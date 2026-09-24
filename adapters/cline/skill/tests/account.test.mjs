@@ -1,10 +1,41 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchClineAccount, requestCline, summarizeClineAccount } from '../scripts/lib/cline-account.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fetchClineAccount, requestCline, resolveClineCredential, summarizeClineAccount } from '../scripts/lib/cline-account.mjs';
 
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify({ success: status < 400, data, error: status >= 400 ? 'failure' : undefined }), { status, headers: { 'content-type': 'application/json' } });
 }
+
+test('credential resolver prefers a non-expired providers.json OAuth token', () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-cost-'));
+  fs.mkdirSync(path.join(dataDir, 'data', 'settings'), { recursive: true });
+  fs.writeFileSync(path.join(dataDir, 'data', 'settings', 'providers.json'), JSON.stringify({
+    providers: { cline: { settings: { auth: { accessToken: 'oauth-token', accountId: 'usr-oauth', expiresAt: Date.now() + 3_600_000 } } } },
+  }));
+  fs.writeFileSync(path.join(dataDir, 'data', 'secrets.json'), JSON.stringify({ apiKey: 'legacy-token' }));
+  const credential = resolveClineCredential({ dataDir, environment: {}, now: Date.now() });
+  assert.equal(credential.apiKey, 'oauth-token');
+  assert.equal(credential.userId, 'usr-oauth');
+  assert.equal(credential.source, 'providers.json:cline');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test('credential resolver skips expired OAuth and falls back to the legacy api key', () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-cost-'));
+  fs.mkdirSync(path.join(dataDir, 'data', 'settings'), { recursive: true });
+  fs.writeFileSync(path.join(dataDir, 'data', 'settings', 'providers.json'), JSON.stringify({
+    providers: { cline: { settings: { auth: { accessToken: 'expired-token', expiresAt: Date.now() - 1 } } } },
+  }));
+  fs.writeFileSync(path.join(dataDir, 'data', 'secrets.json'), JSON.stringify({ apiKey: 'legacy-token' }));
+  const credential = resolveClineCredential({ dataDir, environment: {}, now: Date.now() });
+  assert.equal(credential.apiKey, 'legacy-token');
+  assert.equal(credential.source, 'secrets.json');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
 
 test('account summary preserves Cline money units and token totals', () => {
   const summary = summarizeClineAccount({

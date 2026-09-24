@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
-import { fetchClineAccount, summarizeClineAccount } from './lib/cline-account.mjs';
+import { fetchClineAccount, resolveClineCredential, summarizeClineAccount } from './lib/cline-account.mjs';
 import {
   SCHEMA_VERSION,
   addUsage,
@@ -37,6 +37,7 @@ const opts = {
   model: null,
   account: false,
   accountUserId: null,
+  accountDays: 45,
 };
 
 for (let i = 2; i < process.argv.length; i++) {
@@ -44,6 +45,7 @@ for (let i = 2; i < process.argv.length; i++) {
   if (arg === '--session') opts.session = process.argv[++i];
   else if (arg === '--account') opts.account = true;
   else if (arg === '--account-user-id') opts.accountUserId = process.argv[++i];
+  else if (arg === '--account-days') opts.accountDays = Number(process.argv[++i]);
   else if (arg === '--last') opts.mode = 'last';
   else if (arg === '--today') opts.mode = 'today';
   else if (arg === '--compare') opts.mode = 'compare';
@@ -66,6 +68,7 @@ function help() {
   --session <id>       session id (default: auto-detect current Cline session)
   --account            fetch read-only Cline account balance/plan/usage summary
   --account-user-id    optional account id override (must match authenticated profile)
+  --account-days <n>   recent-history window for account stats (default 45)
   --last               report the latest completed session
   --today              report sessions started today (UTC)
   --compare            compare the latest two sessions
@@ -351,18 +354,13 @@ function renderAggregate(report) {
   ].join('\n');
 }
 
-function accountApiKey(dataDir) {
-  if (process.env.CLINE_API_KEY) return process.env.CLINE_API_KEY;
-  const secretsPath = path.join(dataDir, 'data', 'secrets.json');
-  const secrets = readJson(secretsPath);
-  if (secrets?.apiKey) return secrets.apiKey;
-  die('--account requires CLINE_API_KEY or an authenticated Cline apiKey in data/secrets.json');
+function accountCredential(dataDir) {
+  const credential = resolveClineCredential({ dataDir, environment: process.env });
+  if (!credential) die('--account requires CLINE_API_KEY or a valid cline/cline-pass auth entry in data/settings/providers.json (run: cline auth --provider cline)');
+  return credential;
 }
-function accountUserId() {
-  return opts.accountUserId || process.env.CLINE_USER_ID || null;
-}
-function renderPeriod(label, period) {
-  return `${label}: ${usd(period.referenceCostUsd)} reference · ${usd(period.creditsUsedUsd)} credits · ${integer(period.requests)} requests · ${integer(period.totalTokens)} tokens`;
+function renderPeriod(period) {
+  return `${usd(period.referenceCostUsd)} reference · ${usd(period.creditsUsedUsd)} credits · ${integer(period.requests)} requests · ${integer(period.totalTokens)} tokens`;
 }
 function renderAccount(summary) {
   const plan = summary.plan;
@@ -380,17 +378,34 @@ function renderAccount(summary) {
     `Usage limits: ${limits.length ? limits.map((limit) => `${limit.type}=${limit.percentUsed}%${limit.resetsAt ? ` (resets ${limit.resetsAt})` : ''}`).join(', ') : 'none reported'}`,
     '',
     'Period costs:',
-    `  Today: ${renderPeriod('today', summary.periods.today)}`,
-    `  Last 7 days: ${renderPeriod('last 7 days', summary.periods.last7Days)}`,
-    `  Current month: ${renderPeriod('current month', summary.periods.currentMonth)}`,
+    `  Today: ${renderPeriod(summary.periods.today)}`,
+    `  Last 7 days: ${renderPeriod(summary.periods.last7Days)}`,
+    `  Current month: ${renderPeriod(summary.periods.currentMonth)}`,
+    '',
+    'Recent days:',
   ];
-  for (const day of summary.periods.daily.slice(0, 7)) lines.push(`  ${day.from}: ${renderPeriod('day', day)}`);
+  for (const day of summary.periods.daily.slice(0, 7)) lines.push(`  ${day.from}: ${renderPeriod(day)}`);
+  lines.push('', 'Recent weeks:');
+  for (const week of summary.periods.weekly.slice(0, 4)) lines.push(`  ${week.from}: ${renderPeriod(week)}`);
+  lines.push('', 'Recent months:');
+  for (const month of summary.periods.monthly.slice(0, 6)) lines.push(`  ${month.from}: ${renderPeriod(month)}`);
   return lines.join('\n');
 }
 async function runAccount(dataDir) {
-  const account = await fetchClineAccount({ apiKey: accountApiKey(dataDir), userId: accountUserId() });
+  const credential = accountCredential(dataDir);
+  const days = Number.isFinite(opts.accountDays) && opts.accountDays > 0 ? Math.floor(opts.accountDays) : 45;
+  const since = Date.now() - days * 24 * 60 * 60 * 1000;
+  const account = await fetchClineAccount({ apiKey: credential.apiKey, userId: opts.accountUserId || credential.userId || null, since });
   const summary = summarizeClineAccount(account);
-  const output = { schemaVersion: SCHEMA_VERSION, generatedAt: new Date().toISOString(), account: summary, live: true };
+  summary.historyDays = days;
+  const output = {
+    schemaVersion: SCHEMA_VERSION,
+    generatedAt: new Date().toISOString(),
+    account: summary,
+    live: true,
+    credentialSource: credential.source,
+    credentialExpiresAt: credential.expiresAt ?? null,
+  };
   if (opts.json) console.log(JSON.stringify(output, replacer, 2));
   else console.log(renderAccount(summary));
 }

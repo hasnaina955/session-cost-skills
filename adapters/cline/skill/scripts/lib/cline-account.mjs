@@ -1,6 +1,39 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 const DEFAULT_BASE_URL = 'https://api.cline.bot';
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_RETRIES = 2;
+const AUTH_REFRESH_SKEW_MS = 60_000;
+
+function readJson(file) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '')); } catch { return null; }
+}
+
+export function resolveClineCredential({ dataDir, environment = process.env, now = Date.now() } = {}) {
+  if (environment.CLINE_API_KEY) return { apiKey: environment.CLINE_API_KEY, userId: environment.CLINE_USER_ID ?? null, source: 'environment' };
+
+  const providersPath = path.join(dataDir, 'data', 'settings', 'providers.json');
+  const providers = readJson(providersPath);
+  for (const providerId of ['cline', 'cline-pass']) {
+    const auth = providers?.providers?.[providerId]?.settings?.auth;
+    if (!auth?.accessToken) continue;
+    const expiresAt = Number(auth.expiresAt);
+    const expired = Number.isFinite(expiresAt) && expiresAt > 0 && expiresAt <= now + AUTH_REFRESH_SKEW_MS;
+    if (expired) continue;
+    return {
+      apiKey: auth.accessToken,
+      userId: environment.CLINE_USER_ID ?? auth.accountId ?? auth.metadata?.userInfo?.clineUserId ?? null,
+      source: `providers.json:${providerId}`,
+      expiresAt: Number.isFinite(expiresAt) && expiresAt > 0 ? new Date(expiresAt).toISOString() : null,
+    };
+  }
+
+  const secrets = readJson(path.join(dataDir, 'data', 'secrets.json'));
+  if (secrets?.apiKey) return { apiKey: secrets.apiKey, userId: environment.CLINE_USER_ID ?? null, source: 'secrets.json' };
+  return null;
+}
+
 
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 function isRetryableStatus(status) { return status === 408 || status === 425 || status === 429 || status >= 500; }
@@ -35,7 +68,7 @@ export async function requestCline(pathname, { apiKey, baseUrl = DEFAULT_BASE_UR
   throw new Error('Cline API request failed after retries');
 }
 
-export async function fetchClineAccount({ apiKey, userId, baseUrl, fetcher, timeoutMs, retries, maxPages = 10_000 } = {}) {
+export async function fetchClineAccount({ apiKey, userId, baseUrl, fetcher, timeoutMs, retries, maxPages = 100, since = null } = {}) {
   const profile = await requestCline('/api/v1/users/me', { apiKey, baseUrl, fetcher, timeoutMs, retries });
   if (!profile?.id) throw new Error('Cline profile response did not include a user id');
   const resolvedUserId = userId || profile.id;
@@ -55,9 +88,15 @@ export async function fetchClineAccount({ apiKey, userId, baseUrl, fetcher, time
     const query = new URLSearchParams({ limit: '1000' });
     if (cursor) query.set('cursor', cursor);
     const page = await requestCline(`/api/v1/users/${encodeURIComponent(resolvedUserId)}/usages?${query}`, { apiKey, baseUrl, fetcher, timeoutMs, retries });
-    items.push(...(Array.isArray(page?.items) ? page.items : []));
+    const rows = Array.isArray(page?.items) ? page.items : [];
+    items.push(...rows);
     cursor = page?.nextToken || null;
     pages++;
+    const oldest = rows.reduce((value, item) => {
+      const timestamp = Date.parse(item?.createdAt);
+      return Number.isFinite(timestamp) ? Math.min(value, timestamp) : value;
+    }, Number.POSITIVE_INFINITY);
+    if (since !== null && Number.isFinite(oldest) && oldest <= since) cursor = null;
     if (cursor && seen.has(cursor)) throw new Error('Cline API returned a repeated pagination cursor');
     if (cursor) seen.add(cursor);
     if (pages >= maxPages) throw new Error(`Cline usage history exceeded ${maxPages} pages`);
