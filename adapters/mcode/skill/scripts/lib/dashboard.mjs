@@ -8,12 +8,19 @@ function number(value) { return Number(value || 0).toLocaleString('en-US', { max
 function money(value) { return value === null || value === undefined ? '—' : `$${Number(value).toFixed(6)}`; }
 function percent(value) { return `${(Number(value || 0) * 100).toFixed(1)}%`; }
 function safeJson(value) { return JSON.stringify(value ?? {}).replace(/</g, '\\u003c'); }
+function modelName(model) { return model.model ?? model.modelId ?? model.id ?? 'unknown'; }
+function providerName(model) { return model.provider ?? model.providerKey ?? 'unknown'; }
 function modelRows(data) {
   const raw = data?.models ?? data?.total?.models ?? [];
-  if (raw instanceof Map) return [...raw.values()];
-  if (Array.isArray(raw)) return raw;
-  if (raw && typeof raw === 'object') return Object.values(raw);
-  return [];
+  const rows = raw instanceof Map ? [...raw.values()] : Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? Object.values(raw) : [];
+  return rows.map((m) => {
+    const input = Number(m.inputTokens ?? m.promptTokens ?? 0);
+    const output = Number(m.outputTokens ?? m.completionTokens ?? 0);
+    const cacheRead = Number(m.cacheReadTokens ?? m.cachedTokens ?? 0);
+    const cacheWrite = Number(m.cacheWriteTokens ?? 0);
+    const totalTokens = Number(m.totalTokens) || (m.promptTokens !== undefined || m.completionTokens !== undefined ? input + output : input + output);
+    return { ...m, provider: providerName(m), model: modelName(m), totalTokens, totalCost: Number(m.totalCost ?? m.cost ?? 0) };
+  });
 }
 function accountModels(data) { return modelRows({ models: data?.account?.models ?? [] }); }
 function usage(data) {
@@ -35,6 +42,12 @@ function rowsForPeriods(data) {
 function renderTable(headers, rows) {
   return `<table><thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
 }
+function normalizeSession(session) {
+  const metrics = session.metrics ?? session;
+  const input = Number(metrics.inputTokens ?? 0);
+  const output = Number(metrics.outputTokens ?? 0);
+  return { ...session, metrics: { ...metrics, totalTokens: Number(metrics.totalTokens) || input + output, totalCost: Number(metrics.totalCost ?? metrics.cost ?? 0) } };
+}
 export function renderDashboard(data, { title = 'Session Cost Dashboard' } = {}) {
   const account = data?.account;
   const u = usage(data);
@@ -42,7 +55,7 @@ export function renderDashboard(data, { title = 'Session Cost Dashboard' } = {})
   const periods = rowsForPeriods(data);
   const models = [...modelRows(data), ...accountModels(data)].filter((model, index, all) => all.findIndex((item) => item.provider === model.provider && item.model === model.model) === index);
   const rawSessions = data?.sessions ?? data?.perSession ?? [];
-  const sessions = Array.isArray(rawSessions) ? rawSessions : Object.entries(rawSessions).map(([id, value]) => ({ id, ...value }));
+  const sessions = (Array.isArray(rawSessions) ? rawSessions : Object.entries(rawSessions).map(([id, value]) => ({ id, ...value }))).map(normalizeSession);
   const payload = safeJson({ data, models, periods, sessions });
   const modelTable = models.length ? renderTable(['Provider / Model', 'Calls', 'Tokens', 'Cost'], models.slice(0, 50).map((m) => [esc(`${m.provider ?? m.providerKey ?? '—'} / ${m.model ?? m.modelId ?? '—'}`), number(m.calls), number(m.totalTokens), money(m.rateKnown === false ? null : (m.totalCost ?? m.recordedCostUsd))])) : '';
   const periodTable = periods.length ? renderTable(['Period', 'Requests', 'Reference / Cost', 'Credits', 'Tokens'], periods.map((p) => [esc(p.from ?? p.label), number(p.requests), money(p.referenceCostUsd ?? p.totalCost), money(p.creditsUsedUsd), number(p.totalTokens)])) : '';
