@@ -1,0 +1,21 @@
+# Secrets and local runtime data
+.env
+.env.*
+!.env.example
+secrets.json
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Generated reports and temporary files
+reports/
+outputs/
+dist/
+*.log
+*.tmp
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

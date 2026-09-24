@@ -1,0 +1,15 @@
+{
+  "name": "session-cost-skills",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private source for Cline and MCode session-cost skills",
+  "type": "module",
+  "scripts": {
+    "test": "node --test adapters/cline/skill/tests/core.test.mjs adapters/cline/skill/tests/account.test.mjs",
+    "check:cline": "node --check adapters/cline/skill/scripts/session-cost.mjs && node --check adapters/cline/skill/scripts/lib/session-cost-core.mjs && node --check adapters/cline/skill/scripts/lib/cline-account.mjs"
+  },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "license": "UNLICENSED"
+}
