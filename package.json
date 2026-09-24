@@ -7,7 +7,8 @@
   "scripts": {
     "test": "node --test adapters/cline/skill/tests/core.test.mjs adapters/cline/skill/tests/account.test.mjs adapters/mcode/skill/tests/cli.test.mjs",
     "check:cline": "node --check adapters/cline/skill/scripts/session-cost.mjs && node --check adapters/cline/skill/scripts/lib/session-cost-core.mjs && node --check adapters/cline/skill/scripts/lib/cline-account.mjs",
-    "check:mcode": "node --check adapters/mcode/skill/scripts/session-cost.mjs"
+    "check:mcode": "node --check adapters/mcode/skill/scripts/session-cost.mjs && node --check adapters/mcode/skill/scripts/lib/dashboard.mjs",
+    "verify": "npm run check:cline && npm run check:mcode && npm test"
   },
   "engines": {
     "node": ">=22.5"

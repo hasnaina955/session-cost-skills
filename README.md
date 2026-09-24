@@ -1,54 +1,105 @@
 # Session Cost Skills
 
-Public, MIT-licensed source repository for the Cline and MiniMax Code (MCode) `session-cost` skills.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-This repository keeps runtime-specific accounting adapters separate while sharing the product architecture, release process, and regression-test conventions.
+Local-first token, cache, billing, and usage dashboards for the Cline and MiniMax Code (`MCode`) `session-cost` skills.
+
+This repository keeps runtime-specific accounting adapters separate while sharing the product architecture, release process, documentation, and regression-test conventions.
 
 ## Status
 
 - Public MIT-licensed repository
-- Cline adapter: existing enhanced implementation included as the baseline
-- MCode adapter: existing provider-rate implementation included as the baseline
-- Shared extraction and MCode usability parity: next development phase
+- Cline adapter: local sessions, Cline account limits, cost/credits, and interactive dashboards
+- MCode adapter: native ledger accounting, CommandCode/StepFun rates, comparisons, and interactive dashboards
+- Shared release and verification workflow
 - No credentials, session databases, generated reports, or API keys belong in this repository
 
-## Repositories and installation targets
+## Features
+
+- Current, last, today, compare, list, and date-range modes
+- Provider/model/search filters
+- Subagent-aware session totals
+- ClinePass/free/billed/partial billing classification
+- Cline account balance, plan, five-hour/weekly/monthly limits
+- Cline daily, weekly, and monthly account periods
+- CommandCode and StepFun provider-rate accounting
+- Cache-read and cache-write semantics preserved per runtime
+- Self-contained HTML dashboards with no external assets
+- Versioned JSON output
+- Windows and Node.js 22.5+ support
+
+## Installation
 
 The source is split into two installable skills:
 
-- `adapters/cline/skill/` → install to `%USERPROFILE%\.cline\skills\session-cost\`
-- `adapters/mcode/skill/` → install to `%USERPROFILE%\.minimax\skills\session-cost\`
+- `adapters/cline/skill/` → `%USERPROFILE%\.cline\skills\session-cost\`
+- `adapters/mcode/skill/` → `%USERPROFILE%\.minimax\skills\session-cost\`
 
-Keep installed copies separate. They have the same public skill name but different runtime ledgers and token semantics.
+Keep installed copies separate. They share the public skill name but use different runtime ledgers and token semantics.
 
-## Runtime differences that must remain adapter-specific
+## Quick usage
+
+Cline:
+
+```powershell
+node "$env:USERPROFILE\.cline\skills\session-cost\scripts\session-cost.mjs"
+node "$env:USERPROFILE\.cline\skills\session-cost\scripts\session-cost.mjs" --account
+node "$env:USERPROFILE\.cline\skills\session-cost\scripts\session-cost.mjs" --dashboard
+```
+
+MiniMax Code:
+
+```powershell
+node "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs"
+node "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs" --rates
+node "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs" --dashboard
+```
+
+## Runtime differences
 
 | Concern | Cline | MCode |
 | --- | --- | --- |
 | Primary data | `data/db/sessions.db` and message JSON | `v2/sqlite/runtime-state.sqlite` and session logs |
 | `inputTokens` | Includes cached prompt tokens | `input_tokens` excludes cached tokens |
 | Cost source | Recorded per-call `metrics.cost` | Provider-rate calculation for BYOK providers |
-| Account mode | Optional read-only Cline API view | Not applicable; use rate-coverage mode instead |
+| Account mode | Optional read-only Cline API view | Not applicable; use rate coverage |
 | Providers | Cline/ClinePass/OpenAI-compatible/etc. | Mirrored CommandCode and StepFun rates |
 
-Never use the Cline fresh-input formula on MCode data without adapting the ledger semantics.
+Never use the Cline fresh-input formula on MCode data.
 
-## Development commands
+## Development
 
-Run the current Cline baseline tests:
+Install no npm dependencies is required for the current skill tests; Node.js 22.5+ and the built-in `node:sqlite` module are required.
 
 ```powershell
-node --test "adapters/cline/skill/tests/core.test.mjs"
-node --test "adapters/cline/skill/tests/account.test.mjs"
+npm run verify
 ```
 
-The MCode baseline remains in its native skill format while the shared adapter is developed.
+Or run individual checks:
 
-## Release policy
+```powershell
+npm test
+npm run check:cline
+npm run check:mcode
+```
 
-Releases are generated as separate ZIP packages. Never publish a package containing a user's local data, credentials, session history, generated account reports, or provider secrets.
+The verification command performs syntax checks, dashboard safety tests, credential redaction checks, and adapter tests.
 
-See [docs/architecture.md](docs/architecture.md), [docs/porting-plan.md](docs/porting-plan.md), and the adapter usage references:
+## Documentation
 
-- [adapters/cline/USAGE.md](adapters/cline/USAGE.md)
-- [adapters/mcode/USAGE.md](adapters/mcode/USAGE.md)
+- [Cline usage reference](adapters/cline/USAGE.md)
+- [MCode usage reference](adapters/mcode/USAGE.md)
+- [Architecture](docs/architecture.md)
+- [MCode porting plan](docs/porting-plan.md)
+- [Gumroad selling guide](docs/gumroad-selling-guide.html)
+- [Changelog](CHANGELOG.md)
+- [Security policy](SECURITY.md)
+- [Contributing guide](CONTRIBUTING.md)
+
+## Security and privacy
+
+Never commit API keys, OAuth tokens, `secrets.json`, session databases, generated account reports, or local logs. Local session reporting is offline. Cline account mode makes read-only API requests using the user's own Cline authentication and never prints the credential.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
