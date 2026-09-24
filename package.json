@@ -1,8 +1,8 @@
 {
   "name": "session-cost-skills",
   "version": "0.1.0",
-  "private": true,
-  "description": "Private source for Cline and MCode session-cost skills",
+  "private": false,
+  "description": "Cline and MiniMax Code session-cost skills with shared reporting architecture",
   "type": "module",
   "scripts": {
     "test": "node --test adapters/cline/skill/tests/core.test.mjs adapters/cline/skill/tests/account.test.mjs adapters/mcode/skill/tests/cli.test.mjs",
@@ -12,5 +12,5 @@
   "engines": {
     "node": ">=22.5"
   },
-  "license": "UNLICENSED"
+  "license": "MIT"
 }

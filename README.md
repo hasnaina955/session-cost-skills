@@ -1,12 +1,12 @@
 # Session Cost Skills
 
-Private source repository for the Cline and MiniMax Code (MCode) `session-cost` skills.
+Public, MIT-licensed source repository for the Cline and MiniMax Code (MCode) `session-cost` skills.
 
 This repository keeps runtime-specific accounting adapters separate while sharing the product architecture, release process, and regression-test conventions.
 
 ## Status
 
-- Private development repository
+- Public MIT-licensed repository
 - Cline adapter: existing enhanced implementation included as the baseline
 - MCode adapter: existing provider-rate implementation included as the baseline
 - Shared extraction and MCode usability parity: next development phase
