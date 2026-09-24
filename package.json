@@ -1,6 +1,6 @@
 {
   "name": "session-cost-skills",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": false,
   "description": "Cline and MiniMax Code session-cost skills with shared reporting architecture",
   "type": "module",
