@@ -56,6 +56,8 @@ test('account summary preserves Cline money units and token totals', () => {
   assert.equal(summary.clinePassRequests, 1);
   assert.equal(summary.usageBillingRequests, 2);
   assert.equal(summary.usageLimits[0].percentUsed, 42);
+  assert.equal(summary.models.length, 2);
+  assert.equal(summary.models[0].provider, 'unknown');
   assert.equal(summary.periods.today.referenceCostUsd, 0.25);
   assert.equal(summary.periods.last7Days.referenceCostUsd, 2.75);
   assert.equal(summary.periods.currentMonth.referenceCostUsd, 2.75);

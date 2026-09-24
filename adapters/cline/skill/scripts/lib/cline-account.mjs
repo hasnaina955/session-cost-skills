@@ -200,6 +200,28 @@ const monthly = [...monthlyMap.entries()].sort(([a], [b]) => b.localeCompare(a))
   };
 }
 
+function modelSummaries(usages) {
+  const grouped = new Map();
+  for (const item of usages) {
+    const provider = item.aiInferenceProviderName || 'unknown';
+    const model = item.aiModelName || item.aiModelTypeName || item.operation || 'unknown';
+    const key = `${provider}|${model}`;
+    const row = grouped.get(key) ?? { provider, model, calls: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, totalTokens: 0, referenceCostUsd: 0, creditsUsedUsd: 0, rateKnown: true };
+    const promptTokens = finiteNumberOrZero(item.promptTokens);
+    const completionTokens = finiteNumberOrZero(item.completionTokens);
+    const totalTokens = finiteNumberOrZero(item.totalTokens) || promptTokens + completionTokens;
+    row.calls += 1;
+    row.promptTokens += promptTokens;
+    row.completionTokens += completionTokens;
+    row.cachedTokens += finiteNumberOrZero(item.cachedTokens);
+    row.totalTokens += totalTokens;
+    row.referenceCostUsd += finiteNumberOrZero(item.costUsd) / REFERENCE_COST_USD_SCALE;
+    row.creditsUsedUsd += finiteNumberOrZero(item.creditsUsed) / MICRO_USD;
+    grouped.set(key, row);
+  }
+  return [...grouped.values()].sort((a, b) => b.totalTokens - a.totalTokens);
+}
+
 export function summarizeClineAccount(data, now = new Date()) {
   const summary = sumUsage(data.usages);
   const balanceUsd = finiteNumberOrZero(data.balance?.balance) / MICRO_USD;
@@ -213,6 +235,7 @@ export function summarizeClineAccount(data, now = new Date()) {
     usageLimits: data.usageLimits?.limits ?? [],
     clinePassRequests: summary.clinePassRequests,
     usageBillingRequests: summary.usageBillingRequests,
+    models: modelSummaries(data.usages),
     periods: buildPeriods(data.usages, now),
     pages: data.pages,
   };
