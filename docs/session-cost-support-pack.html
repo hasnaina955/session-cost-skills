@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Session Cost Skills — Support Pack</title><style>body{margin:0;background:#f5f7fb;color:#182230;font:15px/1.6 system-ui,-apple-system,Segoe UI,sans-serif}main{max-width:900px;margin:auto;padding:42px 24px}h1{font-size:36px;letter-spacing:-.03em}h2{margin-top:32px}section{background:white;border:1px solid #dbe3ef;border-radius:14px;padding:22px;margin:16px 0}pre{background:#101827;color:#d8e6ff;border-radius:10px;padding:16px;overflow:auto}code{background:#edf1f7;padding:2px 5px;border-radius:4px}li{margin:6px 0}.note{border-left:4px solid #3b82f6;background:#eef5ff;padding:14px}</style></head><body><main>
+<h1>Session Cost Skills</h1><p>Optional support onboarding pack for the free, MIT-licensed Cline and MiniMax Code skills.</p>
+<section><h2>Free software</h2><p>The skill source is free under the MIT license. Payment is optional and does not unlock any software feature.</p><p>Repository: <code>https://github.com/hasnaina955/session-cost-skills</code></p></section>
+<section><h2>Requirements</h2><ul><li>Windows 10 or Windows 11</li><li>Node.js 22.5 or newer</li><li>Cline CLI or MiniMax Code CLI</li><li>Cline account authentication for live account mode</li></ul></section>
+<section><h2>Cline install</h2><pre>1. Close Cline.
+2. Copy the Cline skill folder into:
+   %USERPROFILE%\.cline\skills\session-cost\
+3. Confirm SKILL.md exists.
+4. Start a new Cline session.</pre><pre>$SessionCost = "$env:USERPROFILE\.cline\skills\session-cost\scripts\session-cost.mjs"
+node $SessionCost
+node $SessionCost --account
+node $SessionCost --dashboard</pre></section>
+<section><h2>MiniMax Code install</h2><pre>1. Close MiniMax Code.
+2. Copy the MCode skill folder into:
+   %USERPROFILE%\.minimax\skills\session-cost\
+3. Confirm SKILL.md exists.
+4. Start a new MiniMax Code session.</pre><pre>$SessionCost = "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs"
+node $SessionCost
+node $SessionCost --rates
+node $SessionCost --dashboard</pre></section>
+<section><h2>What the support purchase covers</h2><ul><li>Installation and compatibility assistance</li><li>Investigating a confirmed bug</li><li>Runtime migration guidance</li><li>Priority help for a bounded support request</li><li>Sponsored development when separately agreed</li></ul><p class="note">Support does not include credentials, API keys, private transcripts, custom reverse engineering, or guaranteed third-party API availability.</p></section>
+<section><h2>Privacy</h2><p>Local mode reads runtime data already on your computer. Cline account mode uses your own Cline authentication and read-only API requests. Never send API keys, OAuth tokens, secrets.json, or private session transcripts when requesting support.</p></section>
+<section><h2>FAQ</h2><h3>Is the software paid?</h3><p>No. The source is free and MIT-licensed. Support is optional.</p><h3>Why is there a Gumroad listing?</h3><p>It funds maintenance, compatibility work, documentation, and sponsored development.</p><h3>Does support change the license?</h3><p>No. The public MIT license remains in effect.</p><h3>What if my report says rate unknown?</h3><p>The skill reports the uncertainty instead of guessing. Run the MCode rate coverage command and refresh rates if appropriate.</p></section>
+<footer>Optional support pack • Session Cost Skills • 2026</footer>
+</main></body></html>
