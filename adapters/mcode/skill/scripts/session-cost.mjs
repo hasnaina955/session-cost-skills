@@ -13,6 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeDashboard } from './lib/dashboard.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RATES_PATH = path.resolve(__dirname, '..', 'references', 'provider-rates.json');
@@ -27,6 +28,7 @@ function parseArgs(argv) {
   const opts = {
     session: null, mode: 'current', list: 0, json: false, includeChildren: false, includeChildrenExplicit: false,
     refreshRates: false, dataDir: null, from: null, to: null, provider: null, model: null, configPath: null, rates: false,
+    dashboard: false, out: null,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -40,6 +42,8 @@ function parseArgs(argv) {
     else if (a === '--model') opts.model = argv[++i];
     else if (a === '--config') opts.configPath = argv[++i];
     else if (a === '--rates') opts.rates = true;
+    else if (a === '--dashboard') opts.dashboard = true;
+    else if (a === '--out') opts.out = argv[++i];
     else if (a === '--list') opts.list = Number(argv[++i] ?? 10);
     else if (a === '--json') opts.json = true;
     else if (a === '--include-children') { opts.includeChildren = true; opts.includeChildrenExplicit = true; }
@@ -63,6 +67,8 @@ function printHelp() {
   --provider <name>       filter sessions by provider key
   --model <name>          filter sessions by model substring
   --rates                 show mirrored rate-table coverage and freshness
+  --dashboard             write a self-contained HTML dashboard
+  --out <path>            dashboard output path
   --include-children      also bill sub-agent sessions parented to the target
   --list [n]              list the n most recent sessions with their cost (default 10)
   --json                  emit JSON instead of the markdown summary
@@ -857,7 +863,11 @@ async function main() {
         freeModels: table.freeModels ?? [],
       },
     };
-    if (opts.json) console.log(JSON.stringify(output, null, 2));
+    if (opts.dashboard) {
+      const outputPath = writeDashboard(output, { outPath: opts.out ?? path.join(dataDir, 'reports', 'session-cost', 'rates-dashboard.html'), title: 'MCode Rate Coverage Dashboard' });
+      if (opts.json) console.log(JSON.stringify({ ...output, dashboardPath: outputPath }, null, 2));
+      else console.log(`Dashboard written: ${outputPath}`);
+    } else if (opts.json) console.log(JSON.stringify(output, null, 2));
     else console.log(renderRates(table));
     return 0;
   }
@@ -952,7 +962,11 @@ async function main() {
     const report = costForSession(db, dataDir, table, sessionId);
     const selection = { method: opts.session ? 'explicit' : 'latest-ledger-activity', requestedId: opts.session ?? null, candidates: candidates.slice(0, 5).map((row) => row.session_id) };
 
-    if (opts.json) console.log(JSON.stringify(enhanceReport(report, selection), null, 2));
+    if (opts.dashboard) {
+      const outputPath = writeDashboard(enhanceReport(report, selection), { outPath: opts.out ?? path.join(dataDir, 'reports', 'session-cost', 'session-dashboard.html'), title: 'MCode Session Cost Dashboard' });
+      if (opts.json) console.log(JSON.stringify({ schemaVersion: 1, dashboardPath: outputPath, report: enhanceReport(report, selection) }, null, 2));
+      else console.log(`Dashboard written: ${outputPath}`);
+    } else if (opts.json) console.log(JSON.stringify(enhanceReport(report, selection), null, 2));
     else console.log(renderText(report));
 
     return report.rateKnown ? 0 : 2;

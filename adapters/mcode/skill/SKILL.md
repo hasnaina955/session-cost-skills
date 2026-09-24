@@ -36,6 +36,9 @@ node $SessionCost --from 2026-09-01 --to 2026-09-30
 node $SessionCost --provider commandcode
 node $SessionCost --model deepseek
 node $SessionCost --session <id> --include-children
+node $SessionCost --dashboard
+node $SessionCost --dashboard --out <path>
+node $SessionCost --rates --dashboard
 node $SessionCost --rates
 node $SessionCost --json
 node $SessionCost --config <path>

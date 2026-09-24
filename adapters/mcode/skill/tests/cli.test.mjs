@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,6 +25,16 @@ test('MCode --rates works without reading the session ledger and emits versioned
   assert.equal(typeof output.rates.refreshedAt, 'string');
   assert.ok(output.rates.providers.commandcode.models > 0);
   assert.ok(output.rates.providers.stepfun.models > 0);
+});
+
+test('MCode rates dashboard writes a self-contained HTML file', () => {
+  const out = path.join(os.tmpdir(), `mcode-rates-dashboard-${process.pid}.html`);
+  const result = spawnSync(process.execPath, [script, '--rates', '--dashboard', '--out', out], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  const html = fs.readFileSync(out, 'utf8');
+  assert.match(html, /MCode Rate Coverage Dashboard/);
+  assert.doesNotMatch(html, /<(?:script|link|img)[^>]+(?:src|href)=["']https?:\/\//i);
+  fs.rmSync(out, { force: true });
 });
 
 test('MCode CLI rejects an invalid calendar date after opening a valid ledger', () => {

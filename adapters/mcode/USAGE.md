@@ -28,6 +28,8 @@ node $SessionCost
 | `--include-children` | Bill subagent sessions |
 | `--list [n]` | Recent sessions, default 10 |
 | `--rates` | Rate coverage and freshness |
+| `--dashboard` | Write a self-contained HTML dashboard |
+| `--out <path>` | Dashboard output path |
 | `--refresh-rates` | Re-fetch mirrored provider rates |
 | `--json` | Versioned JSON |
 | `--config <path>` | Standing-summary config |
@@ -96,6 +98,23 @@ node $SessionCost --session mvs_xxxx --include-children
 - CommandCode uses peak and off-peak bands.
 - Unknown provider/model rates produce tokens without a guessed cost.
 - A session can change model or provider midway.
+
+## Dashboard export
+
+```powershell
+node $SessionCost --dashboard
+node $SessionCost --rates --dashboard
+node $SessionCost --dashboard --out C:\path\to\mcode-dashboard.html
+```
+
+Default outputs:
+
+```text
+%USERPROFILE%\.minimax\reports\session-cost\session-dashboard.html
+%USERPROFILE%\.minimax\reports\session-cost\rates-dashboard.html
+```
+
+The HTML is self-contained and does not load external assets.
 
 ## Account API
 

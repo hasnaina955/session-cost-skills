@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { fetchClineAccount, resolveClineCredential, summarizeClineAccount } from './lib/cline-account.mjs';
+import { writeDashboard } from './lib/dashboard.mjs';
 import {
   SCHEMA_VERSION,
   addUsage,
@@ -38,6 +39,8 @@ const opts = {
   account: false,
   accountUserId: null,
   accountDays: 45,
+  dashboard: false,
+  out: null,
 };
 
 for (let i = 2; i < process.argv.length; i++) {
@@ -46,6 +49,8 @@ for (let i = 2; i < process.argv.length; i++) {
   else if (arg === '--account') opts.account = true;
   else if (arg === '--account-user-id') opts.accountUserId = process.argv[++i];
   else if (arg === '--account-days') opts.accountDays = Number(process.argv[++i]);
+  else if (arg === '--dashboard') opts.dashboard = true;
+  else if (arg === '--out') opts.out = process.argv[++i];
   else if (arg === '--last') opts.mode = 'last';
   else if (arg === '--today') opts.mode = 'today';
   else if (arg === '--compare') opts.mode = 'compare';
@@ -69,6 +74,8 @@ function help() {
   --account            fetch read-only Cline account balance/plan/usage summary
   --account-user-id    optional account id override (must match authenticated profile)
   --account-days <n>   recent-history window for account stats (default 45)
+  --dashboard            write a self-contained HTML dashboard
+  --out <path>           dashboard output path
   --last               report the latest completed session
   --today              report sessions started today (UTC)
   --compare            compare the latest two sessions
@@ -406,7 +413,14 @@ async function runAccount(dataDir) {
     credentialSource: credential.source,
     credentialExpiresAt: credential.expiresAt ?? null,
   };
-  if (opts.json) console.log(JSON.stringify(output, replacer, 2));
+  if (opts.dashboard) {
+    const outputPath = writeDashboard(output, {
+      outPath: opts.out ?? path.join(dataDir, 'data', 'reports', 'session-cost', 'account-dashboard.html'),
+      title: 'Cline Account Usage Dashboard',
+    });
+    if (opts.json) console.log(JSON.stringify({ ...output, dashboardPath: outputPath }, replacer, 2));
+    else console.log(`Dashboard written: ${outputPath}`);
+  } else if (opts.json) console.log(JSON.stringify(output, replacer, 2));
   else console.log(renderAccount(summary));
 }
 
@@ -479,7 +493,14 @@ try {
       warning: selection.warning ?? null,
     };
     if (selection.warning) report.snapshot.warning = selection.warning;
-    if (opts.json) console.log(JSON.stringify(report, replacer, 2));
+    if (opts.dashboard) {
+      const outputPath = writeDashboard(report, {
+        outPath: opts.out ?? path.join(dataDir, 'data', 'reports', 'session-cost', 'session-dashboard.html'),
+        title: 'Cline Session Cost Dashboard',
+      });
+      if (opts.json) console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, dashboardPath: outputPath, report }, replacer, 2));
+      else console.log(`Dashboard written: ${outputPath}`);
+    } else if (opts.json) console.log(JSON.stringify(report, replacer, 2));
     else console.log(render(report));
   }
 } finally {

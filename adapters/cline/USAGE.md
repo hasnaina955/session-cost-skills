@@ -32,6 +32,8 @@ node $SessionCost
 | `--account` | Live read-only account API view |
 | `--account-days <n>` | Account history window, default 45 |
 | `--account-user-id <id>` | Must match authenticated account |
+| `--dashboard` | Write a self-contained HTML dashboard |
+| `--out <path>` | Dashboard output path |
 | `--data-dir <path>` | Override Cline data directory |
 | `--help` / `-h` | CLI help |
 
@@ -117,6 +119,28 @@ cline auth --provider cline
 
 `includeChildren` is applied unless `--include-children` is explicitly supplied. The CLI never
 writes the file.
+
+## Dashboard export
+
+```powershell
+node $SessionCost --dashboard
+node $SessionCost --account --dashboard
+node $SessionCost --dashboard --out C:\path\to\session-dashboard.html
+```
+
+The default account dashboard is written to:
+
+```text
+%USERPROFILE%\.cline\data\reports\session-cost\account-dashboard.html
+```
+
+The default current-session dashboard is written to:
+
+```text
+%USERPROFILE%\.cline\data\reports\session-cost\session-dashboard.html
+```
+
+The HTML is self-contained and does not load external assets or make network requests.
 
 ## Billing semantics
 

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fetchClineAccount, requestCline, resolveClineCredential, summarizeClineAccount } from '../scripts/lib/cline-account.mjs';
+import { renderDashboard } from '../scripts/lib/dashboard.mjs';
 
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify({ success: status < 400, data, error: status >= 400 ? 'failure' : undefined }), { status, headers: { 'content-type': 'application/json' } });
@@ -85,6 +86,13 @@ test('account client paginates, validates identity, and redacts credentials', as
   assert.equal(data.pages, 2);
   assert.equal(calls.some((url) => url.includes('secret-token')), false);
   await assert.rejects(() => fetchClineAccount({ apiKey: 'secret-token', userId: 'usr-wrong', fetcher, retries: 0 }), /does not match/);
+});
+
+test('dashboard renderer escapes report text and embeds no external assets', () => {
+  const html = renderDashboard({ session: { id: '<script>alert(1)</script>' }, usage: { totalTokens: 10, cacheHitRate: 0.5 }, billing: { recordedCostUsd: 1 } }, { title: 'Test <Dashboard>' });
+  assert.match(html, /&lt;script&gt;/);
+  assert.doesNotMatch(html, /<script>alert/);
+  assert.doesNotMatch(html, /<(?:script|link|img)[^>]+(?:src|href)=["']https?:\/\//i);
 });
 
 test('account request reports missing credentials without making a request', async () => {
