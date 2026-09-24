@@ -17,6 +17,9 @@ Current capabilities:
 - `--last`, `--today`, `--compare`
 - Date/provider/model filters
 - Optional read-only `--account` API view
+- Live account usage limits: five-hour, weekly, and monthly
+- Live daily, rolling-seven-day, and calendar-month account totals
+- Daily, weekly, and monthly account history summaries
 - Versioned JSON output
 
 The Cline adapter uses `%USERPROFILE%\.cline\data\db\sessions.db` and Cline message history. It must not be modified to use MCode ledger semantics.

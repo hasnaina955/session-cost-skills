@@ -12,16 +12,25 @@ test('account summary preserves Cline money units and token totals', () => {
     balance: { balance: 2_500_000 }, plan: { plan: { id: 'pass', name: 'ClinePass', type: 'subscription', isActive: true } },
     usageLimits: { limits: [{ type: 'weekly', percentUsed: 42 }] }, pages: 2,
     usages: [
-      { promptTokens: 100, completionTokens: 20, totalTokens: 120, cachedTokens: 80, costUsd: 200_000_000, creditsUsed: 1_000_000, aiModelTypeName: 'cline-pass' },
-      { promptTokens: 50, completionTokens: 10, totalTokens: 60, cachedTokens: 0, costUsd: 50_000_000, creditsUsed: 0, aiModelTypeName: 'other' },
+      { createdAt: '2026-01-01T00:00:00Z', promptTokens: 100, completionTokens: 20, totalTokens: 120, cachedTokens: 80, costUsd: 200_000_000, creditsUsed: 1_000_000, aiModelTypeName: 'cline-pass' },
+      { createdAt: '2026-01-02T00:00:00Z', promptTokens: 50, completionTokens: 10, totalTokens: 60, cachedTokens: 0, costUsd: 50_000_000, creditsUsed: 0, aiModelTypeName: 'other' },
+      { createdAt: '2026-01-03T06:00:00Z', promptTokens: 25, completionTokens: 5, totalTokens: 30, cachedTokens: 10, costUsd: 25_000_000, creditsUsed: 500_000, aiModelTypeName: 'other' },
     ],
-  });
+  }, new Date('2026-01-03T12:00:00Z'));
   assert.equal(summary.billingTotals.balanceUsd, 2.5);
-  assert.equal(summary.billingTotals.referenceCostUsd, 2.5);
-  assert.equal(summary.billingTotals.creditsUsedUsd, 1);
-  assert.equal(summary.tokenTotals.totalTokens, 180);
+  assert.equal(summary.billingTotals.referenceCostUsd, 2.75);
+  assert.equal(summary.billingTotals.creditsUsedUsd, 1.5);
+  assert.equal(summary.tokenTotals.totalTokens, 210);
   assert.equal(summary.clinePassRequests, 1);
+  assert.equal(summary.usageBillingRequests, 2);
   assert.equal(summary.usageLimits[0].percentUsed, 42);
+  assert.equal(summary.periods.today.referenceCostUsd, 0.25);
+  assert.equal(summary.periods.last7Days.referenceCostUsd, 2.75);
+  assert.equal(summary.periods.currentMonth.referenceCostUsd, 2.75);
+  assert.equal(summary.periods.daily.length, 3);
+  assert.equal(summary.periods.weekly.length, 1);
+  assert.equal(summary.periods.monthly.length, 1);
+  assert.equal(summary.periods.monthly[0].to, '2026-01-31');
 });
 
 test('account client paginates, validates identity, and redacts credentials', async () => {

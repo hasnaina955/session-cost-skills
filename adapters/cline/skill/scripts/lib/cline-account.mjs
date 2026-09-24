@@ -66,25 +66,115 @@ export async function fetchClineAccount({ apiKey, userId, baseUrl, fetcher, time
   return { profile, userId: resolvedUserId, balance, plan, usageLimits, usages: items, pages };
 }
 
-export function summarizeClineAccount(data) {
-  const sum = (items, field) => items.reduce((total, item) => total + (Number(item?.[field]) || 0), 0);
-  const promptTokens = sum(data.usages, 'promptTokens');
-  const completionTokens = sum(data.usages, 'completionTokens');
-  const cachedTokens = sum(data.usages, 'cachedTokens');
-  const totalTokens = sum(data.usages, 'totalTokens') || promptTokens + completionTokens;
-  const referenceCostUsd = sum(data.usages, 'costUsd') / 100_000_000;
-  const creditsUsedUsd = sum(data.usages, 'creditsUsed') / 1_000_000;
-  const balanceUsd = Number(data.balance?.balance) / 1_000_000;
-  const clinePassRequests = data.usages.filter((item) => item?.aiModelTypeName === 'cline-pass').length;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MICRO_USD = 1_000_000;
+const REFERENCE_COST_USD_SCALE = 100_000_000;
+
+function finiteNumberOrZero(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+function utcDateKey(value) {
+  return new Date(value).toISOString().slice(0, 10);
+}
+function utcWeekKey(value) {
+  const date = new Date(value);
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() - day + 1);
+  return `${date.toISOString().slice(0, 10)}`;
+}
+function utcMonthKey(value) {
+  return new Date(value).toISOString().slice(0, 7);
+}
+function sumUsage(items) {
+  return items.reduce((total, item) => {
+    const promptTokens = finiteNumberOrZero(item.promptTokens);
+    const completionTokens = finiteNumberOrZero(item.completionTokens);
+    const cachedTokens = finiteNumberOrZero(item.cachedTokens);
+    const totalTokens = finiteNumberOrZero(item.totalTokens) || promptTokens + completionTokens;
+    const clinePass = item.aiModelTypeName === 'cline-pass';
+    return {
+      requests: total.requests + 1,
+      promptTokens: total.promptTokens + promptTokens,
+      completionTokens: total.completionTokens + completionTokens,
+      cachedTokens: total.cachedTokens + cachedTokens,
+      totalTokens: total.totalTokens + totalTokens,
+      referenceCostUsd: total.referenceCostUsd + finiteNumberOrZero(item.costUsd) / REFERENCE_COST_USD_SCALE,
+      creditsUsedUsd: total.creditsUsedUsd + finiteNumberOrZero(item.creditsUsed) / MICRO_USD,
+      clinePassRequests: total.clinePassRequests + (clinePass ? 1 : 0),
+      usageBillingRequests: total.usageBillingRequests + (clinePass ? 0 : 1),
+    };
+  }, {
+    requests: 0,
+    promptTokens: 0,
+    completionTokens: 0,
+    cachedTokens: 0,
+    totalTokens: 0,
+    referenceCostUsd: 0,
+    creditsUsedUsd: 0,
+    clinePassRequests: 0,
+    usageBillingRequests: 0,
+  });
+}
+function periodSummary(items, label, from, to) {
+  return { label, from, to, ...sumUsage(items) };
+}
+function buildPeriods(usages, now = new Date()) {
+  const end = now.getTime();
+  const todayKey = utcDateKey(now);
+  const weekStart = new Date(now);
+  weekStart.setUTCDate(weekStart.getUTCDate() - 6);
+  weekStart.setUTCHours(0, 0, 0, 0);
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const dailyMap = new Map();
+  const weeklyMap = new Map();
+  const monthlyMap = new Map();
+  for (const item of usages) {
+    const timestamp = Date.parse(item.createdAt);
+    if (!Number.isFinite(timestamp) || timestamp > end + DAY_MS) continue;
+    const date = utcDateKey(item.createdAt);
+    const week = utcWeekKey(item.createdAt);
+    const month = utcMonthKey(item.createdAt);
+    for (const [map, key] of [[dailyMap, date], [weeklyMap, week], [monthlyMap, month]]) {
+      const rows = map.get(key) ?? [];
+      rows.push(item);
+      map.set(key, rows);
+    }
+  }
+  const current = (items) => items.filter((item) => {
+    const timestamp = Date.parse(item.createdAt);
+    return Number.isFinite(timestamp) && timestamp <= end;
+  });
+  const daily = [...dailyMap.entries()].sort(([a], [b]) => b.localeCompare(a)).slice(0, 14).map(([date, rows]) => periodSummary(rows, 'day', date, date));
+  const weekly = [...weeklyMap.entries()].sort(([a], [b]) => b.localeCompare(a)).slice(0, 8).map(([week, rows]) => periodSummary(rows, 'week', week, week));
+  function monthEnd(monthKey) {
+  const [year, month] = monthKey.split('-').map(Number);
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+}
+const monthly = [...monthlyMap.entries()].sort(([a], [b]) => b.localeCompare(a)).slice(0, 12).map(([month, rows]) => periodSummary(rows, 'month', `${month}-01`, monthEnd(month)));
+  return {
+    today: periodSummary(current(usages).filter((item) => utcDateKey(item.createdAt) === todayKey), 'day', todayKey, todayKey),
+    last7Days: periodSummary(current(usages).filter((item) => Date.parse(item.createdAt) >= weekStart.getTime()), 'rolling-7-days', weekStart.toISOString().slice(0, 10), todayKey),
+    currentMonth: periodSummary(current(usages).filter((item) => Date.parse(item.createdAt) >= monthStart.getTime()), 'calendar-month', monthStart.toISOString().slice(0, 10), todayKey),
+    daily,
+    weekly,
+    monthly,
+  };
+}
+
+export function summarizeClineAccount(data, now = new Date()) {
+  const summary = sumUsage(data.usages);
+  const balanceUsd = finiteNumberOrZero(data.balance?.balance) / MICRO_USD;
   return {
     userId: data.userId,
     accountCreatedAt: data.profile?.createdAt ?? null,
-    requests: data.usages.length,
-    tokenTotals: { promptTokens, completionTokens, cachedTokens, totalTokens },
-    billingTotals: { referenceCostUsd, creditsUsedUsd, balanceUsd },
+    requests: summary.requests,
+    tokenTotals: { promptTokens: summary.promptTokens, completionTokens: summary.completionTokens, cachedTokens: summary.cachedTokens, totalTokens: summary.totalTokens },
+    billingTotals: { referenceCostUsd: summary.referenceCostUsd, creditsUsedUsd: summary.creditsUsedUsd, balanceUsd },
     plan: data.plan?.plan ? { id: data.plan.plan.id, name: data.plan.plan.name, type: data.plan.plan.type, active: data.plan.plan.isActive, periodEnd: data.plan.currentPeriodEnd ?? null } : null,
     usageLimits: data.usageLimits?.limits ?? [],
-    clinePassRequests,
+    clinePassRequests: summary.clinePassRequests,
+    usageBillingRequests: summary.usageBillingRequests,
+    periods: buildPeriods(data.usages, now),
     pages: data.pages,
   };
 }

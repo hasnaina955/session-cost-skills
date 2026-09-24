@@ -361,10 +361,13 @@ function accountApiKey(dataDir) {
 function accountUserId() {
   return opts.accountUserId || process.env.CLINE_USER_ID || null;
 }
+function renderPeriod(label, period) {
+  return `${label}: ${usd(period.referenceCostUsd)} reference · ${usd(period.creditsUsedUsd)} credits · ${integer(period.requests)} requests · ${integer(period.totalTokens)} tokens`;
+}
 function renderAccount(summary) {
   const plan = summary.plan;
   const limits = summary.usageLimits ?? [];
-  return [
+  const lines = [
     'Cline Account Summary',
     `Account: ${summary.userId}`,
     `Requests: ${integer(summary.requests)}`,
@@ -374,13 +377,20 @@ function renderAccount(summary) {
     `Credits used: ${usd(summary.billingTotals.creditsUsedUsd)}`,
     `Total tokens: ${integer(summary.tokenTotals.totalTokens)} (${millions(summary.tokenTotals.totalTokens)})`,
     `ClinePass requests: ${integer(summary.clinePassRequests)}`,
-    `Usage limits: ${limits.length ? limits.map((limit) => `${limit.type}=${limit.percentUsed}%`).join(', ') : 'none reported'}`,
-  ].join('\n');
+    `Usage limits: ${limits.length ? limits.map((limit) => `${limit.type}=${limit.percentUsed}%${limit.resetsAt ? ` (resets ${limit.resetsAt})` : ''}`).join(', ') : 'none reported'}`,
+    '',
+    'Period costs:',
+    `  Today: ${renderPeriod('today', summary.periods.today)}`,
+    `  Last 7 days: ${renderPeriod('last 7 days', summary.periods.last7Days)}`,
+    `  Current month: ${renderPeriod('current month', summary.periods.currentMonth)}`,
+  ];
+  for (const day of summary.periods.daily.slice(0, 7)) lines.push(`  ${day.from}: ${renderPeriod('day', day)}`);
+  return lines.join('\n');
 }
 async function runAccount(dataDir) {
   const account = await fetchClineAccount({ apiKey: accountApiKey(dataDir), userId: accountUserId() });
   const summary = summarizeClineAccount(account);
-  const output = { schemaVersion: SCHEMA_VERSION, generatedAt: new Date().toISOString(), account: summary };
+  const output = { schemaVersion: SCHEMA_VERSION, generatedAt: new Date().toISOString(), account: summary, live: true };
   if (opts.json) console.log(JSON.stringify(output, replacer, 2));
   else console.log(renderAccount(summary));
 }

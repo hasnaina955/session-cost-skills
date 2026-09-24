@@ -77,11 +77,7 @@ node $SessionCost --account --account-user-id usr-...
 UTC date. `--compare` compares the latest two matching sessions. Date, provider, and model filters
 produce an aggregate when multiple sessions match.
 
-`--account` is a separate read-only account view. It reports Cline API balance, plan, usage limits,
-reference cost, credits used, total account tokens, and ClinePass request count. It does not replace
-or silently merge with the current session's local `metrics.cost`. The command reads
-`CLINE_API_KEY` or the authenticated `data/secrets.json` apiKey, never prints the credential, and
-requires a currently valid Cline API authentication.
+`--account` is a separate read-only account view. It reports Cline API balance, plan, five-hour/weekly/monthly usage limits, reference cost, credits used, total account tokens, ClinePass request count, and live period totals for today, the rolling last seven days, the current calendar month, plus recent daily/weekly/monthly history. It does not replace or silently merge with the current session's local `metrics.cost`. The command reads `CLINE_API_KEY` or the authenticated `data/secrets.json` apiKey, never prints the credential, and requires a currently valid Cline API authentication.
 
 ## Standing-summary configuration
 
