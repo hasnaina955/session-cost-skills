@@ -17,6 +17,7 @@ All notable changes to this project are documented here.
 - Versioned JSON output
 - Cline and MCode usage references
 - Gumroad selling guide
+- Free software with optional paid support policy
 - Security, contribution, changelog, and CI documentation
 
 ### Compatibility

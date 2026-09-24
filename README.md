@@ -85,6 +85,12 @@ npm run check:mcode
 
 The verification command performs syntax checks, dashboard safety tests, credential redaction checks, and adapter tests.
 
+## Free and optional support
+
+The source code, skill installers, dashboards, and documentation are free under the MIT license. Payment is optional and is never required to use the Cline or MCode skill.
+
+A Gumroad product may be offered for voluntary support, compatibility assistance, or sponsored development. Paid support must not unlock features that are already available in the public repository.
+
 ## Documentation
 
 - [Cline usage reference](adapters/cline/USAGE.md)
