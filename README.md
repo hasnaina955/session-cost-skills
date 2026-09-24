@@ -48,4 +48,7 @@ The MCode baseline remains in its native skill format while the shared adapter i
 
 Releases are generated as separate ZIP packages. Never publish a package containing a user's local data, credentials, session history, generated account reports, or provider secrets.
 
-See [docs/architecture.md](docs/architecture.md) and [docs/porting-plan.md](docs/porting-plan.md).
+See [docs/architecture.md](docs/architecture.md), [docs/porting-plan.md](docs/porting-plan.md), and the adapter usage references:
+
+- [adapters/cline/USAGE.md](adapters/cline/USAGE.md)
+- [adapters/mcode/USAGE.md](adapters/mcode/USAGE.md)

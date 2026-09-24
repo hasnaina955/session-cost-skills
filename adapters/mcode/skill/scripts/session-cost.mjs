@@ -24,13 +24,25 @@ const LIVE_WINDOW_MS = 5 * 60 * 1000;
 // ---------------------------------------------------------------- arguments
 
 function parseArgs(argv) {
-  const opts = { session: null, list: 0, json: false, includeChildren: false, refreshRates: false, dataDir: null };
+  const opts = {
+    session: null, mode: 'current', list: 0, json: false, includeChildren: false, includeChildrenExplicit: false,
+    refreshRates: false, dataDir: null, from: null, to: null, provider: null, model: null, configPath: null, rates: false,
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--session') opts.session = argv[++i];
+    else if (a === '--last') opts.mode = 'last';
+    else if (a === '--today') opts.mode = 'today';
+    else if (a === '--compare') opts.mode = 'compare';
+    else if (a === '--from') opts.from = argv[++i];
+    else if (a === '--to') opts.to = argv[++i];
+    else if (a === '--provider') opts.provider = argv[++i];
+    else if (a === '--model') opts.model = argv[++i];
+    else if (a === '--config') opts.configPath = argv[++i];
+    else if (a === '--rates') opts.rates = true;
     else if (a === '--list') opts.list = Number(argv[++i] ?? 10);
     else if (a === '--json') opts.json = true;
-    else if (a === '--include-children') opts.includeChildren = true;
+    else if (a === '--include-children') { opts.includeChildren = true; opts.includeChildrenExplicit = true; }
     else if (a === '--refresh-rates') opts.refreshRates = true;
     else if (a === '--data-dir') opts.dataDir = argv[++i];
     else if (a === '--help' || a === '-h') { printHelp(); process.exit(0); }
@@ -42,10 +54,19 @@ function parseArgs(argv) {
 function printHelp() {
   console.log(`session-cost — token usage and CommandCode cost of a MiniMax Code session
 
-  --session <mvs_...>     session id (default: most recent session in the ledger)
+  --session <mvs_...>     session id (default: current/latest session)
+  --last                  latest completed session
+  --today                 sessions started today (UTC)
+  --compare               compare the latest two sessions
+  --from <YYYY-MM-DD>     include sessions on/after this UTC date
+  --to <YYYY-MM-DD>       include sessions on/before this UTC date
+  --provider <name>       filter sessions by provider key
+  --model <name>          filter sessions by model substring
+  --rates                 show mirrored rate-table coverage and freshness
   --include-children      also bill sub-agent sessions parented to the target
   --list [n]              list the n most recent sessions with their cost (default 10)
   --json                  emit JSON instead of the markdown summary
+  --config <path>         load standing-summary settings
   --refresh-rates         re-fetch the CommandCode rate table into references/
   --data-dir <path>       MiniMax data dir (default: derived from this script's location)`);
 }
@@ -693,6 +714,124 @@ function renderText(rep) {
   return L.join('\n');
 }
 
+// ---------------------------------------------------------------- shared CLI helpers
+
+function readJsonFile(file) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '')); } catch { return null; }
+}
+function parseDate(value, endOfDay = false) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value ?? '')) fail(`invalid date ${value}; expected YYYY-MM-DD`);
+  const [year, month, day] = value.split('-').map(Number);
+  const parsed = Date.parse(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`);
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (!Number.isFinite(parsed) || check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) fail(`invalid calendar date ${value}`);
+  return parsed;
+}
+function loadConfig(dataDir) {
+  const configPath = path.resolve(opts.configPath ?? path.join(dataDir, 'session-cost.json'));
+  const values = readJsonFile(configPath) ?? {};
+  if (!opts.includeChildrenExplicit && values.includeChildren === true) opts.includeChildren = true;
+  return { path: configPath, values };
+}
+function sessionRows(db) {
+  return db.prepare('SELECT session_id, MIN(ts) AS first_ts, MAX(ts) AS last_ts, COUNT(*) AS calls FROM local_runtime_token_usage GROUP BY session_id ORDER BY last_ts DESC').all();
+}
+function matchesFilters(db, dataDir, row) {
+  const from = opts.from ? parseDate(opts.from) : null;
+  const to = opts.to ? parseDate(opts.to, true) : null;
+  if (from !== null && Number(row.first_ts) < from) return false;
+  if (to !== null && Number(row.first_ts) > to) return false;
+  if (!opts.provider && !opts.model) return true;
+  const meta = sessionMeta(db, row.session_id);
+  const resolved = resolveProviderModel(dataDir, meta);
+  if (opts.provider && !String(resolved.provider ?? '').toLowerCase().includes(opts.provider.toLowerCase())) return false;
+  if (opts.model && !String(resolved.model ?? '').toLowerCase().includes(opts.model.toLowerCase())) return false;
+  return true;
+}
+function enhanceReport(report, selection = null) {
+  const snapshotAt = Number(report.snapshotAt) || Date.now();
+  const ledgerLastCallAt = Number(report.ledgerLastCallAt);
+  return {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    snapshot: {
+      active: Boolean(report.sessionActive),
+      capturedAt: new Date(snapshotAt).toISOString(),
+      lastLedgerActivityAt: Number.isFinite(ledgerLastCallAt) ? new Date(ledgerLastCallAt).toISOString() : null,
+    },
+    selection,
+    usage: {
+      totalTokens: report.totalTokens,
+      inputTokens: report.inputTokens,
+      cacheReadTokens: report.cacheReadTokens,
+      cacheWriteTokens: report.cacheWriteTokens,
+      outputTokens: report.outputTokens,
+      cacheHitRate: report.cacheRate,
+    },
+    billing: {
+      classification: report.rateKnown ? 'rate-priced' : 'cost-unavailable',
+      recordedCostUsd: report.rateKnown ? report.totalCost : null,
+      rateKnown: report.rateKnown,
+      ratesRefreshedAt: report.ratesRefreshedAt,
+    },
+    ...report,
+  };
+}
+function aggregateMcReports(reports) {
+  const total = {
+    calls: 0, inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0,
+    costInput: 0, costOutput: 0, costCacheRead: 0, costCacheWrite: 0, totalCost: 0, totalTokens: 0,
+    promptTokens: 0, bands: { peak: 0, offPeak: 0, flat: 0 }, models: new Map(), sessions: [],
+  };
+  for (const report of reports) {
+    for (const field of ['calls', 'inputTokens', 'outputTokens', 'reasoningTokens', 'cacheReadTokens', 'cacheWriteTokens', 'costInput', 'costOutput', 'costCacheRead', 'costCacheWrite', 'totalCost', 'totalTokens', 'promptTokens']) total[field] += Number(report[field]) || 0;
+    for (const band of ['peak', 'offPeak', 'flat']) total.bands[band] += Number(report.bands?.[band]) || 0;
+    total.sessions.push(report.sessionId);
+    for (const model of report.models) {
+      const key = `${model.providerKey}::${model.modelId}`;
+      const existing = total.models.get(key) ?? { ...model, calls: 0, totalTokens: 0, totalCost: 0 };
+      existing.calls += model.calls;
+      existing.totalTokens += model.totalTokens;
+      existing.totalCost += model.totalCost;
+      total.models.set(key, existing);
+    }
+  }
+  total.cacheRate = total.promptTokens > 0 ? total.cacheReadTokens / total.promptTokens : 0;
+  return { ...total, models: [...total.models.values()], rateKnown: reports.every((report) => report.rateKnown) };
+}
+function renderAggregateMc(report, label) {
+  return [
+    `MCode session cost — ${label}`,
+    `Sessions: ${report.sessions.length}`,
+    `Calls: ${report.calls}`,
+    `Total tokens: ${M(report.totalTokens)} M`,
+    `Fresh input: ${M(report.inputTokens)} M`,
+    `Cached read: ${M(report.cacheReadTokens)} M`,
+    `Output: ${M(report.outputTokens)} M`,
+    `Cache rate: ${(report.cacheRate * 100).toFixed(1)}%`,
+    report.rateKnown ? `Total cost: ${USD(report.totalCost)}` : 'Total cost: unavailable (unpriced calls present)',
+  ].join('\n');
+}
+function renderCompareMc(older, newer) {
+  const delta = newer.totalTokens - older.totalTokens;
+  return [
+    'MCode session cost — comparison',
+    `Older: ${older.sessionId} (${stamp(older.ledgerLastCallAt)})`,
+    `Newer: ${newer.sessionId} (${stamp(newer.ledgerLastCallAt)})`,
+    `Tokens: ${M(older.totalTokens)} M → ${M(newer.totalTokens)} M (${delta >= 0 ? '+' : ''}${M(delta)} M)`,
+    `Cache rate: ${(older.cacheRate * 100).toFixed(1)}% → ${(newer.cacheRate * 100).toFixed(1)}%`,
+    `Cost: ${older.rateKnown ? USD(older.totalCost) : 'unavailable'} → ${newer.rateKnown ? USD(newer.totalCost) : 'unavailable'}`,
+  ].join('\n');
+}
+function renderRates(table) {
+  const lines = ['MCode rate coverage', `Refreshed: ${table._meta?.refreshedAt ?? 'unknown'}`];
+  for (const [key, entry] of Object.entries(table.providers ?? {})) {
+    lines.push(`${key}: ${Object.keys(entry.models ?? {}).length} model(s), source ${entry.source ?? 'unknown'}, fetched ${entry.fetchedAt ?? 'unknown'}`);
+  }
+  lines.push(`Free models: ${(table.freeModels ?? []).join(', ') || 'none'}`);
+  return lines.join('\n');
+}
+
 // ---------------------------------------------------------------- main
 
 const opts = parseArgs(process.argv.slice(2));
@@ -700,18 +839,38 @@ const opts = parseArgs(process.argv.slice(2));
 const dataDir = opts.dataDir ? path.resolve(opts.dataDir) : path.resolve(__dirname, '..', '..', '..');
 
 function costForSession(db, dataDir, table, sessionId) {
-  return buildReport(db, dataDir, table, sessionId, false);
+  return buildReport(db, dataDir, table, sessionId, opts.includeChildren);
 }
 
 async function main() {
   if (opts.refreshRates) await refreshRates();
 
   const table = loadRates();
+
+  if (opts.rates) {
+    const output = {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      rates: {
+        refreshedAt: table._meta?.refreshedAt ?? null,
+        providers: Object.fromEntries(Object.entries(table.providers ?? {}).map(([key, entry]) => [key, { models: Object.keys(entry.models ?? {}).length, source: entry.source ?? null, fetchedAt: entry.fetchedAt ?? null }])),
+        freeModels: table.freeModels ?? [],
+      },
+    };
+    if (opts.json) console.log(JSON.stringify(output, null, 2));
+    else console.log(renderRates(table));
+    return 0;
+  }
+
   const db = await openLedger(dataDir);
 
   try {
+    loadConfig(dataDir);
+    const allRows = sessionRows(db);
+    const candidates = allRows.filter((row) => matchesFilters(db, dataDir, row));
+
     if (opts.list > 0) {
-      const recent = db.prepare('SELECT session_id, MAX(ts) AS last_ts FROM local_runtime_token_usage GROUP BY session_id ORDER BY last_ts DESC LIMIT ?').all(opts.list);
+      const recent = candidates.slice(0, opts.list);
       const out = recent.map((r) => {
         const rep = costForSession(db, dataDir, table, r.session_id);
         const priced = rep.models.filter((m) => m.rateKnown).length;
@@ -723,8 +882,6 @@ async function main() {
           calls: rep.calls,
           totalTokens: rep.totalTokens,
           cacheRate: rep.cacheRate,
-          // A partial figure beats "unknown" in a status list, but it is marked so it is
-          // never quoted as the session's full cost.
           costLabel: priced > 0 ? `${USD(rep.totalCost)}${unpricedCalls ? '*' : ''}` : 'rate unknown',
           partial: priced > 0 && unpricedCalls > 0,
           lastTs: Number(r.last_ts),
@@ -732,7 +889,7 @@ async function main() {
       });
 
       if (opts.json) {
-        console.log(JSON.stringify(out, null, 2));
+        console.log(JSON.stringify({ schemaVersion: 1, generatedAt: new Date().toISOString(), sessions: out }, null, 2));
       } else {
         const clip = (s, n) => (s.length <= n ? s : s.slice(0, n - 1) + '…');
         console.log('recent sessions (newest first)\n');
@@ -756,10 +913,46 @@ async function main() {
       return 0;
     }
 
-    const sessionId = opts.session ?? latestSessionId(db);
-    const report = buildReport(db, dataDir, table, sessionId, opts.includeChildren);
+    if (opts.mode === 'compare') {
+      const reports = candidates.slice(0, 2).map((row) => costForSession(db, dataDir, table, row.session_id));
+      if (reports.length < 2) fail('--compare requires at least two matching sessions');
+      if (opts.json) {
+        console.log(JSON.stringify({
+          schemaVersion: 1,
+          generatedAt: new Date().toISOString(),
+          comparison: { older: enhanceReport(reports[1]), newer: enhanceReport(reports[0]) },
+        }, null, 2));
+      } else {
+        console.log(renderCompareMc(reports[1], reports[0]));
+      }
+      return reports.every((report) => report.rateKnown) ? 0 : 2;
+    }
 
-    if (opts.json) console.log(JSON.stringify(report, null, 2));
+    if (opts.mode === 'last' || opts.mode === 'today' || opts.from || opts.to || opts.provider || opts.model) {
+      let rows = candidates;
+      if (opts.mode === 'last') rows = rows.filter((row) => Date.now() - Number(row.last_ts) >= LIVE_WINDOW_MS).slice(0, 1);
+      if (opts.mode === 'today') {
+        const today = new Date().toISOString().slice(0, 10);
+        rows = rows.filter((row) => new Date(Number(row.first_ts)).toISOString().slice(0, 10) === today);
+      }
+      if (!rows.length) fail('no sessions match the requested filters');
+      const reports = rows.slice(0, 200).map((row) => costForSession(db, dataDir, table, row.session_id));
+      if (reports.length === 1) {
+        if (opts.json) console.log(JSON.stringify(enhanceReport(reports[0], { method: opts.mode, requestedId: null, candidates: reports.map((r) => r.sessionId) }), null, 2));
+        else console.log(renderText(reports[0]));
+      } else {
+        const aggregate = aggregateMcReports(reports);
+        if (opts.json) console.log(JSON.stringify({ schemaVersion: 1, generatedAt: new Date().toISOString(), selection: { method: opts.mode, sessions: reports.map((r) => r.sessionId) }, ...enhanceReport(aggregate), models: aggregate.models }, null, 2));
+        else console.log(renderAggregateMc(aggregate, opts.mode === 'today' ? 'today' : 'filtered range'));
+      }
+      return reports.every((report) => report.rateKnown) ? 0 : 2;
+    }
+
+    const sessionId = opts.session ?? candidates[0]?.session_id ?? latestSessionId(db);
+    const report = costForSession(db, dataDir, table, sessionId);
+    const selection = { method: opts.session ? 'explicit' : 'latest-ledger-activity', requestedId: opts.session ?? null, candidates: candidates.slice(0, 5).map((row) => row.session_id) };
+
+    if (opts.json) console.log(JSON.stringify(enhanceReport(report, selection), null, 2));
     else console.log(renderText(report));
 
     return report.rateKnown ? 0 : 2;

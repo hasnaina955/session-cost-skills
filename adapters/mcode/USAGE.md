@@ -1,0 +1,114 @@
+# MCode session-cost usage reference
+
+Install location:
+
+```text
+%USERPROFILE%\.minimax\skills\session-cost\
+```
+
+## Quick start
+
+```powershell
+$SessionCost = "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs"
+node $SessionCost
+```
+
+## Command matrix
+
+| Command | Meaning |
+| --- | --- |
+| `node $SessionCost` | Current/latest ledger session |
+| `--session <id>` | Specific `mvs_...` session |
+| `--last` | Latest completed session |
+| `--today` | Sessions started today (UTC) |
+| `--compare` | Compare the latest two sessions |
+| `--from <date>` / `--to <date>` | UTC date-range filter |
+| `--provider <name>` | Provider substring filter |
+| `--model <name>` | Model substring filter |
+| `--include-children` | Bill subagent sessions |
+| `--list [n]` | Recent sessions, default 10 |
+| `--rates` | Rate coverage and freshness |
+| `--refresh-rates` | Re-fetch mirrored provider rates |
+| `--json` | Versioned JSON |
+| `--config <path>` | Standing-summary config |
+| `--data-dir <path>` | Override MCode data directory |
+| `--help` / `-h` | CLI help |
+
+## Session modes
+
+```powershell
+node $SessionCost
+node $SessionCost --last
+node $SessionCost --today
+node $SessionCost --compare
+node $SessionCost --session mvs_xxxx
+```
+
+## Filters
+
+```powershell
+node $SessionCost --from 2026-09-01 --to 2026-09-30
+node $SessionCost --provider commandcode
+node $SessionCost --model deepseek
+node $SessionCost --provider stepfun --model step-5-preview
+```
+
+When several sessions match, the command returns an aggregate priced by the same rate engine.
+
+## Rate coverage
+
+```powershell
+node $SessionCost --rates
+node $SessionCost --rates --json
+node $SessionCost --refresh-rates
+```
+
+`--rates` reports mirrored providers, model counts, sources, fetch timestamps, and free-model
+entries without reading the session ledger. `--refresh-rates` re-fetches sources and keeps previous
+rates when a source fails.
+
+## Subagents
+
+```powershell
+node $SessionCost --include-children
+node $SessionCost --session mvs_xxxx --include-children
+```
+
+## Config
+
+`%USERPROFILE%\.minimax\session-cost.json`:
+
+```json
+{
+  "standingSummary": true,
+  "includeChildren": true,
+  "defaultFormat": "compact",
+  "warnOnCacheRateBelow": 0.6
+}
+```
+
+## Accounting semantics that must not change
+
+- `input_tokens` is fresh input and excludes cached tokens.
+- Total prompt = input + cache read + cache write.
+- Cost is calculated from mirrored provider rates.
+- `cacheWrite` can be nonzero for `step-5-preview`.
+- CommandCode uses peak and off-peak bands.
+- Unknown provider/model rates produce tokens without a guessed cost.
+- A session can change model or provider midway.
+
+## Account API
+
+MCode has no Cline account API mode. Use `--rates` for provider coverage instead. Cline’s
+`--account` values are not applicable to MCode sessions.
+
+## Troubleshooting
+
+| Symptom | Action |
+| --- | --- |
+| `cost unavailable` | Run `--rates`; add or refresh the provider rate |
+| `rate unknown` with a total | Total covers priced calls only; unpriced models are named |
+| Stale rates | Run `--refresh-rates` |
+| Wrong session | Use `--session` or `--list` |
+| Missing subagent spend | Use `--include-children` |
+| Ledger not found | Pass `--data-dir %USERPROFILE%\.minimax` |

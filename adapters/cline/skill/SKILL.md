@@ -70,6 +70,7 @@ node $SessionCost --data-dir <path>
 node $SessionCost --config <path>
 node $SessionCost --account
 node $SessionCost --account --json
+node $SessionCost --account --account-days 90
 node $SessionCost --account --account-user-id usr-...
 ```
 

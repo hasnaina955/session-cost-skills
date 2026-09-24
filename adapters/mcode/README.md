@@ -17,6 +17,14 @@ Current capabilities:
 - Model/provider switching within a session
 - Partial or unavailable cost reporting when rates are missing
 - Native MCode session and subagent accounting
+- Automatic current-session selection
+- `--last`, `--today`, `--compare`
+- Date/provider/model filters
+- `--rates` coverage and freshness view
+- Versioned JSON output
+- Optional standing-summary configuration
+
+MCode uses `--rates` instead of the Cline-only `--account` API view.
 
 MCode-specific semantics must remain intact:
 

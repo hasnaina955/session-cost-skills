@@ -20,6 +20,42 @@ Report what a session actually consumed and what it cost, from the runtime's own
 `references/ledger-internals.md` holds the schema, the peak/off-peak band rule, and the model-id
 matching rules — read it before changing the script or explaining an unexpected number.
 
+## Command modes
+
+Run the bundled script from the installed MCode skill:
+
+```powershell
+$SessionCost = "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs"
+
+node $SessionCost
+node $SessionCost --last
+node $SessionCost --today
+node $SessionCost --compare
+node $SessionCost --list 10
+node $SessionCost --from 2026-09-01 --to 2026-09-30
+node $SessionCost --provider commandcode
+node $SessionCost --model deepseek
+node $SessionCost --session <id> --include-children
+node $SessionCost --rates
+node $SessionCost --json
+node $SessionCost --config <path>
+node $SessionCost --refresh-rates
+```
+
+`--last` selects the latest session that is no longer active. `--today` aggregates sessions whose
+first ledger call is on the current UTC date. `--compare` compares the latest two sessions.
+Date/provider/model filters produce an aggregate when multiple sessions match. `--rates` reports
+mirrored provider coverage and freshness without reading session history.
+
+Natural language mapping:
+
+- `current` → no flag
+- `last` → `--last`
+- `today` → `--today`
+- `compare` → `--compare`
+- `this task end to end` → `--include-children`
+- `rate coverage` / `are these rates current` → `--rates`
+
 ## Inputs to collect
 
 - **Which session.** Default to the current session id from `<agent-context>`. Ask only when the
