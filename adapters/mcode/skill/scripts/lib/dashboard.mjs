@@ -67,8 +67,10 @@ export function renderDashboard(data, { title = 'Session Cost Dashboard' } = {})
     body.theme-light .controls input,body.theme-light .controls select,body.theme-light .controls button{background:#fff;border-color:#9fb4cf;color:var(--text)}
     body.theme-light .controls select option{background:#fff;color:var(--text)}
     body.theme-light .controls button{background:#e8f1ff;color:var(--accent-2)}
-    body.theme-light th{background:rgba(238,245,255,.96)}
-    body.theme-light tbody tr:hover{background:rgba(37,99,235,.08)}
+    body.theme-light table,body.theme-light tbody,body.theme-light tbody tr,body.theme-light tr{background:#fff;color:var(--text)}
+    body.theme-light th{background:#eaf1fb;color:#34445c;border-color:var(--line)}
+    body.theme-light td{border-color:var(--line);color:var(--text)}
+    body.theme-light tbody tr:hover{background:#eef5ff}
     body.theme-light pre{background:#0b1527;color:#c4d5ee}
     body.theme-light :focus-visible{outline-color:#1d4ed8}
     .theme-toggle,.format-toggle{border:1px solid var(--line);background:var(--surface-3);color:var(--text);border-radius:999px;padding:7px 11px;cursor:pointer;font:inherit;margin-left:8px}.format-toggle{color:var(--accent-2)}
