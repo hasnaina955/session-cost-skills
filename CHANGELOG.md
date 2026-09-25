@@ -6,6 +6,21 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- Corrected peak/off-peak pricing for OpenAI- and Anthropic-compatible provider profiles.
+  `bandForTimestamp` did `new Date(Number(timestamp))`, and `Number()` of an ISO-8601 string is
+  `NaN`, so every ISO timestamp resolved to off-peak and **silently under-reported cost** during
+  peak windows. An ISO `at` now prices identically to the same instant as epoch milliseconds.
+- Stopped applying CommandCode/StepFun's peak calendar to arbitrary third-party providers. A
+  profile that declares both peak and off-peak records but no time-of-day policy now reports
+  `coverage: unavailable` instead of guessing a band.
+- `bandForTimestamp` now throws on an unparseable timestamp rather than falling through to
+  off-peak, and returns `flat` for an empty time-of-day policy.
+- Fixed the Anthropic-compatible stream parser. The Messages API emits server-sent events, but
+  the parser treated every line as bare JSON and threw on the first `event:` line, so no
+  Anthropic-compatible streaming usage could ever be read.
+- `doctor` and `providers` now report the manifest `fingerprint` the provider-driver contract
+  requires. Built-in manifests were surfaced raw and never passed through the registry, so
+  `doctor --json` listed driver identities the pricing path could not reproduce.
 - Replaced two hand-rolled argument parsers with one shared option schema, so both adapters
   accept, reject, and explain the same flags identically.
 - `--list` no longer consumes the following flag as its count. `--list --json` used to
@@ -17,6 +32,14 @@ All notable changes to this project are documented here.
 - Numeric ranges (`--list`, `--account-days`) and calendar dates are validated before any
   storage is opened, so a bad invocation fails immediately instead of after loading a ledger.
 - `--account-days abc` no longer crashes MCode with a raw stack trace.
+
+### Added
+
+- Documented the configuration system, provider-driver contract, model-matching precedence,
+  and skill migration in `docs/configuration.md`, `docs/provider-drivers.md`,
+  `docs/model-matching.md`, and `docs/migration.md`.
+- Added offline fixtures covering every built-in provider driver in both adapters plus the
+  generic OpenAI- and Anthropic-compatible protocol drivers.
 
 ### Changed
 

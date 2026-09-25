@@ -130,8 +130,18 @@ export function makeRateRecord({
 }
 
 export function bandForTimestamp(timestamp, rate) {
-  if (!rate?.timeOfDay) return 'flat';
-  const date = new Date(Number(timestamp));
+  if (!rate?.timeOfDay || Object.keys(rate.timeOfDay).length === 0) return 'flat';
+  // `Number(isoString)` is NaN, and `new Date(NaN)` silently yields NaN for every
+  // getter, which made an ISO timestamp always fall through to offPeak and quietly
+  // under-price a peak call. Parse both accepted shapes explicitly.
+  const date = timestamp instanceof Date ? timestamp
+    : typeof timestamp === 'string' ? new Date(Date.parse(timestamp))
+      : new Date(Number(timestamp));
+  if (Number.isNaN(date.getTime())) {
+    // A band we cannot determine must not be guessed: pricing a peak window as
+    // off-peak under-reports cost, and pricing it as peak over-reports it.
+    throw new Error(`cannot determine a time band from timestamp ${JSON.stringify(timestamp)}`);
+  }
   const day = date.getUTCDay();
   const hour = date.getUTCHours();
   const isWeekday = day >= 1 && day <= 5;

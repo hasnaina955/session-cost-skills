@@ -1,5 +1,6 @@
 import {
   BUILTIN_PROVIDER_MANIFESTS,
+  detectBuiltinProvider,
   detectConfiguredProvider,
   normalizeModelId,
   normalizeProviderId,
@@ -13,7 +14,13 @@ function manifestForConfiguredProfile(profile, configuration, runtimeId) {
 export function discoverProviderManifests(configuration, runtimeId) {
   const manifests = new Map();
   for (const manifest of BUILTIN_PROVIDER_MANIFESTS) {
-    if (manifest.match.runtimes.includes(runtimeId)) manifests.set(manifest.id, manifest);
+    if (!manifest.match.runtimes.includes(runtimeId)) continue;
+    // Resolve through the registry rather than reporting the raw manifest. The raw
+    // entries never pass through defineProviderDriver, so they carry no fingerprint,
+    // and `doctor`/`providers` were emitting driver identities that the pricing path
+    // could not reproduce.
+    const resolved = detectBuiltinProvider(manifest.id, runtimeId);
+    manifests.set(manifest.id, resolved ?? manifest);
   }
   for (const profile of configuration?.providers ?? []) {
     if (!profile.match.runtimes.includes(runtimeId)) continue;
