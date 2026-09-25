@@ -9,10 +9,13 @@
     "check:dashboard": "node scripts/sync-dashboard.mjs --check",
     "sync:session-graph": "node scripts/sync-session-graph.mjs",
     "check:session-graph": "node scripts/sync-session-graph.mjs --check",
-    "test": "node --test tests/dashboard-security.test.mjs tests/session-graph.test.mjs adapters/cline/skill/tests/core.test.mjs adapters/cline/skill/tests/account.test.mjs adapters/mcode/skill/tests/rates.test.mjs adapters/mcode/skill/tests/cli.test.mjs",
-    "check:cline": "node --check adapters/cline/skill/scripts/session-cost.mjs && node --check adapters/cline/skill/scripts/lib/session-cost-core.mjs && node --check adapters/cline/skill/scripts/lib/cline-account.mjs && node --check adapters/cline/skill/scripts/lib/session-graph.mjs",
-    "check:mcode": "node --check adapters/mcode/skill/scripts/session-cost.mjs && node --check adapters/mcode/skill/scripts/lib/dashboard.mjs && node --check adapters/mcode/skill/scripts/lib/rates.mjs && node --check adapters/mcode/skill/scripts/lib/session-graph.mjs",
-    "verify": "npm run check:dashboard && npm run check:session-graph && npm run check:cline && npm run check:mcode && npm test"
+    "sync:report-contract": "node scripts/sync-report-contract.mjs",
+    "check:report-contract": "node scripts/sync-report-contract.mjs --check",
+    "test": "node scripts/run-tests.mjs",
+    "check:cline": "node --check adapters/cline/skill/scripts/session-cost.mjs && node --check adapters/cline/skill/scripts/lib/session-cost-core.mjs && node --check adapters/cline/skill/scripts/lib/cline-account.mjs && node --check adapters/cline/skill/scripts/lib/session-graph.mjs && node --check adapters/cline/skill/scripts/lib/report-contract.mjs",
+    "check:mcode": "node --check adapters/mcode/skill/scripts/session-cost.mjs && node --check adapters/mcode/skill/scripts/lib/dashboard.mjs && node --check adapters/mcode/skill/scripts/lib/rates.mjs && node --check adapters/mcode/skill/scripts/lib/session-graph.mjs && node --check adapters/mcode/skill/scripts/lib/report-contract.mjs",
+    "check:contracts": "node --check scripts/validate-json-schema.mjs && node --check scripts/run-tests.mjs && node -e \"JSON.parse(require('fs').readFileSync('contracts/normalized-report-v1.schema.json','utf8'))\"",
+    "verify": "npm run check:dashboard && npm run check:session-graph && npm run check:report-contract && npm run check:contracts && npm run check:cline && npm run check:mcode && npm test"
   },
   "engines": {
     "node": ">=22.5"

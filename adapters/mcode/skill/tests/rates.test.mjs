@@ -351,7 +351,10 @@ test('MCode CLI reports a nonzero CommandCode cache-write cost end to end', (t) 
   const report = JSON.parse(result.stdout);
   assert.equal(report.usage.cacheWriteTokens, 1_000_000);
   assert.equal(report.costCacheWrite, 0.25);
-  assert.equal(report.billing.classification, 'rate-priced');
+  assert.equal(report.billing.classification, 'rate-estimated');
+  assert.equal(report.billing.basis, 'provider-rate-estimate');
+  assert.equal(report.billing.recordedCostUsd, null);
+  assert.equal(report.billing.estimatedCostUsd, 0.25);
   assert.equal(report.models[0].rateKnown, true);
   assert.equal(report.rateCoverage.complete, true);
   assert.deepEqual(report.excludedSessionIds, ['mvs_child', 'mvs_grandchild']);

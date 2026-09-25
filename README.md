@@ -25,7 +25,7 @@ This repository keeps runtime-specific accounting adapters separate while sharin
 - CommandCode and StepFun provider-rate accounting
 - Cache-read and cache-write semantics preserved per runtime
 - Self-contained HTML dashboards with no external assets
-- Versioned JSON output
+- Shared normalized JSON report contract with runtime extensions
 - Windows and Node.js 22.5+ support
 
 ## Installation
@@ -79,11 +79,13 @@ Or run individual checks:
 
 ```powershell
 npm test
+npm run check:report-contract
+npm run check:contracts
 npm run check:cline
 npm run check:mcode
 ```
 
-The verification command performs syntax checks, dashboard safety tests, credential redaction checks, and adapter tests.
+The verification command performs syntax and generated-copy checks, validates the normalized JSON contract, runs recursively discovered Cline and MCode tests, exercises synthetic ledger fixtures, and checks dashboard safety.
 
 ## Free and optional support
 
@@ -96,6 +98,7 @@ A Gumroad product may be offered for voluntary support, compatibility assistance
 - [Cline usage reference](adapters/cline/USAGE.md)
 - [MCode usage reference](adapters/mcode/USAGE.md)
 - [Architecture](docs/architecture.md)
+- [Normalized report contract](contracts/README.md)
 - [MCode porting plan](docs/porting-plan.md)
 - [Gumroad selling guide](docs/gumroad-selling-guide.html)
 - [Changelog](CHANGELOG.md)

@@ -24,12 +24,23 @@ import {
   resolveRate as resolveProviderRate,
 } from './lib/rates.mjs';
 import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from './lib/session-graph.mjs';
+import { REPORT_CONTRACT_VERSION, withNormalizedContract } from './lib/report-contract.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RATES_PATH = process.env.SESSION_COST_RATES_PATH
   ? path.resolve(process.env.SESSION_COST_RATES_PATH)
   : path.resolve(__dirname, '..', 'references', 'provider-rates.json');
 const PER_MILLION = 1_000_000;
+const CONTRACT_RUNTIME = Object.freeze({
+  id: 'mcode',
+  costBasis: 'provider-rate-estimate',
+  storageSource: 'v2/sqlite/runtime-state.sqlite and session message logs',
+  inputTokenMeaning: 'excludes-cache',
+  reasoningIncludedInOutput: true,
+  provenanceKind: 'provider-rate-estimate',
+  provenanceSource: 'MCode runtime ledger plus mirrored provider rate tables',
+  rateSources: [],
+});
 // A session whose most recent call is this recent is treated as still running, so the report
 // can say the totals are a snapshot rather than a final figure.
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
@@ -624,31 +635,41 @@ function matchesFilters(db, dataDir, row) {
 function enhanceReport(report, selection = null) {
   const snapshotAt = Number(report.snapshotAt) || Date.now();
   const ledgerLastCallAt = Number(report.ledgerLastCallAt);
-  return {
+  const enhanced = {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
     snapshot: {
       active: Boolean(report.sessionActive),
       capturedAt: new Date(snapshotAt).toISOString(),
+      state: report.sessionActive ? 'snapshot' : 'final',
       lastLedgerActivityAt: Number.isFinite(ledgerLastCallAt) ? new Date(ledgerLastCallAt).toISOString() : null,
     },
     selection,
     usage: {
       totalTokens: report.totalTokens,
       inputTokens: report.inputTokens,
+      freshInputTokens: report.inputTokens,
       cacheReadTokens: report.cacheReadTokens,
       cacheWriteTokens: report.cacheWriteTokens,
       outputTokens: report.outputTokens,
       cacheHitRate: report.cacheRate,
     },
     billing: {
-      classification: report.rateKnown ? 'rate-priced' : 'cost-unavailable',
-      recordedCostUsd: report.rateKnown ? report.totalCost : null,
+      classification: report.rateKnown ? 'rate-estimated' : 'cost-unavailable',
+      recordedCostUsd: null,
+      estimatedCostUsd: report.rateKnown ? report.totalCost : null,
       rateKnown: report.rateKnown,
       ratesRefreshedAt: report.ratesRefreshedAt,
     },
     ...report,
   };
+  return withNormalizedContract(enhanced, {
+    runtime: {
+      ...CONTRACT_RUNTIME,
+      rateSources: (report.providersUsed ?? []).map((provider) => provider.source).filter(Boolean),
+    },
+    selection,
+  });
 }
 function aggregateMcReports(reports, duplicateSuppressedSessionIds = []) {
   const total = {
@@ -779,9 +800,9 @@ async function main() {
     if (opts.list > 0) {
       const topLevel = selectTopLevelCandidates(candidates.map((row) => row.session_id), graph);
       const recent = topLevel.includedRootIds.slice(0, opts.list);
-      const out = recent.map((sessionId) => {
-        const r = rowsById.get(sessionId);
-        const rep = costForSession(db, dataDir, table, graph, sessionId);
+      const reports = recent.map((sessionId) => costForSession(db, dataDir, table, graph, sessionId));
+      const out = reports.map((rep, index) => {
+        const r = rowsById.get(recent[index]);
         const priced = rep.models.filter((m) => m.rateKnown).length;
         const unpricedCalls = rep.models.filter((m) => !m.rateKnown).reduce((n, m) => n + m.calls, 0);
         return {
@@ -801,7 +822,19 @@ async function main() {
       });
 
       if (opts.json) {
-        console.log(JSON.stringify({ schemaVersion: 1, generatedAt: new Date().toISOString(), sessions: out, duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds }, null, 2));
+        console.log(JSON.stringify({
+          schemaVersion: 1,
+          contractVersion: REPORT_CONTRACT_VERSION,
+          runtime: 'mcode',
+          kind: 'report-list',
+          generatedAt: new Date().toISOString(),
+          sessions: reports.map((report) => enhanceReport(report, {
+            method: 'list',
+            requestedId: null,
+            candidateIds: recent,
+          })),
+          duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds,
+        }, null, 2));
       } else {
         const clip = (s, n) => (s.length <= n ? s : s.slice(0, n - 1) + '…');
         console.log('recent sessions (newest first)\n');
@@ -836,8 +869,14 @@ async function main() {
       if (opts.json) {
         console.log(JSON.stringify({
           schemaVersion: 1,
+          contractVersion: REPORT_CONTRACT_VERSION,
+          runtime: 'mcode',
+          kind: 'report-comparison',
           generatedAt: new Date().toISOString(),
-          comparison: { older: enhanceReport(reports[1]), newer: enhanceReport(reports[0]) },
+          comparison: {
+            older: enhanceReport(reports[1], { method: 'compare', requestedId: null, candidateIds: topLevel.includedRootIds }),
+            newer: enhanceReport(reports[0], { method: 'compare', requestedId: null, candidateIds: topLevel.includedRootIds }),
+          },
           duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds,
         }, null, 2));
       } else {
@@ -866,7 +905,18 @@ async function main() {
         else console.log(renderText(reports[0]));
       } else {
         const aggregate = aggregateMcReports(reports, topLevel.duplicateSuppressedSessionIds);
-        if (opts.json) console.log(JSON.stringify({ schemaVersion: 1, generatedAt: new Date().toISOString(), selection: { method: opts.mode, sessions: reports.map((r) => r.sessionId) }, ...enhanceReport(aggregate), models: aggregate.models }, null, 2));
+        if (opts.json) console.log(JSON.stringify({
+          schemaVersion: 1,
+          contractVersion: REPORT_CONTRACT_VERSION,
+          runtime: 'mcode',
+          kind: 'report',
+          ...enhanceReport(aggregate, {
+            method: opts.mode,
+            requestedId: null,
+            candidateIds: topLevel.includedRootIds,
+          }),
+          models: aggregate.models,
+        }, null, 2));
         else console.log(renderAggregateMc(aggregate, opts.mode === 'today' ? 'today' : 'filtered range'));
       }
       return reports.every((report) => report.rateKnown) ? 0 : 2;
@@ -878,7 +928,7 @@ async function main() {
 
     if (opts.dashboard) {
       const outputPath = writeDashboard(enhanceReport(report, selection), { outPath: opts.out ?? path.join(dataDir, 'reports', 'session-cost', 'session-dashboard.html'), title: 'MCode Session Cost Dashboard' });
-      if (opts.json) console.log(JSON.stringify({ schemaVersion: 1, dashboardPath: outputPath, report: enhanceReport(report, selection) }, null, 2));
+      if (opts.json) console.log(JSON.stringify({ schemaVersion: 1, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'mcode', kind: 'dashboard', generatedAt: new Date().toISOString(), dashboardPath: outputPath, report: enhanceReport(report, selection) }, null, 2));
       else console.log(`Dashboard written: ${outputPath}`);
     } else if (opts.json) console.log(JSON.stringify(enhanceReport(report, selection), null, 2));
     else console.log(renderText(report));

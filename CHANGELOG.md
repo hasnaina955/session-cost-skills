@@ -16,6 +16,9 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- Added a formal normalized report contract shared by both CLIs, including token semantics, cost basis, provenance, coverage, warnings, selection, and session-graph state.
+- Label MCode rate-derived totals as estimates rather than runtime-recorded charges.
+- Discover every adapter and contract test recursively instead of maintaining a partial package script list.
 - Generate independently installable Cline and MCode dashboard renderers from one canonical implementation and fail verification when copies drift.
 
 ## 0.2.0
