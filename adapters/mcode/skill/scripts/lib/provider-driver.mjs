@@ -174,6 +174,31 @@ export function detectBuiltinProvider(providerId, runtimeId) {
   return registry.resolve(providerId)?.manifest ?? null;
 }
 
+export function detectConfiguredProvider(providerId, configuration, runtimeId) {
+  const profiles = configuration?.providers ?? [];
+  const normalized = normalizeProviderId(providerId);
+  const profile = profiles.find((candidate) => (
+    candidate.match?.runtimes?.includes(runtimeId)
+    && candidate.match.providerIds.some((id) => normalizeProviderId(id) === normalized)
+  ));
+  if (!profile) return detectBuiltinProvider(providerId, runtimeId);
+  const base = BUILTIN_PROVIDER_MANIFESTS.find((candidate) => candidate.id === profile.driverId);
+  if (!base) throw new Error(`provider profile ${profile.id} references unsupported driver ${profile.driverId}`);
+  const aliases = Object.fromEntries((configuration.models ?? [])
+    .filter((mapping) => profile.match.providerIds.includes(mapping.provider))
+    .map((mapping) => [mapping.runtimeModel, mapping.rateModel]));
+  return defineProviderDriver({
+    manifest: {
+      ...base,
+      id: profile.id,
+      version: `${base.version}+profile`,
+      match: profile.match,
+      modelAliases: { ...base.modelAliases, ...aliases },
+    },
+    handlers: Object.fromEntries(base.operations.map((operation) => [operation, () => null])),
+  }).manifest;
+}
+
 export async function loadProviderDrivers(directory) {
   const root = path.resolve(directory);
   if (!fs.existsSync(root)) return [];

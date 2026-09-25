@@ -8,6 +8,7 @@ All notable changes to this project are documented here.
 
 - Added fingerprinted effective-dated rate records with context thresholds, time bands, source metadata, and immutable refresh history.
 - Added a versioned provider-driver contract with deterministic detection, aliases, capability declarations, and safe user-module loading.
+- Added layered project/user configuration, provider profiles, safe secret references, and config lifecycle commands.
 
 ### Security
 

@@ -24,6 +24,7 @@ import {
   refreshRateTable as refreshRateCatalog,
 } from './lib/rates.mjs';
 import { createMCodeProviderRegistry, resolveWithProviderDriver } from './lib/provider-drivers.mjs';
+import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, readConfigFile } from './lib/config.mjs';
 import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from './lib/session-graph.mjs';
 import { REPORT_CONTRACT_VERSION, withNormalizedContract } from './lib/report-contract.mjs';
 
@@ -53,6 +54,7 @@ function parseArgs(argv) {
     session: null, mode: 'current', list: 0, json: false, includeChildren: false, includeChildrenExplicit: false,
     refreshRates: false, dataDir: null, from: null, to: null, provider: null, model: null, configPath: null, rates: false,
     dashboard: false, out: null,
+    sessionConfigPath: null, configAction: null, configImportPath: null,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -65,6 +67,11 @@ function parseArgs(argv) {
     else if (a === '--provider') opts.provider = argv[++i];
     else if (a === '--model') opts.model = argv[++i];
     else if (a === '--config') opts.configPath = argv[++i];
+    else if (a === '--session-config') opts.sessionConfigPath = argv[++i];
+    else if (a === '--init-config') opts.configAction = 'init';
+    else if (a === '--validate-config') opts.configAction = 'validate';
+    else if (a === '--export-config') opts.configAction = 'export';
+    else if (a === '--import-config') { opts.configAction = 'import'; opts.configImportPath = argv[++i]; }
     else if (a === '--rates') opts.rates = true;
     else if (a === '--dashboard') opts.dashboard = true;
     else if (a === '--out') opts.out = argv[++i];
@@ -97,6 +104,11 @@ function printHelp() {
   --list [n]              list the n most recent sessions with their cost (default 10)
   --json                  emit JSON instead of the markdown summary
   --config <path>         load standing-summary settings
+  --session-config <path> load provider/session configuration
+  --init-config           create a safe project config template
+  --validate-config       validate and print effective configuration
+  --export-config         print the effective configuration
+  --import-config <path>  validate and import a config file
   --refresh-rates         atomically re-fetch and validate CommandCode and StepFun rates
   --data-dir <path>       MiniMax data dir (default: derived from this script's location)`);
 }
@@ -482,6 +494,7 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
     ledgerLastCallAt: lastTs,
     sessionActive: lastTs !== null && snapshotAt - lastTs < LIVE_WINDOW_MS,
     ratesRefreshedAt: table._meta?.refreshedAt ?? null,
+    configuration: effectiveConfiguration,
     rateCoverage: inspectRateTable(table),
     providerDrivers,
     rateProvenance,
@@ -852,6 +865,7 @@ function renderRates(table) {
 // ---------------------------------------------------------------- main
 
 const opts = parseArgs(process.argv.slice(2));
+let effectiveConfiguration = null;
 // <dataDir>/skills/session-cost/scripts/ -> three levels up is <dataDir>.
 const dataDir = opts.dataDir ? path.resolve(opts.dataDir) : path.resolve(__dirname, '..', '..', '..');
 
@@ -859,16 +873,55 @@ function costForSession(db, dataDir, table, providerRegistry, graph, sessionId) 
   return buildReport(db, dataDir, table, providerRegistry, graph, sessionId, opts.includeChildren);
 }
 
+function handleConfigAction(configuration) {
+  if (!opts.configAction) return false;
+  const target = path.resolve(opts.sessionConfigPath ?? configuration.paths.project);
+  let actionResult = null;
+  if (opts.configAction === 'init') actionResult = initConfig(target);
+  else if (opts.configAction === 'import') {
+    if (!opts.configImportPath) fail('--import-config requires a path');
+    actionResult = importConfig(path.resolve(opts.configImportPath), target);
+  }
+  else if (opts.configAction === 'validate') {
+    const loaded = readConfigFile(target);
+    if (!loaded) fail(`config not found: ${target}`);
+    actionResult = { path: target, config: loaded.config };
+  } else if (opts.configAction === 'export') actionResult = { path: target, config: configuration.config };
+  console.log(JSON.stringify({
+    schemaVersion: 1,
+    action: opts.configAction,
+    result: actionResult,
+    configuration: { ...publicConfigResult(configuration), config: actionResult?.config ?? configuration.config },
+  }, null, 2));
+  return true;
+}
+
 async function main() {
+  effectiveConfiguration = loadEffectiveConfig({
+    configPath: opts.sessionConfigPath,
+    cli: {
+      provider: opts.provider,
+      model: opts.model,
+      includeChildren: opts.includeChildrenExplicit ? opts.includeChildren : undefined,
+    },
+  });
+  if (handleConfigAction(effectiveConfiguration)) return 0;
+  if (!opts.provider && effectiveConfiguration.config.runtimeDefaults.provider) opts.provider = effectiveConfiguration.config.runtimeDefaults.provider;
+  if (!opts.model && effectiveConfiguration.config.runtimeDefaults.model) opts.model = effectiveConfiguration.config.runtimeDefaults.model;
+  if (!opts.includeChildrenExplicit && effectiveConfiguration.config.runtimeDefaults.includeChildren === true) opts.includeChildren = true;
   if (opts.refreshRates) await refreshRates();
 
   const table = loadRates();
-  const providerRegistry = createMCodeProviderRegistry(table);
+  const providerRegistry = createMCodeProviderRegistry(table, {
+    profiles: effectiveConfiguration.config.providers,
+    models: effectiveConfiguration.config.models,
+  });
 
   if (opts.rates) {
     const output = {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
+      configuration: publicConfigResult(effectiveConfiguration),
       rates: {
         refreshedAt: table._meta?.refreshedAt ?? null,
         providers: Object.fromEntries(Object.entries(table.providers ?? {}).map(([key, entry]) => [key, { models: Object.keys(entry.models ?? {}).length, source: entry.source ?? null, fetchedAt: entry.fetchedAt ?? null }])),

@@ -43,6 +43,7 @@
       "type": "array",
       "items": { "type": "object", "additionalProperties": true }
     },
+    "configuration": { "type": ["object", "null"], "additionalProperties": true },
     "providerDriver": { "type": ["object", "null"], "additionalProperties": true },
     "providerDrivers": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
     "rateProvenance": {

@@ -73,6 +73,8 @@ test('Cline CLI satisfies the shared contract across all report modes', (t) => {
   assert.equal(root.output.runtime.costBasis, 'runtime-recorded');
   assert.equal(root.output.providerDriver.id, 'commandcode');
   assert.match(root.output.providerDriver.fingerprint, /^sha256:/);
+  assert.equal(root.output.configuration.config.schemaVersion, 1);
+  assert.equal(root.output.configuration.sources.cli.merged, true);
   assert.equal(root.output.usage.semantics.inputTokenMeaning, 'includes-cache');
   assert.deepEqual(root.output.sessionGraph.rootSessionIds, ['cline-root']);
   assert.deepEqual(root.output.sessionGraph.includedSessionIds, ['cline-root', 'cline-child', 'cline-grandchild']);
@@ -153,6 +155,8 @@ test('MCode CLI satisfies the shared contract across all report modes', (t) => {
   assert.equal(typeof root.output.rateProvenance[0].effectiveFrom, 'string');
   assert.deepEqual(root.output.sessionGraph.rootSessionIds, ['mcode-root']);
   assert.deepEqual(root.output.sessionGraph.includedSessionIds, ['mcode-root', 'mcode-child', 'mcode-grandchild']);
+  assert.equal(root.output.configuration.config.schemaVersion, 1);
+  assert.equal(root.output.configuration.sources.cli.merged, true);
   assert.equal(root.output.multiProvider, true);
   assert.ok(root.output.models.length >= 2);
   assert.deepEqual(root.output.providerDrivers.map((driver) => driver.id).sort(), ['commandcode', 'stepfun']);

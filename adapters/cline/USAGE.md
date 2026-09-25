@@ -29,6 +29,11 @@ node $SessionCost
 | `--list [n]` | Recent-session table, default 10 |
 | `--json` | Shared normalized contract JSON |
 | `--config <path>` | Standing-summary config |
+| `--session-config <path>` | Provider/session config |
+| `--init-config` | Create safe config template |
+| `--validate-config` | Validate and show effective config |
+| `--export-config` | Print effective config |
+| `--import-config <path>` | Import validated config |
 | `--account` | Live read-only account API view |
 | `--account-days <n>` | Account history window, default 45 |
 | `--account-user-id <id>` | Must match authenticated account |
@@ -39,6 +44,14 @@ node $SessionCost
 
 
 `--json` reports use normalized contract version `1.2.0`. Cline labels its value as a runtime-recorded cost; token semantics, selection, coverage, provider-driver provenance, warnings, and session-graph state are explicit.
+
+## Provider configuration
+
+Project config is `.session-cost.json`; user config uses the platform config directory. Precedence is
+CLI flags, project config, user config, detected runtime defaults, then built-in defaults. Use
+`--validate-config` or `--export-config` to see the effective values and winning sources. Profiles store
+only environment-variable names such as `OPENROUTER_API_KEY`, never credential values.
+
 ## Session modes
 
 ```powershell
