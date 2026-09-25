@@ -216,15 +216,39 @@ function logSessionId(dataDir) {
   return null;
 }
 
+function finiteOrNull(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 function fromAggregate(metadata, row) {
-  const usage = metadata.aggregateUsage ?? metadata.usage ?? {};
-  const result = { ...emptyMetrics(), source: 'aggregate', storedTotalCost: metadata.totalCost };
-  for (const field of ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens']) result[field] = num(usage[field]);
+  const usage = metadata.aggregateUsage ?? metadata.usage ?? null;
+  const storedTotalCost = finiteOrNull(metadata.totalCost);
+  const hasUsage = usage && typeof usage === 'object';
+  if (!hasUsage && storedTotalCost === null) return null;
+
+  const result = {
+    ...emptyMetrics(),
+    callCountKnown: false,
+    source: 'aggregate',
+    storedTotalCost,
+    cost: storedTotalCost ?? 0,
+  };
+  for (const field of ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens']) {
+    result[field] = finiteOrNull(usage?.[field]) ?? 0;
+  }
   result.lastTs = Date.parse(row.updated_at ?? row.started_at ?? '') || Date.parse(row.ended_at ?? '') || 0;
   const provider = row.provider ?? 'unknown';
   const model = row.model ?? 'unknown';
-  const group = { provider, model, ...emptyMetrics() };
-  for (const field of ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens']) group[field] = result[field];
+  const group = {
+    provider,
+    model,
+    ...emptyMetrics(),
+    callCountKnown: false,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
+    cacheReadTokens: result.cacheReadTokens,
+    cacheWriteTokens: result.cacheWriteTokens,
+  };
   result.models.set(`${provider}|${model}`, group);
   return result;
 }
@@ -241,13 +265,15 @@ function rowMetrics(row) {
     }
   }
   if (!result.calls) {
-    result = fromAggregate(metadata, row);
-    source = result.inputTokens || result.outputTokens ? 'aggregate' : 'none';
+    const aggregate = fromAggregate(metadata, row);
+    if (aggregate) return { ...aggregate, title: metadata.title ?? row.prompt ?? '' };
+    return { ...result, source: 'none', title: metadata.title ?? row.prompt ?? '' };
   }
-  return { ...result, source, title: metadata.title ?? row.prompt ?? '', storedTotalCost: metadata.totalCost };
+  return { ...result, source, title: metadata.title ?? row.prompt ?? '', storedTotalCost: finiteOrNull(metadata.totalCost) };
 }
 
 function costState(metrics) {
+  if (metrics.callCountKnown === false) return { label: metrics.cost > 0 ? usd(metrics.cost) : 'not recorded', note: 'aggregate call count unavailable' };
   if (!metrics.calls) return { label: usd(0), note: 'no calls' };
   if (metrics.unpricedCalls === 0) return { label: usd(metrics.cost), note: 'complete' };
   if (metrics.pricedCalls === 0) return { label: 'not recorded', note: `0/${metrics.calls} calls have cost` };
@@ -268,25 +294,39 @@ function reportFor(row, all, graph, includeChildren, selection = null) {
     },
     metrics: rowMetrics(item),
   }));
+  const missingChildren = sessions.filter((item) => (
+    !item.metrics.calls
+    && item.row.sessionId !== row.session_id
+    && item.metrics.callCountKnown !== false
+  ));
+  const rootMetrics = sessions[0]?.metrics ?? emptyMetrics();
   const total = emptyMetrics();
-  for (const session of sessions) combineMetrics(total, session.metrics);
+  const warnings = [];
+  let totalSource;
+  let usageScope;
+  let aggregateFallback = null;
 
-  // Some older Cline subagent rows have no message file and no usage aggregate. In that case the
-  // root session's aggregateUsage is Cline's authoritative end-to-end total, so use it rather than
-  // silently under-reporting. Per-model rows remain the call-level detail that is locally present.
-  const missingChildren = sessions.filter((item) => !item.metrics.calls && item.row.sessionId !== row.session_id);
-  let totalSource = 'messages';
-  if (includeChildren && missingChildren.length) {
-    const metadata = safeJson(row.metadata_json);
-    const aggregate = metadata.aggregateUsage;
-    if (aggregate) {
-      for (const field of ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens']) total[field] = num(aggregate[field]);
-      if (Number.isFinite(Number(metadata.totalCost))) {
-        total.cost = Number(metadata.totalCost);
-        total.pricedCalls = total.calls;
-        total.unpricedCalls = 0;
-      }
-      totalSource = 'aggregate-with-missing-children';
+  if (rootMetrics.callCountKnown === false) {
+    combineMetrics(total, rootMetrics);
+    totalSource = 'root-aggregate';
+    usageScope = 'end-to-end';
+    aggregateFallback = {
+      used: true,
+      source: 'metadata.aggregateUsage',
+      callCountKnown: false,
+      storedTotalCostUsd: finiteOrNull(rootMetrics.storedTotalCost),
+    };
+    if (excludedSessionIds.length) {
+      warnings.push('Aggregate usage already includes descendant sessions even though descendants are excluded from this selection.');
+    }
+  } else {
+    for (const session of sessions) combineMetrics(total, session.metrics);
+    usageScope = includeChildren ? 'included-sessions' : 'root-only';
+    totalSource = 'messages';
+    if (includeChildren && missingChildren.length) {
+      total.callCountKnown = false;
+      totalSource = 'partial-messages';
+      warnings.push(`${missingChildren.length} descendant session(s) have no reconstructable usage; totals are incomplete.`);
     }
   }
 
@@ -296,7 +336,7 @@ function reportFor(row, all, graph, includeChildren, selection = null) {
     snapshot: reportStatus(row),
     session: {
       id: row.session_id,
-      title: rowMetrics(row).title,
+      title: rootMetrics.title,
       status: row.status,
       startedAt: row.started_at,
       endedAt: row.ended_at,
@@ -314,6 +354,16 @@ function reportFor(row, all, graph, includeChildren, selection = null) {
     sessions,
     total,
     totalSource,
+    usageScope,
+    rootCallCountKnown: rootMetrics.callCountKnown !== false,
+    aggregateFallback,
+    warnings,
+    provenance: {
+      kind: aggregateFallback ? 'runtime-aggregate' : 'runtime-ledger',
+      source: aggregateFallback ? 'Cline metadata.aggregateUsage' : 'Cline session messages',
+      callCountKnown: total.callCountKnown !== false,
+      rateSources: [],
+    },
     includedChildren: includeChildren,
   }, selection);
 }
@@ -342,6 +392,8 @@ function render(report) {
     `Session: ${report.session.id}`,
     `Title: ${clip(report.session.title || '(untitled)', 80)}`,
     `Status: ${report.session.status} (${freshness(report)})`,
+    `Usage scope: ${report.usageScope ?? 'included sessions'}`,
+    ...(report.warnings ?? []).map((warning) => `Warning: ${warning}`),
     ...(report.providerDriver ? [`Provider driver: ${report.providerDriver.id}@${report.providerDriver.version} (${report.providerDriver.fingerprint})`] : []),
     ...(report.selection?.method ? [`Selection: ${report.selection.method}${report.selection.requestedId ? ` (${report.selection.requestedId})` : ''}`] : []),
     ...(report.selection?.warning ? [`Selection warning: ${report.selection.warning}`] : []),

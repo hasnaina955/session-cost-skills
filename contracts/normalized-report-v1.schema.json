@@ -206,7 +206,8 @@
       "properties": {
         "kind": { "type": "string", "minLength": 1 },
         "source": { "type": "string", "minLength": 1 },
-        "rateSources": { "$ref": "#/$defs/sessionIds" }
+        "rateSources": { "$ref": "#/$defs/sessionIds" },
+        "callCountKnown": { "type": "boolean" }
       },
       "additionalProperties": false
     }

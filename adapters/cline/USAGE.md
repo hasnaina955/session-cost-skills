@@ -106,6 +106,11 @@ roots before aggregation, so a child is never counted again beneath a selected p
 root includes descendants even when they start on another UTC date; a child becomes a root only when
 its parent is outside the filtered candidate set.
 
+When Cline supplies `aggregateUsage`, the report labels it `end-to-end` and does not add descendant
+message rows a second time. The aggregate call count remains explicitly unknown. Missing local totals
+produce a partial-scope warning rather than a silent zero. ClinePass reference cost is labeled as
+included subscription usage, not an additional charge.
+
 ## Account mode
 
 ```powershell
