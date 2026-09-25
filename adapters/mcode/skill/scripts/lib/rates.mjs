@@ -788,10 +788,14 @@ function decodeHtmlText(value) {
 function parseRenderedAmount(value) {
   const text = decodeHtmlText(value);
   if (text === '—' || text === '-') return { amount: 0, explicit: true, rendered: 'no-charge', sourceAmount: text };
-  const match = text.replaceAll(',', '').match(/^\$\s*([0-9]+(?:\.[0-9]+)?)$/);
-  return match
-    ? { amount: Number(match[1]), explicit: true, rendered: 'rate', sourceAmount: text }
-    : { amount: null, explicit: false, rendered: null, sourceAmount: null };
+  const compact = text.replaceAll(',', '');
+  const single = compact.match(/^\$\s*([0-9]+(?:\.[0-9]+)?)$/);
+  if (single) return { amount: Number(single[1]), explicit: true, rendered: 'rate', sourceAmount: text };
+  // Promo rows concatenate list and discounted prices in one cell. The JSON payload carries the
+  // effective discounted values, so the final displayed amount is the safe fallback.
+  const promo = compact.match(/^\$\s*([0-9]+(?:\.[0-9]+)?)\$\s*([0-9]+(?:\.[0-9]+)?)$/);
+  if (promo) return { amount: Number(promo[2]), explicit: true, rendered: 'promo-rate', sourceAmount: text };
+  return { amount: null, explicit: false, rendered: null, sourceAmount: null };
 }
 
 function commandCodeDisplayedRates(html) {
@@ -799,19 +803,40 @@ function commandCodeDisplayedRates(html) {
   for (const match of html.matchAll(/<div\b[^>]*\brole="row"[^>]*>/g)) {
     const rowHtml = html.slice(match.index, matchingDivEnd(html, match.index));
     const cells = directDivChildren(rowHtml).map(decodeHtmlText);
-    if (cells.length < 6 || cells[1] !== '1M') continue;
+    if (cells.length < 5) continue;
+
+    // Rows can carry promo badges between the model name and the rate columns. The billing
+    // unit/context cell also varies (`1M`, `200K`, `256K`, ...), so do not anchor on `1M`.
+    // Locate the first four consecutive explicit rendered amounts instead.
+    let rateStart = -1;
+    for (let index = 1; index <= cells.length - 4; index += 1) {
+      if (cells.slice(index, index + 4).every((cell) => parseRenderedAmount(cell).explicit)) {
+        rateStart = index;
+        break;
+      }
+    }
+    if (rateStart === -1) continue;
+
     const name = cells[0];
+    if (!name) continue;
     if (rows.has(name)) throw new Error(`CommandCode pricing HTML has duplicate rendered model name ${name}`);
-    rows.set(name, {
-      input: parseRenderedAmount(cells[2]),
-      output: parseRenderedAmount(cells[3]),
-      cacheRead: parseRenderedAmount(cells[4]),
-      cacheWrite: parseRenderedAmount(cells[5]),
-    });
+    const [input, output, cacheRead, cacheWrite] = cells.slice(rateStart, rateStart + 4).map(parseRenderedAmount);
+    rows.set(name, { input, output, cacheRead, cacheWrite });
   }
   return rows;
 }
 
+
+function renderedRatesForModel(rows, name) {
+  if (rows.has(name)) return rows.get(name);
+  const promoCandidates = [...rows]
+    .filter(([renderedName]) => renderedName.replace(/-[0-9]+(?:\.[0-9]+)?%$/, '') === name)
+    .map(([, value]) => value);
+  if (promoCandidates.length > 1) {
+    throw new Error(`CommandCode pricing HTML has ambiguous promo rows for ${name}`);
+  }
+  return promoCandidates[0] ?? null;
+}
 
 function renderedFallback(rendered, component) {
   return rendered?.[component]?.explicit ? rendered[component].amount : null;
@@ -849,7 +874,7 @@ export function parseCommandCodeRates(html) {
     if (Object.hasOwn(models, raw.id)) {
       throw new Error(`CommandCode rate payload has duplicate model id ${raw.id}`);
     }
-    const rendered = displayed.get(raw.name);
+    const rendered = renderedRatesForModel(displayed, raw.name);
     const input = normalizeRateAmount(raw.inputCost) ?? renderedFallback(rendered, 'input');
     const output = normalizeRateAmount(raw.outputCost) ?? renderedFallback(rendered, 'output');
     const cacheRead = normalizeRateAmount(raw.cacheReadCost) ?? renderedFallback(rendered, 'cacheRead');
