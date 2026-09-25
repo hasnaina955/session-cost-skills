@@ -49,7 +49,7 @@ function dashboardOutput(fixture) {
   assert.equal(output.kind, 'dashboard');
   assertContract(output.report, fixture.runtimeId);
   const html = fs.readFileSync(out, 'utf8');
-  assert.ok(html.includes('"contractVersion":"1.0.0"'));
+  assert.ok(html.includes(`"contractVersion":"${REPORT_CONTRACT_VERSION}"`));
   assert.ok(html.includes(`"id":"${fixture.runtimeId}"`));
   return output.report;
 }
@@ -145,6 +145,10 @@ test('MCode CLI satisfies the shared contract across all report modes', (t) => {
   assert.equal(root.output.usage.semantics.inputTokenMeaning, 'excludes-cache');
   assert.equal(root.output.billing.recordedCostUsd, null);
   assert.ok(Number.isFinite(root.output.billing.estimatedCostUsd));
+  assert.ok(root.output.rateProvenance.length > 0);
+  assert.equal(root.output.rateProvenance[0].component, 'input');
+  assert.match(root.output.rateProvenance[0].fingerprint, /^sha256:/);
+  assert.equal(typeof root.output.rateProvenance[0].effectiveFrom, 'string');
   assert.deepEqual(root.output.sessionGraph.rootSessionIds, ['mcode-root']);
   assert.deepEqual(root.output.sessionGraph.includedSessionIds, ['mcode-root', 'mcode-child', 'mcode-grandchild']);
   assert.equal(root.output.multiProvider, true);

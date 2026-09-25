@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Added
+
+- Added fingerprinted effective-dated rate records with context thresholds, time bands, source metadata, and immutable refresh history.
+
 ### Security
 
 - Replaced browser-side dashboard HTML sinks with DOM text construction and locked dashboards to a hash-scoped, offline content security policy.

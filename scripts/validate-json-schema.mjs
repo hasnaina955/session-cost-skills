@@ -27,7 +27,7 @@ export function validateJsonSchema(value, schema, root = schema, location = '$')
     const types = Array.isArray(schema.type) ? schema.type : [schema.type];
     if (!types.some((type) => typeMatches(value, type))) errors.push(`${location} must be ${types.join(' or ')}`);
   }
-  if (schema.format === 'date-time' && (typeof value !== 'string' || !Number.isFinite(Date.parse(value)))) {
+  if (schema.format === 'date-time' && value !== null && (typeof value !== 'string' || !Number.isFinite(Date.parse(value)))) {
     errors.push(`${location} must be an ISO date-time`);
   }
   if (typeof value === 'string') {

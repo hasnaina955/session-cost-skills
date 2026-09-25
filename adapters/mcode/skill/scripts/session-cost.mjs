@@ -15,6 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeDashboard } from './lib/dashboard.mjs';
 import {
+  bandForTimestamp,
   calculateTokenCost,
   inspectRateTable,
   normalizeProvider,
@@ -143,17 +144,6 @@ const UNPRICED_ZERO_RATE = Object.freeze({
 });
 
 // ---------------------------------------------------------------- billing
-
-// Published window: "01-04 & 06-10 UTC, Mon-Fri" — peak on those UTC hours on weekdays.
-function bandForTimestamp(ts, rate) {
-  if (!rate?.timeOfDay) return 'flat';
-  const d = new Date(Number(ts));
-  const day = d.getUTCDay();
-  const hour = d.getUTCHours();
-  const isWeekday = day >= 1 && day <= 5;
-  const inWindow = (hour >= 1 && hour < 4) || (hour >= 6 && hour < 10);
-  return isWeekday && inWindow ? 'peak' : 'offPeak';
-}
 
 function emptyAggregate() {
   return {
@@ -306,9 +296,11 @@ function buildPricer(db, dataDir, table, sessionId) {
     defaultModel: model,
     callIndex: loadCallModels(dataDir, meta),
     // Rate lookup is provider-aware, so the cache key is provider + model.
-    rateFor(providerId, modelId) {
-      const cacheKey = `${normalizeProvider(providerId)}::${modelId}`;
-      if (!rateCache.has(cacheKey)) rateCache.set(cacheKey, resolveProviderRate(table, providerId, modelId));
+    rateFor(providerId, modelId, { at, contextTokens }) {
+      const cacheKey = `${normalizeProvider(providerId)}::${modelId}::${Math.floor(Number(at) / 3_600_000)}::${contextTokens}`;
+      if (!rateCache.has(cacheKey)) {
+        rateCache.set(cacheKey, resolveProviderRate(table, providerId, modelId, { at, contextTokens }));
+      }
       return rateCache.get(cacheKey);
     },
   };
@@ -343,13 +335,24 @@ function buildReport(db, dataDir, table, graph, sessionId, includeChildren) {
 
   const priceRow = (pricer, row) => {
     const { modelId, provider, inferred } = modelForRow(pricer, row);
-    const rateInfo = modelId ? pricer.rateFor(provider, modelId) : { key: null, rate: null, free: false, providerKey: normalizeProvider(provider) };
-    return { modelId, provider, inferred, rateInfo, rate: rateInfo.rate ?? null };
+    const contextTokens = ['input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens']
+      .reduce((sum, field) => sum + (Number(row[field]) || 0), 0);
+    const rateInfo = modelId
+      ? pricer.rateFor(provider, modelId, { at: row.ts, contextTokens })
+      : {
+          key: null,
+          rate: null,
+          free: false,
+          providerKey: normalizeProvider(provider),
+          coverage: 'unavailable',
+          missingComponents: ['input', 'output', 'cacheRead', 'cacheWrite'],
+        };
+    return { modelId, provider, inferred, rateInfo, rate: rateInfo.rate ?? null, contextTokens };
   };
 
   for (const row of rows) {
     const pricer = pricers.get(row.session_id);
-    const { modelId, provider, inferred, rateInfo, rate } = priceRow(pricer, row);
+    const { modelId, provider, inferred, rateInfo, rate, contextTokens } = priceRow(pricer, row);
     if (inferred) inferredRows += 1;
 
     accumulate(agg, row, rate ?? UNPRICED_ZERO_RATE);
@@ -365,12 +368,22 @@ function buildReport(db, dataDir, table, graph, sessionId, includeChildren) {
         rateKey: rateInfo.key,
         rateKnown: Boolean(rate),
         rateIsFree: rateInfo.free,
+        rateCoverage: rateInfo.coverage,
+        missingRateComponents: new Set(rateInfo.missingComponents ?? []),
+        rateRecords: new Map(),
+        contextMinTokens: contextTokens,
+        contextMaxTokens: contextTokens,
         inferredCalls: 0,
         ...emptyAggregate(),
       });
     }
     const entry = perModel.get(key);
     if (inferred) entry.inferredCalls += 1;
+    for (const component of rateInfo.missingComponents ?? []) entry.missingRateComponents.add(component);
+    for (const record of rateInfo.rate?.rateRecords ?? []) entry.rateRecords.set(record.id, record);
+    entry.contextMinTokens = Math.min(entry.contextMinTokens, contextTokens);
+    entry.contextMaxTokens = Math.max(entry.contextMaxTokens, contextTokens);
+    if (rate) entry.rateCoverage = 'complete';
     accumulate(entry, row, rate ?? UNPRICED_ZERO_RATE);
 
     if (pkey) providersSeen.set(pkey, true);
@@ -390,9 +403,47 @@ function buildReport(db, dataDir, table, graph, sessionId, includeChildren) {
     perSession[id] = { role: 'child', billed: false, calls: null, totalTokens: null, cacheRate: null, totalCost: null };
   }
 
-  const models = [...perModel.values()].map((m) => ({ ...finalize(m), modelId: m.modelId, provider: m.provider, providerKey: m.providerKey, rateKey: m.rateKey, rateKnown: m.rateKnown, rateIsFree: m.rateIsFree, inferredCalls: m.inferredCalls }));
+  const models = [...perModel.values()].map((model) => {
+    const rateRecords = [...model.rateRecords.values()];
+    const missingRateComponents = [...model.missingRateComponents].sort();
+    const rateKnown = model.calls > 0 && model.rateKnown && missingRateComponents.length === 0;
+    const rateCoverage = model.calls === 0
+      ? 'no-calls'
+      : rateKnown ? 'complete' : rateRecords.length ? 'partial' : 'unavailable';
+    return {
+      ...finalize(model),
+      modelId: model.modelId,
+      provider: model.provider,
+      providerKey: model.providerKey,
+      rateKey: model.rateKey,
+      rateKnown,
+      rateCoverage,
+      missingRateComponents,
+      rateIsFree: model.rateIsFree,
+      inferredCalls: model.inferredCalls,
+      context: { minTokens: model.contextMinTokens, maxTokens: model.contextMaxTokens },
+      effectiveFrom: rateRecords.map((record) => record.effectiveFrom).sort()[0] ?? null,
+      effectiveThrough: rateRecords.every((record) => record.effectiveThrough)
+        ? rateRecords.map((record) => record.effectiveThrough).sort().at(-1) ?? null
+        : null,
+      rateRecords,
+      rateFingerprints: rateRecords.map((record) => record.fingerprint),
+    };
+  });
   const lastTs = rows.length ? Number(rows[rows.length - 1].ts) : null;
   const snapshotAt = Date.now();
+
+  const rateProvenance = [...new Map(models.flatMap((model) => model.rateRecords.map((record) => [record.fingerprint, {
+    provider: record.provider,
+    model: record.model,
+    component: record.component,
+    effectiveFrom: record.effectiveFrom,
+    effectiveThrough: record.effectiveThrough,
+    context: record.context,
+    timeBand: record.timeBand,
+    source: record.source,
+    fingerprint: record.fingerprint,
+  }]))).values()];
 
   // Per-provider mirror provenance, since a multi-provider session draws on several tables.
   const providersUsed = [...providersSeen].map(([pkey]) => {
@@ -427,6 +478,7 @@ function buildReport(db, dataDir, table, graph, sessionId, includeChildren) {
     sessionActive: lastTs !== null && snapshotAt - lastTs < LIVE_WINDOW_MS,
     ratesRefreshedAt: table._meta?.refreshedAt ?? null,
     rateCoverage: inspectRateTable(table),
+    rateProvenance,
     ...finalize(agg),
   };
 }
@@ -495,7 +547,7 @@ function renderText(rep) {
     L.push(`TOTAL COST ${USD(rep.totalCost)} for ${M(rep.totalTokens)} M tokens — ${USD(rep.allInUsdPerM)}/M all-in${hasUnpriced ? ' (priced calls only)' : ''}`);
   } else {
     L.push(`COST UNAVAILABLE — ${M(rep.totalTokens)} M tokens, but none of the models in this session`);
-    L.push('are in the CommandCode rate table, so no cost can be computed (see "Rates actually billed").');
+    L.push('are in the mirrored rate tables, so no cost can be computed (see "Rates actually billed").');
   }
   L.push('');
 
@@ -541,13 +593,19 @@ function renderText(rep) {
   for (const m of rep.models) {
     const who = rep.multiProvider ? `${m.providerKey} · ` : '';
     if (!m.rateKnown) {
-      L.push(`  ${who}${m.modelId} — not in the ${m.providerKey ?? 'provider'} rate table: ${m.calls} call(s), ${M(m.totalTokens)} M tokens, unpriced`);
+      const missing = m.missingRateComponents?.length ? `; missing ${m.missingRateComponents.join(', ')}` : '';
+      L.push(`  ${who}${m.modelId} — no complete effective rate for ${m.calls} call(s), ${M(m.totalTokens)} M tokens${missing}`);
       continue;
     }
     const bands = Object.entries(m.rateBandsUsed)
       .map(([band, r]) => `${band === 'flat' ? 'flat' : band} $${fmtRate(r.input)} in / $${fmtRate(r.cacheRead)} cache read / $${fmtRate(r.output)} out${r.cacheWrite ? ` / $${fmtRate(r.cacheWrite)} cache write` : ''}`)
       .join(', ');
     L.push(`  ${who}${m.modelId} — ${bands} per 1M  (${m.calls} call(s), ${USD(m.totalCost)})`);
+    const effectiveCards = [...new Set((m.rateRecords ?? []).map((record) => (
+      `${record.effectiveFrom}..${record.effectiveThrough ?? 'open'} ${record.timeBand} context ${record.context.minTokens}-${record.context.maxTokens ?? 'unbounded'}`
+    )))];
+    if (effectiveCards.length) L.push(`    effective cards: ${effectiveCards.join('; ')}`);
+    if (m.rateFingerprints?.length) L.push(`    rate fingerprints: ${m.rateFingerprints.slice(0, 4).join(', ')}${m.rateFingerprints.length > 4 ? ', ...' : ''}`);
   }
   L.push(`  band split: ${rep.bands.offPeak ?? 0} off-peak · ${rep.bands.peak ?? 0} peak · ${rep.bands.flat ?? 0} flat`);
   if (hasUnpriced && anyPriced) {
@@ -675,27 +733,55 @@ function aggregateMcReports(reports, duplicateSuppressedSessionIds = []) {
   const total = {
     calls: 0, inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0,
     costInput: 0, costOutput: 0, costCacheRead: 0, costCacheWrite: 0, totalCost: 0, totalTokens: 0,
-    promptTokens: 0, bands: { peak: 0, offPeak: 0, flat: 0 }, models: new Map(), sessions: [],
+    promptTokens: 0, bands: { peak: 0, offPeak: 0, flat: 0 }, models: new Map(), sessions: [], rateProvenance: new Map(),
   };
   for (const report of reports) {
     for (const field of ['calls', 'inputTokens', 'outputTokens', 'reasoningTokens', 'cacheReadTokens', 'cacheWriteTokens', 'costInput', 'costOutput', 'costCacheRead', 'costCacheWrite', 'totalCost', 'totalTokens', 'promptTokens']) total[field] += Number(report[field]) || 0;
     for (const band of ['peak', 'offPeak', 'flat']) total.bands[band] += Number(report.bands?.[band]) || 0;
     total.sessions.push(report.sessionId);
+    for (const record of report.rateProvenance ?? []) total.rateProvenance.set(record.fingerprint, record);
     for (const model of report.models) {
       const key = `${model.providerKey}::${model.modelId}`;
-      const existing = total.models.get(key) ?? { ...model, calls: 0, totalTokens: 0, totalCost: 0 };
+      const existing = total.models.get(key) ?? {
+        ...model,
+        calls: 0,
+        totalTokens: 0,
+        totalCost: 0,
+        missingRateComponents: new Set(),
+        rateRecords: new Map(),
+        context: { minTokens: Number.POSITIVE_INFINITY, maxTokens: 0 },
+      };
       existing.calls += model.calls;
       existing.totalTokens += model.totalTokens;
       existing.totalCost += model.totalCost;
+      existing.rateKnown = existing.rateKnown && model.rateKnown;
+      for (const component of model.missingRateComponents ?? []) existing.missingRateComponents.add(component);
+      for (const record of model.rateRecords ?? []) existing.rateRecords.set(record.id, record);
+      existing.context.minTokens = Math.min(existing.context.minTokens, model.context?.minTokens ?? 0);
+      existing.context.maxTokens = Math.max(existing.context.maxTokens, model.context?.maxTokens ?? 0);
       total.models.set(key, existing);
     }
   }
   total.cacheRate = total.promptTokens > 0 ? total.cacheReadTokens / total.promptTokens : 0;
   const unique = (values) => [...new Set(values)];
+  const aggregatedModels = [...total.models.values()].map((model) => {
+    const rateRecords = [...model.rateRecords.values()];
+    const missingRateComponents = [...model.missingRateComponents].sort();
+    const rateKnown = model.calls > 0 && model.rateKnown && missingRateComponents.length === 0;
+    return {
+      ...model,
+      rateKnown,
+      rateCoverage: model.calls === 0 ? 'no-calls' : rateKnown ? 'complete' : rateRecords.length ? 'partial' : 'unavailable',
+      missingRateComponents,
+      rateRecords,
+      rateFingerprints: rateRecords.map((record) => record.fingerprint),
+    };
+  });
   return {
     ...total,
-    models: [...total.models.values()],
+    models: aggregatedModels,
     rateKnown: reports.every((report) => report.rateKnown),
+    rateProvenance: [...total.rateProvenance.values()],
     rootSessionIds: reports.map((report) => report.sessionId),
     includedSessionIds: unique(reports.flatMap((report) => report.includedSessionIds)),
     excludedSessionIds: unique(reports.flatMap((report) => report.excludedSessionIds)),
@@ -745,6 +831,7 @@ function renderRates(table) {
       .map(([name, value]) => `${name} ${value.complete ? 'complete' : `${value.completeModels}/${entry.models}`}`)
       .join(', ');
     lines.push(`${key}: ${entry.completeModels}/${entry.models} complete model(s); ${components}`);
+    lines.push(`  ${entry.rateRecords} effective rate record(s) from ${entry.effectiveFrom ?? 'unknown'}`);
     if (entry.excludedModels?.length) lines.push(`  source excluded ${entry.excludedModels.length} incomplete model(s): ${entry.excludedModels.slice(0, 8).join(', ')}${entry.excludedModels.length > 8 ? ', ...' : ''}`);
     lines.push(`  source ${entry.source ?? 'unknown'}, fetched ${entry.fetchedAt ?? 'unknown'}`);
   }

@@ -381,9 +381,11 @@ function render() {
     ]);
     replaceChildren('filterTables', [
       element('h2', { text: 'Rate coverage' }),
-      table(['Provider', 'Models', 'Fetched', 'Source'], entries.map(([name, value]) => [
+      table(['Provider', 'Models', 'Rate records', 'Effective from', 'Fetched', 'Source'], entries.map(([name, value]) => [
         name,
         fmt(value.models),
+        fmt(providerCoverage[name]?.rateRecords),
+        providerCoverage[name]?.effectiveFrom || 'unknown',
         value.fetchedAt || 'unknown',
         value.source || '',
       ])),

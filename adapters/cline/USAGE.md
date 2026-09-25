@@ -38,7 +38,7 @@ node $SessionCost
 | `--help` / `-h` | CLI help |
 
 
-`--json` reports use normalized contract version `1.0.0`. Cline labels its value as a runtime-recorded cost; token semantics, selection, coverage, provenance, warnings, and session-graph state are explicit.
+`--json` reports use normalized contract version `1.1.0`. Cline labels its value as a runtime-recorded cost; token semantics, selection, coverage, provenance, warnings, and session-graph state are explicit.
 ## Session modes
 
 ```powershell
