@@ -41,19 +41,44 @@ never a ledger:
 
 ## Step 2: install over the old copy
 
-Unpack the archive for the adapter you use over the existing directory so the whole
-skill, including `scripts/lib/`, is replaced together. The skills are versioned as
-units: a stale generated copy left behind from an older release will not match the
-current `scripts/session-cost.mjs`. Verify the archive checksum before unpacking, then
-confirm the new banner:
+The whole skill is one unit, including `scripts/lib/`. Unpack over the existing
+directory so every file is replaced together; a stale generated copy left behind from
+an older release will not match the current `scripts/session-cost.mjs`.
+
+Verify the archive checksum before unpacking:
 
 ```powershell
 Get-FileHash .\session-cost-mcode-v0.3.0.zip -Algorithm SHA256
 ```
 
-Nothing outside the skill directory is touched by an install, and no session data is
-read or rewritten. Rates for MCode live in `references/provider-rates.json` inside the
-skill; they are refreshed explicitly with `--refresh-rates`, never on install.
+Then confirm the new banner:
+
+```powershell
+node "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs" --version
+```
+
+Nothing outside the skill directory is touched, and no session data is read or
+rewritten.
+
+### Back up your MCode rate file first
+
+MCode stores its mirrored provider rates in `references/provider-rates.json`, which
+lives **inside** the skill directory. An install therefore overwrites it, discarding any
+records you fetched with `--refresh-rates` and resetting the refresh history. Nothing
+warns you; the next report just quietly uses the rates bundled with the release.
+
+If you have refreshed rates, copy the file out before installing and put it back after:
+
+```powershell
+$Skill = "$env:USERPROFILE\.minimax\skills\session-cost"
+Copy-Item "$Skill\references\provider-rates.json" "$env:TEMP\provider-rates.json"
+# ... install ...
+Copy-Item "$env:TEMP\provider-rates.json" "$Skill\references\provider-rates.json"
+```
+
+Or simply run `--refresh-rates` afterwards, which re-fetches both providers and records
+a new history entry. The Cline adapter has no equivalent file; its cost comes from the
+runtime ledger, so an install cannot lose anything.
 
 ## What changed in the normalized report
 

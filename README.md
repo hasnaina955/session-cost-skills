@@ -40,7 +40,17 @@ The source is split into two installable skills:
 - `adapters/cline/skill/` → `%USERPROFILE%\.cline\skills\session-cost\`
 - `adapters/mcode/skill/` → `%USERPROFILE%\.minimax\skills\session-cost\`
 
-Keep installed copies separate. They share the public skill name but use different runtime ledgers and token semantics.
+To install or update, copy the folder contents over the target:
+
+```powershell
+Copy-Item -Recurse -Force .\adapters\mcode\skill\* "$env:USERPROFILE\.minimax\skills\session-cost\"
+```
+
+Keep the two installed copies separate. They share the public skill name but use different
+runtime ledgers and token semantics.
+
+MCode stores refreshed provider rates inside the skill folder, so an update overwrites
+them. See [docs/migration.md](docs/migration.md) for the two lines that preserve them.
 
 Each installed skill reports its own version:
 
@@ -54,7 +64,9 @@ report contract: 1.2.0
 node: 24.21.0 (requires >= 22.15.0)
 ```
 
-Releases publish one archive per adapter plus a combined bundle, each with a SHA-256 checksum. See [docs/release.md](docs/release.md) for the version contract, archive contents, and the release process.
+Releases also publish one archive per adapter plus a combined bundle, each with a SHA-256
+checksum. See [docs/release.md](docs/release.md) for the version contract, archive
+contents, and the release process.
 
 ## Quick usage
 

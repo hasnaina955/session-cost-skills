@@ -28,6 +28,23 @@ Confirm:
 
 The two skills may be updated independently. Do not merge their ledgers, token semantics, or rate catalogs.
 
+### Updating
+
+To update, copy the skill folder again over the installed one:
+
+```powershell
+$Skill = "$env:USERPROFILE\.minimax\skills\session-cost"
+Copy-Item "$Skill\references\provider-rates.json" "$env:TEMP\provider-rates.json"   # MCode only
+Copy-Item -Recurse -Force .\adapters\mcode\skill\* $Skill
+Copy-Item "$env:TEMP\provider-rates.json" "$Skill\references\provider-rates.json"  # MCode only
+node "$Skill\scripts\session-cost.mjs" --version
+```
+
+**MCode only:** `references/provider-rates.json` lives inside the skill folder, so copying
+over it discards rates you fetched with `--refresh-rates`. The two lines above preserve
+them; skip them and run `--refresh-rates` afterwards instead. Cline has no such file, so
+a Cline update cannot lose anything.
+
 ## Released archives
 
 Releases publish three archives plus a `SHA256SUMS.txt` file: one installable Cline skill, one
