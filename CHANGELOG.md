@@ -9,6 +9,10 @@ All notable changes to this project are documented here.
 - Replaced browser-side dashboard HTML sinks with DOM text construction and locked dashboards to a hash-scoped, offline content security policy.
 - Added regression coverage for malicious model, provider, session, title, filter, and rate metadata in both adapters.
 
+### Fixed
+
+- Corrected MCode CommandCode cache-write pricing, made missing rate components fail validation, and made provider refreshes atomic and all-or-nothing.
+
 ### Changed
 
 - Generate independently installable Cline and MCode dashboard renderers from one canonical implementation and fail verification when copies drift.

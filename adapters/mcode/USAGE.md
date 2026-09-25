@@ -65,9 +65,11 @@ node $SessionCost --rates --json
 node $SessionCost --refresh-rates
 ```
 
-`--rates` reports mirrored providers, model counts, sources, fetch timestamps, and free-model
-entries without reading the session ledger. `--refresh-rates` re-fetches sources and keeps previous
-rates when a source fails.
+`--rates` reports mirrored providers, model counts, sources, fetch timestamps, component-level
+completeness, source exclusions, and free-model entries without reading the session ledger. `--refresh-rates` fetches
+CommandCode and StepFun together, validates every input/output/cache-read/cache-write component,
+and atomically publishes the new table only when both providers are complete. A failed or incomplete
+refresh leaves the previous valid table byte-for-byte unchanged.
 
 ## Subagents
 
@@ -94,7 +96,7 @@ node $SessionCost --session mvs_xxxx --include-children
 - `input_tokens` is fresh input and excludes cached tokens.
 - Total prompt = input + cache read + cache write.
 - Cost is calculated from mirrored provider rates.
-- `cacheWrite` can be nonzero for `step-5-preview`.
+- Published `cacheWrite` rates are used for every provider, including nonzero CommandCode rates.
 - CommandCode uses peak and off-peak bands.
 - Unknown provider/model rates produce tokens without a guessed cost.
 - A session can change model or provider midway.
@@ -128,6 +130,7 @@ MCode has no Cline account API mode. Use `--rates` for provider coverage instead
 | `cost unavailable` | Run `--rates`; add or refresh the provider rate |
 | `rate unknown` with a total | Total covers priced calls only; unpriced models are named |
 | Stale rates | Run `--refresh-rates` |
+| Refresh rejected | Read the reported component/parser issue; the previous valid table was preserved |
 | Wrong session | Use `--session` or `--list` |
 | Missing subagent spend | Use `--include-children` |
 | Ledger not found | Pass `--data-dir %USERPROFILE%\.minimax` |

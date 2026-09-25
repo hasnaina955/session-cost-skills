@@ -361,12 +361,23 @@ function render() {
   if (P.data?.rates) {
     const providers = P.data.rates.providers || {};
     const entries = Object.entries(providers);
+    const coverage = P.data.rates.coverage || {};
+    const providerCoverage = coverage.providers || {};
     const modelCount = entries.reduce((sum, [, value]) => sum + (Number(value.models) || 0), 0);
+    const componentSummary = Object.entries(providerCoverage)
+      .map(([name, value]) => {
+        const components = Object.entries(value.components || {})
+          .map(([component, status]) => component + ' ' + status.completeModels + '/' + value.models)
+          .join(', ');
+        const excluded = value.excludedModels?.length ? '; excluded ' + value.excludedModels.length : '';
+        return name + ': ' + components + excluded;
+      })
+      .join(' | ');
     replaceChildren('cards', [
       card('Mirrored providers', fmt(entries.length)),
       card('Mirrored models', fmt(modelCount)),
-      card('Rate source', P.data.rates.refreshedAt || 'unknown'),
-      card('Mode', 'Rate coverage'),
+      card('Rate snapshot', P.data.rates.refreshedAt || 'unknown'),
+      card('Table status', coverage.complete ? 'complete' : 'incomplete'),
     ]);
     replaceChildren('filterTables', [
       element('h2', { text: 'Rate coverage' }),
@@ -376,6 +387,7 @@ function render() {
         value.fetchedAt || 'unknown',
         value.source || '',
       ])),
+      element('p', { class: 'sub', text: componentSummary || 'No component coverage metadata' }),
     ]);
     return;
   }

@@ -48,7 +48,8 @@ node $SessionCost --refresh-rates
 `--last` selects the latest session that is no longer active. `--today` aggregates sessions whose
 first ledger call is on the current UTC date. `--compare` compares the latest two sessions.
 Date/provider/model filters produce an aggregate when multiple sessions match. `--rates` reports
-mirrored provider coverage and freshness without reading session history.
+mirrored provider coverage, component completeness, source exclusions, and freshness without reading
+session history.
 
 Natural language mapping:
 
