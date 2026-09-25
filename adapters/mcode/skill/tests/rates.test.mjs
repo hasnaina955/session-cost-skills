@@ -320,6 +320,10 @@ test('MCode CLI reports a nonzero CommandCode cache-write cost end to end', (t) 
     0,
     1_000_000,
   );
+  database.prepare('INSERT INTO local_runtime_sessions VALUES (?, ?, ?, ?, ?)').run('mvs_child', 'child', 'Child', 'mvs_test', null);
+  database.prepare('INSERT INTO local_runtime_sessions VALUES (?, ?, ?, ?, ?)').run('mvs_grandchild', 'grandchild', 'Grandchild', 'mvs_child', null);
+  database.prepare('INSERT INTO local_runtime_token_usage VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(2, 'mvs_child', 'child', 'turn-2', timestamp + 1, 0, 0, 0, 0, 0);
+  database.prepare('INSERT INTO local_runtime_token_usage VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(3, 'mvs_grandchild', 'grandchild', 'turn-3', timestamp + 2, 0, 0, 0, 0, 0);
   database.close();
 
   fs.writeFileSync(path.join(historyDirectory, 'llm-call.json'), JSON.stringify({
@@ -350,4 +354,43 @@ test('MCode CLI reports a nonzero CommandCode cache-write cost end to end', (t) 
   assert.equal(report.billing.classification, 'rate-priced');
   assert.equal(report.models[0].rateKnown, true);
   assert.equal(report.rateCoverage.complete, true);
+  assert.deepEqual(report.excludedSessionIds, ['mvs_child', 'mvs_grandchild']);
+
+  const recursiveResult = spawnSync(process.execPath, [
+    script,
+    '--data-dir',
+    directory,
+    '--session',
+    'mvs_test',
+    '--include-children',
+    '--json',
+  ], {
+    encoding: 'utf8',
+    env: { ...process.env, SESSION_COST_RATES_PATH: ratesPath },
+  });
+  assert.equal(recursiveResult.status, 2, recursiveResult.stderr);
+  const recursiveReport = JSON.parse(recursiveResult.stdout);
+  assert.deepEqual(recursiveReport.includedSessionIds, ['mvs_test', 'mvs_child', 'mvs_grandchild']);
+  assert.deepEqual(recursiveReport.excludedSessionIds, []);
+
+  const date = new Date(timestamp).toISOString().slice(0, 10);
+  const aggregateResult = spawnSync(process.execPath, [
+    script,
+    '--data-dir',
+    directory,
+    '--from',
+    date,
+    '--to',
+    date,
+    '--include-children',
+    '--json',
+  ], {
+    encoding: 'utf8',
+    env: { ...process.env, SESSION_COST_RATES_PATH: ratesPath },
+  });
+  assert.equal(aggregateResult.status, 2, aggregateResult.stderr);
+  const aggregateReport = JSON.parse(aggregateResult.stdout);
+  assert.deepEqual(aggregateReport.rootSessionIds, ['mvs_test']);
+  assert.deepEqual(aggregateReport.includedSessionIds, ['mvs_test', 'mvs_child', 'mvs_grandchild']);
+  assert.deepEqual([...aggregateReport.duplicateSuppressedSessionIds].sort(), ['mvs_child', 'mvs_grandchild']);
 });

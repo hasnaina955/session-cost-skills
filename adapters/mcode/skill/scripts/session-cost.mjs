@@ -23,6 +23,7 @@ import {
   refreshRateTable as refreshRateCatalog,
   resolveRate as resolveProviderRate,
 } from './lib/rates.mjs';
+import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from './lib/session-graph.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RATES_PATH = process.env.SESSION_COST_RATES_PATH
@@ -279,8 +280,8 @@ function nearestCallModel(index, ts) {
 
 // Children are always resolved so the report can state whether sub-agent spend is missing;
 // --include-children only decides whether they are folded into the totals.
-function childSessionIds(db, sessionId) {
-  return db.prepare('SELECT session_id FROM local_runtime_sessions WHERE parent_session_id = ?').all(sessionId).map((r) => r.session_id);
+function loadSessionGraph(db) {
+  return createSessionGraph(db.prepare('SELECT session_id, parent_session_id FROM local_runtime_sessions').all());
 }
 
 function buildPricer(db, dataDir, table, sessionId) {
@@ -312,9 +313,11 @@ function modelForRow(pricer, row) {
   return { modelId: pricer.defaultModel, provider: pricer.provider, inferred: true };
 }
 
-function buildReport(db, dataDir, table, sessionId, includeChildren) {
-  const childIds = childSessionIds(db, sessionId);
-  const ids = includeChildren ? [sessionId, ...childIds] : [sessionId];
+function buildReport(db, dataDir, table, graph, sessionId, includeChildren) {
+  const childIds = [...graph.descendants(sessionId, false)];
+  const includedIds = collectSessionIds([sessionId], graph, { includeChildren });
+  const ids = [...includedIds];
+  const excludedSessionIds = [...graph.descendants(sessionId)].filter((id) => !includedIds.has(id));
   const pricers = new Map(ids.map((id) => [id, buildPricer(db, dataDir, table, id)]));
   const target = pricers.get(sessionId);
 
@@ -372,7 +375,7 @@ function buildReport(db, dataDir, table, sessionId, includeChildren) {
     const fin = finalize(sub);
     perSession[id] = { role: id === sessionId ? 'target' : 'child', billed: true, calls: fin.calls, totalTokens: fin.totalTokens, cacheRate: fin.cacheRate, totalCost: fin.totalCost };
   }
-  for (const id of includeChildren ? [] : childIds) {
+  for (const id of excludedSessionIds) {
     perSession[id] = { role: 'child', billed: false, calls: null, totalTokens: null, cacheRate: null, totalCost: null };
   }
 
@@ -395,7 +398,11 @@ function buildReport(db, dataDir, table, sessionId, includeChildren) {
     rateKnown: models.every((m) => m.rateKnown),
     isCommandCode: Boolean(target.provider && /commandcode/i.test(target.provider)),
     includeChildren,
+    rootSessionIds: [sessionId],
     billedSessions: ids,
+    includedSessionIds: ids,
+    excludedSessionIds,
+    duplicateSuppressedSessionIds: [],
     childSessions: childIds,
     childSessionsBilled: includeChildren ? childIds : [],
     perSession,
@@ -540,6 +547,9 @@ function renderText(rep) {
     L.push('');
     L.push(`Note: ${unbilledChildren} sub-agent session(s) below this one are NOT included. Add --include-children for the end-to-end task total.`);
   }
+  if (rep.duplicateSuppressedSessionIds?.length) {
+    L.push(`Duplicate-suppressed child selections: ${rep.duplicateSuppressedSessionIds.join(', ')}`);
+  }
   if (rep.inferredModelRows > 0) {
     L.push(`Note: the model was inferred for ${rep.inferredModelRows} of ${rep.calls} call(s) from the nearest recorded call — the ledger does not store a model per call.`);
   }
@@ -640,7 +650,7 @@ function enhanceReport(report, selection = null) {
     ...report,
   };
 }
-function aggregateMcReports(reports) {
+function aggregateMcReports(reports, duplicateSuppressedSessionIds = []) {
   const total = {
     calls: 0, inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0,
     costInput: 0, costOutput: 0, costCacheRead: 0, costCacheWrite: 0, totalCost: 0, totalTokens: 0,
@@ -660,12 +670,27 @@ function aggregateMcReports(reports) {
     }
   }
   total.cacheRate = total.promptTokens > 0 ? total.cacheReadTokens / total.promptTokens : 0;
-  return { ...total, models: [...total.models.values()], rateKnown: reports.every((report) => report.rateKnown) };
+  const unique = (values) => [...new Set(values)];
+  return {
+    ...total,
+    models: [...total.models.values()],
+    rateKnown: reports.every((report) => report.rateKnown),
+    rootSessionIds: reports.map((report) => report.sessionId),
+    includedSessionIds: unique(reports.flatMap((report) => report.includedSessionIds)),
+    excludedSessionIds: unique(reports.flatMap((report) => report.excludedSessionIds)),
+    duplicateSuppressedSessionIds: unique([
+      ...duplicateSuppressedSessionIds,
+      ...reports.flatMap((report) => report.duplicateSuppressedSessionIds),
+    ]),
+  };
 }
 function renderAggregateMc(report, label) {
   return [
     `MCode session cost — ${label}`,
     `Sessions: ${report.sessions.length}`,
+    `Included IDs: ${report.includedSessionIds.length}`,
+    `Excluded descendants: ${report.excludedSessionIds.length}`,
+    `Duplicate-suppressed selections: ${report.duplicateSuppressedSessionIds.length}`,
     `Calls: ${report.calls}`,
     `Total tokens: ${M(report.totalTokens)} M`,
     `Fresh input: ${M(report.inputTokens)} M`,
@@ -713,8 +738,8 @@ const opts = parseArgs(process.argv.slice(2));
 // <dataDir>/skills/session-cost/scripts/ -> three levels up is <dataDir>.
 const dataDir = opts.dataDir ? path.resolve(opts.dataDir) : path.resolve(__dirname, '..', '..', '..');
 
-function costForSession(db, dataDir, table, sessionId) {
-  return buildReport(db, dataDir, table, sessionId, opts.includeChildren);
+function costForSession(db, dataDir, table, graph, sessionId) {
+  return buildReport(db, dataDir, table, graph, sessionId, opts.includeChildren);
 }
 
 async function main() {
@@ -748,11 +773,15 @@ async function main() {
     loadConfig(dataDir);
     const allRows = sessionRows(db);
     const candidates = allRows.filter((row) => matchesFilters(db, dataDir, row));
+    const graph = loadSessionGraph(db);
+    const rowsById = new Map(allRows.map((row) => [row.session_id, row]));
 
     if (opts.list > 0) {
-      const recent = candidates.slice(0, opts.list);
-      const out = recent.map((r) => {
-        const rep = costForSession(db, dataDir, table, r.session_id);
+      const topLevel = selectTopLevelCandidates(candidates.map((row) => row.session_id), graph);
+      const recent = topLevel.includedRootIds.slice(0, opts.list);
+      const out = recent.map((sessionId) => {
+        const r = rowsById.get(sessionId);
+        const rep = costForSession(db, dataDir, table, graph, sessionId);
         const priced = rep.models.filter((m) => m.rateKnown).length;
         const unpricedCalls = rep.models.filter((m) => !m.rateKnown).reduce((n, m) => n + m.calls, 0);
         return {
@@ -763,13 +792,16 @@ async function main() {
           totalTokens: rep.totalTokens,
           cacheRate: rep.cacheRate,
           costLabel: priced > 0 ? `${USD(rep.totalCost)}${unpricedCalls ? '*' : ''}` : 'rate unknown',
+          includedSessionIds: rep.includedSessionIds,
+          excludedSessionIds: rep.excludedSessionIds,
+          duplicateSuppressedSessionIds: rep.duplicateSuppressedSessionIds,
           partial: priced > 0 && unpricedCalls > 0,
           lastTs: Number(r.last_ts),
         };
       });
 
       if (opts.json) {
-        console.log(JSON.stringify({ schemaVersion: 1, generatedAt: new Date().toISOString(), sessions: out }, null, 2));
+        console.log(JSON.stringify({ schemaVersion: 1, generatedAt: new Date().toISOString(), sessions: out, duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds }, null, 2));
       } else {
         const clip = (s, n) => (s.length <= n ? s : s.slice(0, n - 1) + '…');
         console.log('recent sessions (newest first)\n');
@@ -789,21 +821,30 @@ async function main() {
         if (out.some((r) => r.partial)) {
           console.log('\n* partial: priced calls only — that session also has unpriced calls (see the per-session report).');
         }
+        if (topLevel.duplicateSuppressedSessionIds.length) {
+          console.log(`Duplicate-suppressed child selections: ${topLevel.duplicateSuppressedSessionIds.join(', ')}`);
+        }
       }
       return 0;
     }
 
     if (opts.mode === 'compare') {
-      const reports = candidates.slice(0, 2).map((row) => costForSession(db, dataDir, table, row.session_id));
+      const topLevel = selectTopLevelCandidates(candidates.map((row) => row.session_id), graph);
+      const reports = topLevel.includedRootIds.slice(0, 2)
+        .map((sessionId) => costForSession(db, dataDir, table, graph, sessionId));
       if (reports.length < 2) fail('--compare requires at least two matching sessions');
       if (opts.json) {
         console.log(JSON.stringify({
           schemaVersion: 1,
           generatedAt: new Date().toISOString(),
           comparison: { older: enhanceReport(reports[1]), newer: enhanceReport(reports[0]) },
+          duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds,
         }, null, 2));
       } else {
         console.log(renderCompareMc(reports[1], reports[0]));
+        if (topLevel.duplicateSuppressedSessionIds.length) {
+          console.log(`Duplicate-suppressed child selections: ${topLevel.duplicateSuppressedSessionIds.join(', ')}`);
+        }
       }
       return reports.every((report) => report.rateKnown) ? 0 : 2;
     }
@@ -816,12 +857,15 @@ async function main() {
         rows = rows.filter((row) => new Date(Number(row.first_ts)).toISOString().slice(0, 10) === today);
       }
       if (!rows.length) fail('no sessions match the requested filters');
-      const reports = rows.slice(0, 200).map((row) => costForSession(db, dataDir, table, row.session_id));
+      const topLevel = selectTopLevelCandidates(rows.map((row) => row.session_id), graph);
+      const reports = topLevel.includedRootIds.slice(0, 200)
+        .map((sessionId) => costForSession(db, dataDir, table, graph, sessionId));
       if (reports.length === 1) {
+        reports[0].duplicateSuppressedSessionIds = topLevel.duplicateSuppressedSessionIds;
         if (opts.json) console.log(JSON.stringify(enhanceReport(reports[0], { method: opts.mode, requestedId: null, candidates: reports.map((r) => r.sessionId) }), null, 2));
         else console.log(renderText(reports[0]));
       } else {
-        const aggregate = aggregateMcReports(reports);
+        const aggregate = aggregateMcReports(reports, topLevel.duplicateSuppressedSessionIds);
         if (opts.json) console.log(JSON.stringify({ schemaVersion: 1, generatedAt: new Date().toISOString(), selection: { method: opts.mode, sessions: reports.map((r) => r.sessionId) }, ...enhanceReport(aggregate), models: aggregate.models }, null, 2));
         else console.log(renderAggregateMc(aggregate, opts.mode === 'today' ? 'today' : 'filtered range'));
       }
@@ -829,7 +873,7 @@ async function main() {
     }
 
     const sessionId = opts.session ?? candidates[0]?.session_id ?? latestSessionId(db);
-    const report = costForSession(db, dataDir, table, sessionId);
+    const report = costForSession(db, dataDir, table, graph, sessionId);
     const selection = { method: opts.session ? 'explicit' : 'latest-ledger-activity', requestedId: opts.session ?? null, candidates: candidates.slice(0, 5).map((row) => row.session_id) };
 
     if (opts.dashboard) {

@@ -78,6 +78,11 @@ node $SessionCost --include-children
 node $SessionCost --session mvs_xxxx --include-children
 ```
 
+`--include-children` recursively includes every descendant. Multi-session modes select top-level roots
+before aggregation, preventing a child from being counted again beneath a selected parent. A selected
+root includes descendants across UTC dates; a child becomes a root only when its parent is outside
+the filtered candidate set.
+
 ## Config
 
 `%USERPROFILE%\.minimax\session-cost.json`:
