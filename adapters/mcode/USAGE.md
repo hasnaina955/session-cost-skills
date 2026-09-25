@@ -38,7 +38,7 @@ node $SessionCost
 
 ## Session modes
 
-`--json` reports use normalized contract version `1.1.0`. MCode labels its value as a provider-rate estimate, keeps `recordedCostUsd` null, and exposes token semantics, coverage, provenance, warnings, and session-graph state.
+`--json` reports use normalized contract version `1.2.0`. MCode labels its value as a provider-rate estimate, keeps `recordedCostUsd` null, and exposes token semantics, coverage, provenance, warnings, and session-graph state.
 
 ```powershell
 node $SessionCost
@@ -73,6 +73,8 @@ component completeness, source exclusions, and free-model entries without readin
 range, and atomically publishes only when both providers are complete. Refreshes retain prior rate
 records and close their intervals at the next effective snapshot. A failed refresh leaves the previous
 valid table byte-for-byte unchanged. Calls before the earliest trustworthy rate date remain unpriced.
+Rate lookup runs through the versioned provider driver selected for the call, so provider matching and
+capabilities are shared across runtimes rather than duplicated in each CLI.
 
 ## Subagents
 

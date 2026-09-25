@@ -20,7 +20,7 @@
   ],
   "properties": {
     "schemaVersion": { "const": 1 },
-    "contractVersion": { "const": "1.1.0" },
+    "contractVersion": { "const": "1.2.0" },
     "generatedAt": { "type": "string", "format": "date-time" },
     "runtime": { "$ref": "#/$defs/runtime" },
     "snapshot": { "$ref": "#/$defs/snapshot" },
@@ -43,6 +43,8 @@
       "type": "array",
       "items": { "type": "object", "additionalProperties": true }
     },
+    "providerDriver": { "type": ["object", "null"], "additionalProperties": true },
+    "providerDrivers": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
     "rateProvenance": {
       "type": "array",
       "items": {

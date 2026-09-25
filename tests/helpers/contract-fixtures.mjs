@@ -122,7 +122,7 @@ export function createClineFixture() {
     provider, model, messages_path, metadata_json, prompt, is_subagent
   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   const rows = [
-    ['cline-root', null, 101, 'completed', rootStarted, isoOffset({ hours: -47 }), rootStarted, 'cline', 'root-model', rootMessages, JSON.stringify({ title: 'Root contract fixture' }), 'root', 0],
+    ['cline-root', null, 101, 'completed', rootStarted, isoOffset({ hours: -47 }), rootStarted, 'commandcode', 'root-model', rootMessages, JSON.stringify({ title: 'Root contract fixture' }), 'root', 0],
     ['cline-child', 'cline-root', 102, 'completed', rootStarted, isoOffset({ hours: -46 }), rootStarted, 'cline', 'child-model', childMessages, JSON.stringify({ title: 'Child contract fixture' }), 'child', 1],
     ['cline-grandchild', 'cline-child', 103, 'completed', rootStarted, isoOffset({ hours: -45 }), rootStarted, 'cline', 'grandchild-model', grandchildMessages, JSON.stringify({ title: 'Grandchild contract fixture' }), 'grandchild', 1],
     ['cline-other', null, 104, 'completed', otherStarted, isoOffset({ hours: -2 }), otherStarted, 'other-provider', 'other-model', otherMessages, JSON.stringify({ title: 'Other contract fixture' }), 'other', 0],

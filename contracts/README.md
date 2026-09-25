@@ -1,6 +1,6 @@
 # Session Cost contracts
 
-## Normalized report contract v1.1
+## Normalized report contract v1.2
 
 `normalized-report-v1.schema.json` defines the common report envelope shared by the Cline and MCode session-cost CLIs.
 
@@ -37,9 +37,13 @@ Unknown cost is `null`, never zero. A known zero-cost session with no calls may 
 
 MCode selects the four component records that apply to each call timestamp, context size, and time band. Refreshes retain previous records and close open intervals at the next effective snapshot. Calls before the earliest trustworthy effective date remain unpriced.
 
+## Provider drivers
+
+`provider-driver-v1.schema.json` defines the versioned manifest for built-in and user-installed provider drivers. A manifest declares deterministic provider matching, supported operations and capabilities, token semantics, model aliases, credential environment-variable references, source metadata, and a SHA-256 fingerprint. Driver implementations may contain functions, but reports serialize only the safe manifest and never credential values.
+
 ## Validation
 
-The canonical runtime validator is `shared/report-contract.mjs`. It is generated into each independently installable adapter and is also checked against the JSON Schema by `tests/normalized-contract.test.mjs`. Rate records are validated across the complete bundled catalog by `tests/rate-record-contract.test.mjs`.
+The canonical runtime validator is `shared/report-contract.mjs`. It is generated into each independently installable adapter and is also checked against the JSON Schema by `tests/normalized-contract.test.mjs`. Rate records are validated across the complete bundled catalog by `tests/rate-record-contract.test.mjs`, and provider manifests plus built-in/user-loaded drivers are covered by `tests/provider-driver-contract.test.mjs`.
 
 Run:
 
