@@ -58,6 +58,10 @@ Natural language mapping:
 - `compare` → `--compare`
 - `this task end to end` → `--include-children`
 - `rate coverage` / `are these rates current` → `--rates`
+- `check my setup` → `doctor`
+- `which providers are configured` → `providers`
+- `find my model` → `models discover`
+- `why was this model selected` → `config explain --provider <id> --model <id>`
 
 ## Inputs to collect
 

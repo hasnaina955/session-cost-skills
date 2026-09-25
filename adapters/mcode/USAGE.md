@@ -38,6 +38,10 @@ node $SessionCost
 | `--validate-config` | Validate and show effective config |
 | `--export-config` | Print effective config |
 | `--import-config <path>` | Import validated config |
+| `doctor` | Inspect effective config/providers |
+| `providers` | List provider drivers |
+| `models discover` | List rate models and aliases |
+| `config explain` | Explain provider/model matching |
 | `--data-dir <path>` | Override MCode data directory |
 | `--help` / `-h` | CLI help |
 
@@ -52,6 +56,15 @@ CLI flags, project config, user config, detected runtime defaults, then built-in
 profiles map custom provider names and model aliases to a supported driver. Use `--validate-config` or
 `--export-config` to inspect effective values and winning sources. Profiles store environment-variable
 names such as `OPENROUTER_API_KEY`, never credential values.
+
+```powershell
+node $SessionCost doctor
+node $SessionCost providers
+node $SessionCost models discover
+node $SessionCost config explain --provider commandcode --model qwen-3.7-plus
+```
+
+Unknown models return a non-zero status with suggestion-only aliases; they are never applied automatically.
 
 ```powershell
 node $SessionCost

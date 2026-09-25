@@ -24,6 +24,7 @@ import {
   refreshRateTable as refreshRateCatalog,
 } from './lib/rates.mjs';
 import { createMCodeProviderRegistry, resolveWithProviderDriver } from './lib/provider-drivers.mjs';
+import { discoverModels, doctorReport, explainModelMatch, renderDiagnostics } from './lib/provider-diagnostics.mjs';
 import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, readConfigFile } from './lib/config.mjs';
 import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from './lib/session-graph.mjs';
 import { REPORT_CONTRACT_VERSION, withNormalizedContract } from './lib/report-contract.mjs';
@@ -54,7 +55,7 @@ function parseArgs(argv) {
     session: null, mode: 'current', list: 0, json: false, includeChildren: false, includeChildrenExplicit: false,
     refreshRates: false, dataDir: null, from: null, to: null, provider: null, model: null, configPath: null, rates: false,
     dashboard: false, out: null,
-    sessionConfigPath: null, configAction: null, configImportPath: null,
+    sessionConfigPath: null, configAction: null, configImportPath: null, diagnostic: null,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -72,6 +73,15 @@ function parseArgs(argv) {
     else if (a === '--validate-config') opts.configAction = 'validate';
     else if (a === '--export-config') opts.configAction = 'export';
     else if (a === '--import-config') { opts.configAction = 'import'; opts.configImportPath = argv[++i]; }
+    else if (a === 'doctor' || a === '--doctor') opts.diagnostic = 'doctor';
+    else if (a === 'providers' || a === '--providers') opts.diagnostic = 'providers';
+    else if ((a === 'models' && argv[i + 1] === 'discover') || a === '--models-discover') {
+      if (a === 'models') i += 1;
+      opts.diagnostic = 'models';
+    } else if ((a === 'config' && argv[i + 1] === 'explain') || a === '--config-explain') {
+      if (a === 'config') i += 1;
+      opts.diagnostic = 'config-explain';
+    }
     else if (a === '--rates') opts.rates = true;
     else if (a === '--dashboard') opts.dashboard = true;
     else if (a === '--out') opts.out = argv[++i];
@@ -110,7 +120,11 @@ function printHelp() {
   --export-config         print the effective configuration
   --import-config <path>  validate and import a config file
   --refresh-rates         atomically re-fetch and validate CommandCode and StepFun rates
-  --data-dir <path>       MiniMax data dir (default: derived from this script's location)`);
+  --data-dir <path>       MiniMax data dir (default: derived from this script's location)
+  doctor                  inspect config, providers, and rate coverage
+  providers                list configured/built-in provider drivers
+  models discover          list provider models and aliases
+  config explain           explain provider/model resolution`);
 }
 
 // Thrown instead of process.exit(): exiting while undici/fetch handles are still open
@@ -896,6 +910,29 @@ function handleConfigAction(configuration) {
   return true;
 }
 
+function runDiagnostic(configuration) {
+  const table = loadRates();
+  const knownModels = Object.fromEntries(Object.entries(table.providers ?? {}).map(([id, provider]) => [id, Object.keys(provider.models ?? {})]));
+  const allRecords = Object.values(table.providers ?? {}).flatMap((provider) => provider.rateRecords ?? []);
+  const allKnownModels = [...new Set(Object.values(knownModels).flat())];
+  const diagnosticModels = opts.provider && knownModels[opts.provider] ? knownModels[opts.provider] : allKnownModels;
+  let report;
+  let status = 0;
+  if (opts.diagnostic === 'providers') {
+    report = { action: 'providers', providers: doctorReport({ configuration, runtimeId: 'mcode' }).providers };
+  } else if (opts.diagnostic === 'models') {
+    report = { action: 'models', models: discoverModels({ configuration, runtimeId: 'mcode', providerId: opts.provider, knownModels }) };
+  } else {
+    const explanation = opts.provider || opts.model
+      ? explainModelMatch({ runtimeId: 'mcode', providerId: opts.provider, modelId: opts.model, configuration, knownModelIds: diagnosticModels, rateRecords: allRecords })
+      : null;
+    report = { action: opts.diagnostic, ...doctorReport({ configuration, runtimeId: 'mcode', providerId: opts.provider, modelId: opts.model, knownModelIds: diagnosticModels, rateRecords: allRecords }), explanation };
+    if (explanation?.status === 'unknown' || explanation?.status === 'ambiguous') status = 2;
+  }
+  console.log(opts.json ? JSON.stringify(report, null, 2) : renderDiagnostics(report));
+  return status;
+}
+
 async function main() {
   effectiveConfiguration = loadEffectiveConfig({
     configPath: opts.sessionConfigPath,
@@ -906,6 +943,7 @@ async function main() {
     },
   });
   if (handleConfigAction(effectiveConfiguration)) return 0;
+  if (opts.diagnostic) return runDiagnostic(effectiveConfiguration);
   if (!opts.provider && effectiveConfiguration.config.runtimeDefaults.provider) opts.provider = effectiveConfiguration.config.runtimeDefaults.provider;
   if (!opts.model && effectiveConfiguration.config.runtimeDefaults.model) opts.model = effectiveConfiguration.config.runtimeDefaults.model;
   if (!opts.includeChildrenExplicit && effectiveConfiguration.config.runtimeDefaults.includeChildren === true) opts.includeChildren = true;

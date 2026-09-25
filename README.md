@@ -26,6 +26,7 @@ This repository keeps runtime-specific accounting adapters separate while sharin
 - Effective-dated, context-aware MCode rates with immutable refresh history and fingerprints
 - Versioned built-in and user-installed provider driver manifests
 - Layered project/user configuration with safe provider profiles and model aliases
+- Secret-safe `doctor`, provider discovery, model discovery, and match explanations
 - Cache-read and cache-write semantics preserved per runtime
 - Self-contained HTML dashboards with no external assets
 - Shared normalized JSON report contract with runtime extensions

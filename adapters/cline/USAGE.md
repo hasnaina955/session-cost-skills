@@ -34,6 +34,10 @@ node $SessionCost
 | `--validate-config` | Validate and show effective config |
 | `--export-config` | Print effective config |
 | `--import-config <path>` | Import validated config |
+| `doctor` | Inspect effective config/providers |
+| `providers` | List provider drivers |
+| `models discover` | List models and aliases |
+| `config explain` | Explain provider/model matching |
 | `--account` | Live read-only account API view |
 | `--account-days <n>` | Account history window, default 45 |
 | `--account-user-id <id>` | Must match authenticated account |
@@ -51,6 +55,15 @@ Project config is `.session-cost.json`; user config uses the platform config dir
 CLI flags, project config, user config, detected runtime defaults, then built-in defaults. Use
 `--validate-config` or `--export-config` to see the effective values and winning sources. Profiles store
 only environment-variable names such as `OPENROUTER_API_KEY`, never credential values.
+
+```powershell
+node $SessionCost doctor
+node $SessionCost providers
+node $SessionCost models discover
+node $SessionCost config explain --provider commandcode --model minimax-m3
+```
+
+Unknown or ambiguous provider/model matches return a non-zero status and are never guessed.
 
 ## Session modes
 

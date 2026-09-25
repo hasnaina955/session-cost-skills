@@ -7,7 +7,7 @@ export const PROVIDER_DRIVER_CONTRACT_VERSION = '1.0.0';
 
 const COMPONENTS = ['input', 'output', 'cacheRead', 'cacheWrite'];
 
-function normalizeProviderId(value) {
+export function normalizeProviderId(value) {
   return String(value ?? '')
     .toLowerCase()
     .replace(/^custom_provider:/, '')
@@ -15,7 +15,7 @@ function normalizeProviderId(value) {
     .replace(/[^a-z0-9]/g, '');
 }
 
-function normalizeModelId(value) {
+export function normalizeModelId(value) {
   return String(value ?? '')
     .toLowerCase()
     .replace(/^[^/]*\//, '')
@@ -96,14 +96,37 @@ export function createProviderRegistry(definitions, { runtimeId = null } = {}) {
   };
 }
 
-export function resolveDriverModel(driver, modelId) {
-  const aliases = driver?.manifest?.modelAliases ?? {};
-  if (Object.hasOwn(aliases, modelId)) return aliases[modelId];
-  const normalized = normalizeModelId(modelId);
-  for (const [alias, target] of Object.entries(aliases)) {
-    if (normalizeModelId(alias) === normalized) return target;
+function globMatches(pattern, value) {
+  if (!pattern.includes('*')) return false;
+  const escaped = pattern.split('*').map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*');
+  return new RegExp(`^${escaped}$`, 'i').test(value);
+}
+
+export function resolveDriverModelMatch(driver, modelId, { knownModelIds = [] } = {}) {
+  const known = [...new Set(knownModelIds.map(String))];
+  if (known.includes(String(modelId))) {
+    return { modelId, rule: 'exact-rate-model', matchedOn: modelId, alias: null, status: 'matched' };
   }
-  return modelId;
+  const aliases = Object.entries(driver?.manifest?.modelAliases ?? {}).sort(([left], [right]) => left.localeCompare(right));
+  const exactAlias = aliases.find(([alias]) => alias === modelId);
+  if (exactAlias) return { modelId: exactAlias[1], rule: 'exact-alias', matchedOn: exactAlias[0], alias: exactAlias[0], status: 'matched' };
+  const normalized = normalizeModelId(modelId);
+  const normalizedAlias = aliases.find(([alias]) => normalizeModelId(alias) === normalized);
+  if (normalizedAlias) return { modelId: normalizedAlias[1], rule: 'normalized-alias', matchedOn: normalizedAlias[0], alias: normalizedAlias[0], status: 'matched' };
+  const normalizedModels = known.filter((candidate) => normalizeModelId(candidate) === normalized);
+  if (normalizedModels.length === 1) {
+    return { modelId: normalizedModels[0], rule: 'normalized-rate-model', matchedOn: normalizedModels[0], alias: null, status: 'matched' };
+  }
+  if (normalizedModels.length > 1) {
+    return { modelId: null, rule: 'normalized-model-collision', matchedOn: normalized, alias: null, status: 'ambiguous', candidates: normalizedModels };
+  }
+  const globAlias = aliases.find(([alias]) => globMatches(alias, String(modelId)));
+  if (globAlias) return { modelId: globAlias[1], rule: 'glob-alias', matchedOn: globAlias[0], alias: globAlias[0], status: 'matched' };
+  return { modelId: String(modelId), rule: 'unknown', matchedOn: null, alias: null, status: 'unknown', candidates: [] };
+}
+
+export function resolveDriverModel(driver, modelId, options = {}) {
+  return resolveDriverModelMatch(driver, modelId, options).modelId ?? String(modelId);
 }
 
 export const BUILTIN_PROVIDER_MANIFESTS = Object.freeze([
