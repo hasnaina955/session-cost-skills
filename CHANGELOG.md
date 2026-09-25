@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+Nothing yet. The next batch of changes lands here before it is cut into a release.
+
+## 0.3.0
+
 ### Added
 
 - Added fingerprinted effective-dated rate records with context thresholds, time bands, source metadata, and immutable refresh history.
@@ -17,11 +21,15 @@ All notable changes to this project are documented here.
 - Reconciled MIT and optional-support terms, corrected install paths, and added UTF-8/legal-copy documentation checks.
 - Added cross-platform/Bun CI matrix templates, artifact allowlist checks, and a Node.js 22.15 runtime floor.
 - Added repository secret/data ignore rules, a history-wide audit, and a documented audit result.
+- Added a release version contract: a single semantic version shared by the repository, both adapter skills, and every archive.
+- Added a `VERSION` file and `--version` flag to both skills so an installed copy identifies itself without the repository.
+- Added reproducible Cline, MCode, and combined release archives with published SHA-256 checksums.
 
 ### Security
 
 - Replaced browser-side dashboard HTML sinks with DOM text construction and locked dashboards to a hash-scoped, offline content security policy.
 - Added regression coverage for malicious model, provider, session, title, filter, and rate metadata in both adapters.
+- Set the package to `private` so no npm publication can leak a skill source as an unintended package.
 
 ### Fixed
 
@@ -35,6 +43,7 @@ All notable changes to this project are documented here.
 - Label MCode rate-derived totals as estimates rather than runtime-recorded charges.
 - Discover every adapter and contract test recursively instead of maintaining a partial package script list.
 - Generate independently installable Cline and MCode dashboard renderers from one canonical implementation and fail verification when copies drift.
+- Documented the relationship between release, adapter, report-contract, and optional-support versions in [docs/release.md](docs/release.md).
 
 ## 0.2.0
 

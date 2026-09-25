@@ -1,7 +1,7 @@
 {
   "name": "session-cost-skills",
-  "version": "0.2.0",
-  "private": false,
+  "version": "0.3.0",
+  "private": true,
   "description": "Cline and MiniMax Code session-cost skills with shared reporting architecture",
   "type": "module",
   "scripts": {
@@ -17,6 +17,12 @@
     "check:protocol-adapters": "node scripts/sync-protocol-adapters.mjs --check",
     "sync:config": "node scripts/sync-config.mjs",
     "check:config": "node scripts/sync-config.mjs --check",
+    "sync:skill-version": "node scripts/sync-skill-version.mjs",
+    "check:skill-version": "node scripts/sync-skill-version.mjs --check",
+    "build:release": "node scripts/build-release.mjs",
+    "check:release": "node scripts/build-release.mjs --check",
+    "check:version": "node scripts/check-version.mjs",
+    "rehearse:release": "node scripts/rehearse-release.mjs",
     "sync:provider-driver": "node scripts/sync-provider-driver.mjs",
     "check:provider-driver": "node scripts/sync-provider-driver.mjs --check",
     "test": "node scripts/run-tests.mjs",

@@ -28,6 +28,7 @@ import { discoverModels, doctorReport, explainModelMatch, renderDiagnostics } fr
 import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, readConfigFile } from './lib/config.mjs';
 import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from './lib/session-graph.mjs';
 import { REPORT_CONTRACT_VERSION, withNormalizedContract } from './lib/report-contract.mjs';
+import { formatVersionBanner, versionBanner } from './lib/skill-version.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RATES_PATH = process.env.SESSION_COST_RATES_PATH
@@ -91,6 +92,7 @@ function parseArgs(argv) {
     else if (a === '--refresh-rates') opts.refreshRates = true;
     else if (a === '--data-dir') opts.dataDir = argv[++i];
     else if (a === '--help' || a === '-h') { printHelp(); process.exit(0); }
+    else if (a === '--version' || a === '-v') { console.log(formatVersionBanner(versionBanner('mcode'))); process.exit(0); }
     else fail(`unknown argument: ${a}`);
   }
   return opts;
@@ -121,6 +123,7 @@ function printHelp() {
   --import-config <path>  validate and import a config file
   --refresh-rates         atomically re-fetch and validate CommandCode and StepFun rates
   --data-dir <path>       MiniMax data dir (default: derived from this script's location)
+  --version              print the installed skill, report-contract, and Node versions
   doctor                  inspect config, providers, and rate coverage
   providers                list configured/built-in provider drivers
   models discover          list provider models and aliases
