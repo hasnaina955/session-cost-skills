@@ -235,7 +235,7 @@ async function openLedger(dataDir) {
   try {
     ({ DatabaseSync } = await import('node:sqlite'));
   } catch {
-    fail(`this script needs the built-in node:sqlite module (Node 22.5+); running ${process.version}`);
+    fail(`this script needs the built-in node:sqlite module (Node 22.15+); running ${process.version}`);
   }
   return new DatabaseSync(dbPath, { readOnly: true });
 }

@@ -199,7 +199,7 @@ Reporting rules that make the number trustworthy:
 - **Rates look stale**: refresh records the source and effective date for each component. Refresh with
   `--refresh-rates`; it needs network access, validates both providers, retains earlier records, and
   atomically leaves the entire previous table intact if either provider fails.
-- **Node too old**: `node:sqlite` needs Node 22.5+ (verified on Node 24). The script prints the
+- **Node too old**: `node:sqlite` needs Node 22.15+ (verified on Node 24). The script prints the
   running version instead of failing cryptically.
 
 ## Standing behaviour after a task

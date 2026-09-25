@@ -31,7 +31,7 @@ This repository keeps runtime-specific accounting adapters separate while sharin
 - Cache-read and cache-write semantics preserved per runtime
 - Self-contained HTML dashboards with no external assets
 - Shared normalized JSON report contract with runtime extensions
-- Windows and Node.js 22.5+ support
+- Windows and Node.js 22.15+ support
 
 ## Installation
 
@@ -74,7 +74,7 @@ Never use the Cline fresh-input formula on MCode data.
 
 ## Development
 
-Install no npm dependencies is required for the current skill tests; Node.js 22.5+ and the built-in `node:sqlite` module are required.
+Install no npm dependencies is required for the current skill tests; Node.js 22.15+ and the built-in `node:sqlite` module are required.
 
 ```powershell
 npm run verify
@@ -84,6 +84,8 @@ Or run individual checks:
 
 ```powershell
 npm test
+npm run check:docs
+npm run check:artifacts
 npm run check:report-contract
 npm run check:provider-driver
 npm run check:provider-diagnostics
@@ -111,6 +113,7 @@ A Gumroad product may be offered for voluntary support, compatibility assistance
 - [MCode porting plan](docs/porting-plan.md)
 - [Optional support and troubleshooting](SUPPORT.md)
 - [Internal optional-support launch checklist](docs/gumroad-selling-guide.html)
+- [Cross-platform CI matrix template](docs/ci-matrix.yml)
 - [Changelog](CHANGELOG.md)
 - [Security policy](SECURITY.md)
 - [Contributing guide](CONTRIBUTING.md)

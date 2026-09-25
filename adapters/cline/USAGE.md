@@ -204,4 +204,4 @@ page number instead of being treated as empty history.
 | Multiple running sessions | The report warns; select with `--session` |
 | Account call slow | Reduce `--account-days` |
 | Missing subagent spend | Use `--include-children` |
-| Old Node | Upgrade to Node 22.5+ |
+| Old Node | Upgrade to Node 22.15+ |
