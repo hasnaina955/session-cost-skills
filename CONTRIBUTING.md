@@ -18,7 +18,9 @@ npm run verify
 
 This checks JavaScript syntax, verifies generated adapter modules, validates the shared report contract, runs every discovered adapter/fixture test, and checks dashboard CSP and DOM-sink safety.
 
-`.github/workflows/ci.yml` is the single source of truth for what CI runs. Today it runs `npm run verify` on `windows-latest` against Node 24, with every action pinned to a full commit SHA. The wider matrix is not enabled yet: `package.json` declares a Node 22.15 floor in `engines`, and neither that floor nor the ubuntu/macos runners are exercised by CI. Do not copy a matrix from anywhere else in this repository; edit the workflow itself.
+`.github/workflows/ci.yml` is the single source of truth for what CI runs. It runs `npm run verify` on ubuntu, windows, and macos against Node 22.15 and 24 (fail-fast disabled, so one broken pair still reports the others), the full test suite under Bun on ubuntu, and a release rehearsal on ubuntu and windows. Every action is pinned to a full commit SHA. `.github/workflows/release.yml` is tag-triggered and publishes the three archives with `SHA256SUMS.txt`, so a release is no longer cut by hand. Do not copy a matrix from anywhere else in this repository; edit the workflow itself.
+
+Bun on Windows is not covered and is known to fail: 11 tests error on temp-directory cleanup with `EBUSY: resource busy or locked, rm '<tmpdir>'`, because the fixtures delete a directory whose SQLite handle is still open. POSIX permits that and Windows does not. The same tests pass under Node on the same machine.
 
 `npm run check:workflows` fails if any workflow pins an action to a mutable tag instead of a
 full 40-character commit SHA, and requires `ci.yml` to declare least-privilege

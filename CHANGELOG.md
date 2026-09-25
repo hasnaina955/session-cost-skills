@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Added
+
+- CI now runs the full matrix: `npm run verify` on ubuntu, windows, and macos against Node 22.15
+  and 24 with fail-fast disabled, the full test suite under Bun on ubuntu, and a release
+  rehearsal on ubuntu and windows. The declared Node 22.15 floor and the ubuntu/macos runners
+  were claimed but never exercised before this; a regression on either now fails a push.
+- `.github/workflows/release.yml` is new. A tag push verifies the tree, rehearses the install
+  from the archives, rebuilds them, confirms the published checksums and that the tag matches
+  `package.json`, then publishes the archives with `SHA256SUMS.txt`. Releases were cut by hand
+  until now, which is why `docs/release.md` referred to a release workflow that did not exist.
+
 ### Fixed
 
 - `tests/release-contract.test.mjs` derived the repository root from
@@ -12,9 +23,13 @@ All notable changes to this project are documented here.
   published-checksum verification - never ran, and `npm run verify` failed on `windows-latest`.
   It now uses `fileURLToPath`, as the rest of the repository does.
 - `CONTRIBUTING.md` and `docs/ci-matrix.yml` described a CI matrix (ubuntu/windows/macos against
-  Node 22.15 and 24, plus Bun and release-rehearsal jobs) that no workflow implements. Both now
-  describe what CI actually runs, and record the unexercised Node 22.15 floor as a known gap
-  instead of implying coverage.
+  Node 22.15 and 24, plus Bun and release-rehearsal jobs) that no workflow implemented. Both now
+  describe what CI actually runs.
+- `scripts/run-tests.mjs` invokes Bun's runner correctly. It spawned `process.execPath --test`,
+  which under Bun is `bun --test` - not Bun's runner, so every file ran as a plain script and
+  each suite threw `Cannot use test outside of the test runner`, exiting 1. It now uses
+  `bun test` and raises Bun's 5000ms default per-test timeout, which `node:test` does not impose
+  and which the slowest CLI end-to-end test exceeds.
 
 ### Security
 
