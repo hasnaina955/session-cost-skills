@@ -20,6 +20,9 @@ const runtime = flag('--runtime', 'cline');
 const ticks = Number(flag('--ticks', 8));
 const budget = Number(flag('--budget', 5));
 const outputHtml = flag('--html', null);
+const activeMs = Number(flag('--active-interval', 500));
+const idleMs = Number(flag('--idle-interval', 3000));
+const surface = createSurface(process.stdout);
 
 const WIDTH = 74;
 const money = (value) => (value == null ? '     n/a' : `$${Number(value).toFixed(4)}`);
@@ -114,6 +117,54 @@ export function renderFrame(report, { previous, elapsedMs, stale }) {
 }
 
 // Append a real assistant message so the ledger genuinely grows between polls.
+// Terminal drawing. A live view has to repaint in place, otherwise every poll
+// appends another frame and the useful one scrolls off the top.
+//
+// On a TTY we take the alternate screen buffer: the user's scrollback is
+// untouched, and on Ctrl-C the shell returns exactly where it was. When output is
+// piped to a file or a pager there is no cursor to move, so frames are appended
+// instead and the caller gets a readable transcript rather than escape codes.
+const ANSI = {
+  enterAlt: '\x1b[?1049h',
+  leaveAlt: '\x1b[?1049l',
+  home: '\x1b[H',
+  clear: '\x1b[2J',
+  hideCursor: '\x1b[?25l',
+  showCursor: '\x1b[?25h',
+  dim: (text) => `\x1b[2m${text}\x1b[0m`,
+};
+
+export function createSurface(stream = process.stdout) {
+  const interactive = Boolean(stream.isTTY);
+  let drawing = false;
+
+  const leave = () => {
+    if (!drawing) return;
+    drawing = false;
+    stream.write(ANSI.showCursor + ANSI.leaveAlt);
+  };
+
+  return {
+    interactive,
+    /** Draw one frame, replacing whatever was on screen. */
+    draw(frame) {
+      if (!interactive) {
+        stream.write(`${frame}\n`);
+        return;
+      }
+      if (!drawing) {
+        drawing = true;
+        process.on('exit', leave);
+        for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { leave(); process.exit(130); });
+        stream.write(ANSI.enterAlt + ANSI.hideCursor);
+      }
+      stream.write(ANSI.home + ANSI.clear + frame);
+    },
+    leave,
+  };
+}
+
+// Append a real assistant message so the ledger genuinely grows between polls.
 function growClineFixture(fixture) {
   const file = path.join(fixture.dataDir, 'data', 'sessions', 'cline-root.json');
   const payload = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -157,12 +208,18 @@ for (let tick = 0; tick < ticks; tick += 1) {
     continue;
   }
 
-  console.log(renderFrame(report, { previous, elapsedMs: Date.now() - started, stale: false }));
+  surface.draw(renderFrame(report, { previous, elapsedMs: Date.now() - started, stale: false }));
   frames.push(report);
   previous = { cost: report.billing?.amountUsd ?? null };
   if (outputHtml) fs.writeFileSync(outputHtml, renderLiveHtml(frames, { budget, runtime, target }), 'utf8');
-  if (tick < ticks - 1) await new Promise((resolve) => setTimeout(resolve, 250));
+  if (tick < ticks - 1) {
+    // Poll fast while the session is actually moving and back off when it is idle,
+    // so watching a finished session does not spin a core for nothing.
+    await new Promise((resolve) => setTimeout(resolve, report.snapshot?.active ? activeMs : idleMs));
+  }
 }
+surface.leave();
+
 
 
 
