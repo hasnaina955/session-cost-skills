@@ -48,8 +48,7 @@ node $SessionCost --refresh-rates
 `--last` selects the latest session that is no longer active. `--today` aggregates sessions whose
 first ledger call is on the current UTC date. `--compare` compares the latest two sessions.
 Date/provider/model filters produce an aggregate when multiple sessions match. `--rates` reports
-mirrored provider coverage, component completeness, source exclusions, and freshness without reading
-session history.
+mirrored provider coverage, effective rate records, component completeness, exclusions, and freshness.
 
 Natural language mapping:
 
@@ -186,16 +185,15 @@ Reporting rules that make the number trustworthy:
   this skill can have. In `--list` the same case appears as a `*` suffix on the cost.
 - **`Provider "<x>" has no mirrored rate table`**: the session ran on a third provider. Token
   counts are still correct; say plainly that only the mirrored providers can be priced.
-- **Non-commandcode provider** (e.g. `custom_provider:stepfun`): the script still reports token
-  counts correctly and refuses to price them. That is the correct outcome — say so plainly.
+- **Non-commandcode provider** (for example an unlisted StepFun model): the script reports tokens but
+  refuses to guess a rate. The published `step-5-preview` card is priced from its effective record.
 - **Totals moving between two runs**: expected for an active session. Report the later snapshot and
   the snapshot time; do not try to reconcile the difference.
 - **Empty ledger or unknown session id**: the script exits with a message. Re-check the id, or run
   `--list 10` to find the right session.
-- **Rates look stale**: each provider's `fetchedAt` is printed in the report footer and recorded
-  in `references/provider-rates.json`. Refresh with `--refresh-rates` when the user doubts a
-  rate. It re-reads CommandCode's model catalog and StepFun's pricing page, so it needs network
-  access; if one source fails, that provider's previous rates are kept rather than dropped.
+- **Rates look stale**: refresh records the source and effective date for each component. Refresh with
+  `--refresh-rates`; it needs network access, validates both providers, retains earlier records, and
+  atomically leaves the entire previous table intact if either provider fails.
 - **Node too old**: `node:sqlite` needs Node 22.5+ (verified on Node 24). The script prints the
   running version instead of failing cryptically.
 
@@ -229,7 +227,7 @@ $SessionCost = "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-co
 node $SessionCost --session mvs_xxxx            # one session
 node $SessionCost --list 10                     # recent sessions with cost
 node $SessionCost --json                        # machine-readable
-node $SessionCost --refresh-rates               # re-fetch CommandCode rates
+node $SessionCost --refresh-rates               # atomically refresh effective provider rates
 ```
 
 `--data-dir <path>` overrides the auto-detected data directory (`%USERPROFILE%\.minimax`, derived

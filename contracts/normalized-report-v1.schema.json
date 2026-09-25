@@ -20,7 +20,7 @@
   ],
   "properties": {
     "schemaVersion": { "const": 1 },
-    "contractVersion": { "const": "1.0.0" },
+    "contractVersion": { "const": "1.1.0" },
     "generatedAt": { "type": "string", "format": "date-time" },
     "runtime": { "$ref": "#/$defs/runtime" },
     "snapshot": { "$ref": "#/$defs/snapshot" },
@@ -42,6 +42,25 @@
     "models": {
       "type": "array",
       "items": { "type": "object", "additionalProperties": true }
+    },
+    "rateProvenance": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["provider", "model", "component", "effectiveFrom", "effectiveThrough", "context", "timeBand", "source", "fingerprint"],
+        "properties": {
+          "provider": { "type": "string", "minLength": 1 },
+          "model": { "type": "string", "minLength": 1 },
+          "component": { "enum": ["input", "output", "cacheRead", "cacheWrite"] },
+          "effectiveFrom": { "type": "string", "format": "date-time" },
+          "effectiveThrough": { "type": ["string", "null"] },
+          "context": { "type": "object", "additionalProperties": true },
+          "timeBand": { "enum": ["flat", "peak", "offPeak"] },
+          "source": { "type": "object", "additionalProperties": true },
+          "fingerprint": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+        },
+        "additionalProperties": false
+      }
     }
   },
   "$defs": {

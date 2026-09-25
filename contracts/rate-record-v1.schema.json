@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hasnaina955.github.io/session-cost-skills/contracts/rate-record-v1.schema.json",
+  "title": "Session Cost effective rate record v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "provider",
+    "model",
+    "component",
+    "sourceAmount",
+    "amount",
+    "currency",
+    "unit",
+    "effectiveFrom",
+    "effectiveThrough",
+    "context",
+    "timeBand",
+    "source",
+    "fingerprint"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "provider": { "type": "string", "minLength": 1 },
+    "model": { "type": "string", "minLength": 1 },
+    "component": { "enum": ["input", "output", "cacheRead", "cacheWrite"] },
+    "sourceAmount": { "type": "string", "minLength": 1 },
+    "amount": { "type": "number", "minimum": 0 },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "unit": { "const": "per_1m_tokens" },
+    "effectiveFrom": { "type": "string", "format": "date-time" },
+    "effectiveThrough": { "type": ["string", "null"], "format": "date-time" },
+    "context": {
+      "type": "object",
+      "required": ["minTokens", "maxTokens"],
+      "properties": {
+        "minTokens": { "type": "integer", "minimum": 0 },
+        "maxTokens": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "timeBand": { "enum": ["flat", "peak", "offPeak"] },
+    "source": {
+      "type": "object",
+      "required": ["url", "parserVersion", "fetchedAt"],
+      "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "parserVersion": { "type": "integer", "minimum": 1 },
+        "fetchedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "fingerprint": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  },
+  "additionalProperties": false
+}

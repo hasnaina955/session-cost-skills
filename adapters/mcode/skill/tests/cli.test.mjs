@@ -28,6 +28,8 @@ test('MCode --rates works without reading the session ledger and emits versioned
   assert.equal(output.rates.coverage.complete, true);
   assert.ok(output.rates.coverage.providers.commandcode.excludedModels.length > 0);
   assert.ok(output.rates.coverage.providers.stepfun.excludedModels.length > 0);
+  assert.ok(output.rates.coverage.providers.commandcode.rateRecords > 0);
+  assert.equal(typeof output.rates.coverage.providers.commandcode.effectiveFrom, 'string');
   assert.equal(
     output.rates.coverage.providers.commandcode.excludedModels.length,
     output.rates.coverage.sourceCoverage.commandcode.excludedModels,

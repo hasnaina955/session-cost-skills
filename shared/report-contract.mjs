@@ -1,4 +1,4 @@
-export const REPORT_CONTRACT_VERSION = '1.0.0';
+export const REPORT_CONTRACT_VERSION = '1.1.0';
 
 const unique = (values) => [...new Set((values ?? []).filter((value) => value != null).map(String))];
 const finiteOrNull = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);

@@ -30,6 +30,8 @@ shared reporting and UX
 
 Runtime-specific report fields remain as schema-approved extensions. The generated adapter copies keep each skill independently installable.
 
+MCode pricing uses `contracts/rate-record-v1.schema.json`. Each input, output, cache-read, and cache-write rate has its own effective interval, context range, time band, source version, raw amount, normalized amount, and fingerprint. Reports include the exact records selected for each call, so estimates can be reproduced after later refreshes.
+
 ## Shared layer
 
 - Normalized report schema and runtime validator

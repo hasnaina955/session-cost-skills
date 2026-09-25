@@ -119,10 +119,20 @@ The table stores a per-model `cacheWrite` rate and refuses to convert a missing 
   StepFun cards do not publish a cache-write component, so the bundled snapshot excludes them rather
   than assuming they are free.
 
-A refresh validates both providers, parser versions, model IDs, peak/off-peak bands, and every input,
-output, cache-read, and cache-write component before replacing the file. The replacement itself is
-atomic, so a fetch or validation failure leaves the last valid table untouched.
+Each published component is a fingerprinted rate record with provider/model, raw and normalized amount,
+currency, effective interval, context range, time band, and source metadata. Refreshes validate both
+providers and retain earlier records; the next snapshot closes the previous open interval. A fetch or
+validation failure leaves the last valid table untouched, and a call before the earliest effective
+record remains unpriced.
 
+## Context tiers
+
+CommandCode cards may publish several context ranges. The parser preserves every numeric threshold and
+creates records such as `0-256000` and `256001-unbounded`. Selection uses the call's full MCode context
+size (`input + output + cache read + cache write`), so long-context calls cannot silently use the flat
+base rate. A tier missing any required component is excluded rather than partially priced.
+
+## Peak / off-peak bands
 ## Peak / off-peak bands
 
 DeepSeek V4 models (and a few others) bill differently by UTC time of day:
@@ -175,5 +185,4 @@ catalog renamed it.
   legitimately give different totals.
 - Rates drift. Each provider's `fetchedAt` is recorded in the rate file and printed in the report
   footer. `--refresh-rates` fetches and validates both sources before one atomic replacement.
-- Context-tier cards are rejected until effective-dated/context-aware selection is implemented;
-  publishing their flat base rate would be unsafe.
+- Calls older than the first retained effective rate snapshot remain unpriced; the current catalog does not retroactively invent historical rates.

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
-import { RATE_PARSER_VERSION, RATES_SOURCE } from '../../adapters/mcode/skill/scripts/lib/rates.mjs';
+import { RATE_PARSER_VERSION, RATES_SOURCE, SOURCE_PARSER_VERSION, prepareProviderRates } from '../../adapters/mcode/skill/scripts/lib/rates.mjs';
 
 export const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const clineScript = path.join(repositoryRoot, 'adapters', 'cline', 'skill', 'scripts', 'session-cost.mjs');
@@ -156,53 +156,49 @@ function writeMCodeSession(dataDir, sessionId, provider, model, messages, malfor
 }
 
 function testRateTable() {
+  const refreshedAt = '2026-01-01T00:00:00.000Z';
+  const commandcode = prepareProviderRates('commandcode', {
+    'fixture-command-model': {
+      name: 'Fixture Command Model',
+      provider: 'commandcode',
+      category: 'fixture',
+      input: 1,
+      output: 2,
+      cacheRead: 0.1,
+      cacheWrite: 0.25,
+      cacheWriteSource: 'commandcode-model',
+      sourceAmounts: { input: '1', output: '2', cacheRead: '0.1', cacheWrite: '0.25' },
+    },
+  }, { refreshedAt });
+  const stepfun = prepareProviderRates('stepfun', {
+    'step-5-preview': {
+      name: 'step-5-preview',
+      provider: 'stepfun',
+      category: 'fixture',
+      input: 1,
+      output: 2.7,
+      cacheRead: 0.05,
+      cacheWrite: 1,
+      cacheWriteSource: 'stepfun-cache-miss-policy',
+      sourceAmounts: { input: '1', output: '2.7', cacheRead: '0.05', cacheWrite: '1' },
+    },
+  }, { refreshedAt });
   return {
     _meta: {
       parserVersion: RATE_PARSER_VERSION,
-      sourceParserVersion: { commandcode: 2, stepfun: 1 },
+      sourceParserVersion: { ...SOURCE_PARSER_VERSION },
       currency: 'USD',
       unit: 'per 1M tokens',
-      refreshedAt: '2026-01-01T00:00:00.000Z',
+      refreshedAt,
+      history: [{ versionId: refreshedAt, parserVersion: RATE_PARSER_VERSION }],
       sourceCoverage: {
         commandcode: { sourceModels: 1, publishedModels: 1, excludedModels: 0 },
         stepfun: { sourceModels: 1, publishedModels: 1, excludedModels: 0 },
       },
     },
     providers: {
-      commandcode: {
-        source: RATES_SOURCE.commandcode,
-        fetchedAt: '2026-01-01T00:00:00.000Z',
-        models: {
-          'fixture-command-model': {
-            name: 'Fixture Command Model',
-            provider: 'commandcode',
-            category: 'fixture',
-            input: 1,
-            output: 2,
-            cacheRead: 0.1,
-            cacheWrite: 0.25,
-            cacheWriteSource: 'commandcode-model',
-          },
-        },
-        excludedModelIds: [],
-      },
-      stepfun: {
-        source: RATES_SOURCE.stepfun,
-        fetchedAt: '2026-01-01T00:00:00.000Z',
-        models: {
-          'step-5-preview': {
-            name: 'step-5-preview',
-            provider: 'stepfun',
-            category: 'fixture',
-            input: 1,
-            output: 2.7,
-            cacheRead: 0.05,
-            cacheWrite: 1,
-            cacheWriteSource: 'stepfun-cache-miss-policy',
-          },
-        },
-        excludedModelIds: [],
-      },
+      commandcode: { source: RATES_SOURCE.commandcode, fetchedAt: refreshedAt, ...commandcode },
+      stepfun: { source: RATES_SOURCE.stepfun, fetchedAt: refreshedAt, ...stepfun },
     },
     freeModels: [],
     aliases: {},
