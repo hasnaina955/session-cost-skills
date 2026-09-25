@@ -22,13 +22,15 @@ import {
 import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from './lib/session-graph.mjs';
 import { REPORT_CONTRACT_VERSION, withNormalizedContract } from './lib/report-contract.mjs';
 import { formatVersionBanner, versionBanner } from './lib/skill-version.mjs';
+import { CliUsageError, parseCliArgs } from './lib/cli-args.mjs';
+import { describeStorageError } from './lib/error-boundaries.mjs';
 import { detectConfiguredProvider } from './lib/provider-driver.mjs';
 import { discoverModels, doctorReport, explainModelMatch, renderDiagnostics } from './lib/provider-diagnostics.mjs';
 import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, readConfigFile } from './lib/config.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA_DIR = path.resolve(SCRIPT_DIR, '..', '..', '..');
-const opts = {
+const DEFAULT_OPTIONS = Object.freeze({
   session: null,
   mode: 'current',
   list: 0,
@@ -50,7 +52,23 @@ const opts = {
   configAction: null,
   configImportPath: null,
   diagnostic: null,
-};
+});
+
+function parseArgs(argv) {
+  let options;
+  try {
+    options = parseCliArgs(argv, { runtimeId: 'cline', defaults: DEFAULT_OPTIONS });
+  } catch (error) {
+    if (error instanceof CliUsageError) die(error.message);
+    throw error;
+  }
+  options.includeChildrenExplicit = options.includeChildren === true;
+  if (options.help) { help(); process.exit(0); }
+  if (options.version) { console.log(formatVersionBanner(versionBanner('cline'))); process.exit(0); }
+  return options;
+}
+
+const opts = parseArgs(process.argv.slice(2));
 
 let effectiveConfiguration = null;
 
@@ -69,44 +87,6 @@ function normalizeClineReport(report, selection = null) {
   return withNormalizedContract(report, { runtime: CONTRACT_RUNTIME, selection });
 }
 
-for (let i = 2; i < process.argv.length; i++) {
-  const arg = process.argv[i];
-  if (arg === '--session') opts.session = process.argv[++i];
-  else if (arg === '--account') opts.account = true;
-  else if (arg === '--account-user-id') opts.accountUserId = process.argv[++i];
-  else if (arg === '--account-days') opts.accountDays = Number(process.argv[++i]);
-  else if (arg === '--dashboard') opts.dashboard = true;
-  else if (arg === '--out') opts.out = process.argv[++i];
-  else if (arg === '--last') opts.mode = 'last';
-  else if (arg === '--today') opts.mode = 'today';
-  else if (arg === '--compare') opts.mode = 'compare';
-  else if (arg === '--from') opts.from = process.argv[++i];
-  else if (arg === '--to') opts.to = process.argv[++i];
-  else if (arg === '--provider') opts.provider = process.argv[++i];
-  else if (arg === '--model') opts.model = process.argv[++i];
-  else if (arg === '--config') opts.configPath = process.argv[++i];
-  else if (arg === '--session-config') opts.sessionConfigPath = process.argv[++i];
-  else if (arg === '--init-config') opts.configAction = 'init';
-  else if (arg === '--validate-config') opts.configAction = 'validate';
-  else if (arg === '--export-config') opts.configAction = 'export';
-  else if (arg === '--import-config') { opts.configAction = 'import'; opts.configImportPath = process.argv[++i]; }
-  else if (arg === 'doctor' || arg === '--doctor') opts.diagnostic = 'doctor';
-  else if (arg === 'providers' || arg === '--providers') opts.diagnostic = 'providers';
-  else if ((arg === 'models' && process.argv[i + 1] === 'discover') || arg === '--models-discover') {
-    if (arg === 'models') i += 1;
-    opts.diagnostic = 'models';
-  } else if ((arg === 'config' && process.argv[i + 1] === 'explain') || arg === '--config-explain') {
-    if (arg === 'config') i += 1;
-    opts.diagnostic = 'config-explain';
-  }
-  else if (arg === '--list') opts.list = Number(process.argv[++i] ?? 10);
-  else if (arg === '--include-children') { opts.includeChildren = true; opts.includeChildrenExplicit = true; }
-  else if (arg === '--json') opts.json = true;
-  else if (arg === '--data-dir') opts.dataDir = process.argv[++i];
-  else if (arg === '--help' || arg === '-h') { help(); process.exit(0); }
-  else if (arg === '--version' || arg === '-v') { console.log(formatVersionBanner(versionBanner('cline'))); process.exit(0); }
-  else die(`unknown argument: ${arg}`);
-}
 
 function help() {
   console.log(`session-cost — token usage and Cline-recorded cost
@@ -135,10 +115,10 @@ function help() {
   --json              emit schema-versioned JSON
   --data-dir <path>    Cline data directory (default: %USERPROFILE%\\.cline)
   --version           print the installed skill, report-contract, and Node versions
-  doctor               inspect config, providers, and detected coverage
-  providers             list configured/built-in provider drivers
-  models discover       list configured model mappings
-  config explain        explain provider/model resolution`);
+  doctor | --doctor       inspect config, providers, and detected coverage
+  providers | --providers list configured/built-in provider drivers
+  models discover | --models-discover   list configured model mappings
+  config explain | --config-explain    explain provider/model resolution`);
 }
 function handleConfigAction(configuration) {
   if (!opts.configAction) return false;
@@ -637,8 +617,22 @@ if (opts.account) {
 } else {
 const dbPath = path.join(dataDir, 'data', 'db', 'sessions.db');
 if (!fs.existsSync(dbPath)) die(`Cline session database not found: ${dbPath}`);
-const db = new DatabaseSync(dbPath, { readOnly: true });
+// A truncated, locked, or non-SQLite file throws from the driver. Report it as a
+// readable condition naming the file, not as an uncaught stack trace quoting the
+// full local path, and never as an empty successful report.
+let db;
 try {
+  db = new DatabaseSync(dbPath, { readOnly: true });
+  // node:sqlite opens lazily, so a truncated or non-SQLite file only fails on the
+  // first statement. Probe the schema here, inside the guard, so the user gets one
+  // readable line instead of an uncaught driver stack trace quoting the install path.
+  db.prepare('SELECT session_id FROM sessions LIMIT 1').all();
+} catch (error) {
+  die(`Cline session database could not be read (${path.basename(dbPath)}): ${describeStorageError(error)}`);
+}
+try {
+  // A database that parses but has no `sessions` table must fail rather than read as
+  // an empty ledger, which would be indistinguishable from a real "no sessions" result.
   const all = db.prepare('SELECT * FROM sessions').all();
   if (!all.length) die('Cline session database contains no sessions');
   const config = loadConfig(dataDir);

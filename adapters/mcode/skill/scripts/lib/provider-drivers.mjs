@@ -44,12 +44,45 @@ export function profileRateRecords(profile) {
   return [...imported, ...manual];
 }
 
+// Resolve which band a provider profile's rate records belong to.
+//
+// The previous version called bandForTimestamp(context.at, { timeOfDay: {} }) when a
+// profile had no flat record. That applied CommandCode/StepFun's peak calendar to an
+// arbitrary OpenAI- or Anthropic-compatible provider, and because the timestamp was an
+// ISO string it always resolved to offPeak. The result was a plausible-looking number
+// that silently under-reported cost, which is the one failure this tool must not have.
+//
+// A band is only resolved when the profile's own records justify it. Otherwise the
+// profile is reported unpriced rather than guessed.
+function resolveProfileTimeBand(records, profile, at) {
+  const knownBands = new Set(records.map((record) => record.timeBand));
+  if (knownBands.has('flat')) return { timeBand: 'flat' };
+  if (knownBands.size <= 1) return { timeBand: [...knownBands][0] ?? 'flat' };
+  const timeOfDay = profile?.timeOfDay ?? null;
+  if (!timeOfDay || Object.keys(timeOfDay).length === 0) {
+    return {
+      timeBand: null,
+      reason: 'provider profile declares peak and off-peak rate records but no time-of-day policy, so the band cannot be determined',
+    };
+  }
+  return { timeBand: bandForTimestamp(at, { timeOfDay }) };
+}
+
 function resolveProfileRate(profile, context) {
   const records = profileRateRecords(profile).filter((record) => record.model === context.model);
-  const knownBands = new Set(records.map((record) => record.timeBand));
-  const timeBand = knownBands.has('flat')
-    ? 'flat'
-    : bandForTimestamp(context.at, { timeOfDay: {} });
+  const { timeBand, reason: bandReason } = resolveProfileTimeBand(records, profile, context.at);
+  if (timeBand === null) {
+    return {
+      key: context.model,
+      rate: null,
+      free: false,
+      coverage: 'unavailable',
+      missingComponents: [...REQUIRED_RATE_COMPONENTS],
+      timeBand: null,
+      contextTokens: Math.max(0, Number(context.contextTokens) || 0),
+      reason: bandReason,
+    };
+  }
   const timestamp = typeof context.at === 'string' ? Date.parse(context.at) : Number(context.at ?? Date.now());
   const contextTokens = Math.max(0, Number(context.contextTokens) || 0);
   const applies = (record) => {

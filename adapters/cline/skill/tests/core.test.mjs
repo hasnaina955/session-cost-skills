@@ -15,6 +15,19 @@ function metrics(entries) {
   return result;
 }
 
+test('an internally inconsistent ledger cannot push the cache hit rate out of range', () => {
+  // A ledger reporting more cache reads than input tokens violates Cline's own
+  // semantics. That must not crash the whole report over a display ratio; the raw
+  // token counts still report exactly what the ledger said.
+  const result = usageSummary(metrics([
+    { metrics: { inputTokens: 400_000, outputTokens: 9_000, cacheReadTokens: 2_400_000, cacheWriteTokens: 120_000 }, modelInfo: { provider: 'x', id: 'x' } },
+  ]));
+  assert.equal(result.cacheReadTokens, 2_400_000, 'the raw ledger count is reported unchanged');
+  assert.equal(result.cacheHitRate, 1, 'the display ratio is clamped into the contract range');
+  assert.ok(result.cacheHitRate >= 0 && result.cacheHitRate <= 1);
+  assert.equal(usageSummary(metrics([])).cacheHitRate, 0, 'an empty ledger reports a zero rate, not NaN');
+});
+
 test('Cline input tokens include cache; fresh input is the non-cached remainder', () => {
   const result = usageSummary(metrics([{ metrics: { inputTokens: 1000, outputTokens: 100, cacheReadTokens: 800, cacheWriteTokens: 50 }, modelInfo: { provider: 'x', id: 'x' } }]));
   assert.deepEqual(result, {

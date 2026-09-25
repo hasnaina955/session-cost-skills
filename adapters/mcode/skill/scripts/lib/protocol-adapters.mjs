@@ -77,10 +77,23 @@ export function parseAnthropicCompatibleStream(text) {
   const events = [];
   let model = null;
   const usage = {};
-  for (const line of String(text).split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    const event = JSON.parse(trimmed);
+  for (const rawLine of String(text).split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    // The Messages API emits server-sent events, so lines arrive as `event: <name>`
+    // and `data: <json>` rather than as bare JSON. Both shapes are accepted so a
+    // newline-delimited transcript still parses.
+    if (line.startsWith(':') || line.startsWith('event:') || line.startsWith('id:') || line.startsWith('retry:')) continue;
+    const payload = line.startsWith('data:') ? line.slice('data:'.length).trim() : line;
+    if (!payload || payload === '[DONE]') continue;
+    let event;
+    try {
+      event = JSON.parse(payload);
+    } catch {
+      // An unparseable frame is skipped rather than failing the whole stream, because
+      // a partial or interleaved frame must not discard the usage already seen.
+      continue;
+    }
     events.push(event);
     model = event.message?.model ?? event.model ?? model;
     const incoming = event.message?.usage ?? event.usage;

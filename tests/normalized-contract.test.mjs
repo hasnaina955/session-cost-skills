@@ -224,9 +224,14 @@ test('MCode CLI satisfies the shared contract across all report modes', (t) => {
   assert.equal(truncated.output.inferredModelRows, 1);
   assert.ok(truncated.output.warnings.some((warning) => warning.includes('inferred')));
 
+  // The shared parser rejects the date before any storage is opened, and echoes the
+  // offending value so the user can see which argument was wrong.
   const invalidDate = runJson(fixture.script, fixture.dataDir, ['--from', '2026-13-99'], fixture.environment);
   assert.equal(invalidDate.result.status, 2);
-  assert.match(invalidDate.result.stderr, /invalid calendar date/);
+  assert.equal(invalidDate.output, null);
+  assert.match(invalidDate.result.stderr, /calendar date/);
+  assert.match(invalidDate.result.stderr, /2026-13-99/);
+  assert.doesNotMatch(invalidDate.result.stderr, /ledger|sqlite|sessions\.db/i, 'a bad date must not reach storage');
 
   dashboardOutput(fixture);
 });

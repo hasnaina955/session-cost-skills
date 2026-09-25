@@ -36,14 +36,21 @@ assert.ok(
   `CHANGELOG.md must have a released section for ${version}; move Unreleased content into it`,
 );
 
-// Every adapter CLI must expose the installed version, and the contract version is separate.
+// Every adapter CLI must expose the installed version. The flag itself is defined in
+// the shared argument schema, so assert the CLI routes through that schema rather than
+// grepping for a literal that legitimately moves when the parser is refactored.
+const schema = read('shared/cli-args.mjs');
 for (const runtime of RUNTIMES) {
   const cli = read(`adapters/${runtime}/skill/scripts/session-cost.mjs`);
   assert.ok(cli.includes(`versionBanner('${runtime}')`), `the ${runtime} CLI must report its own runtime id`);
-  assert.ok(cli.includes("'--version'"), `the ${runtime} CLI must accept --version`);
+  assert.ok(cli.includes('parseCliArgs'), `the ${runtime} CLI must parse arguments through the shared schema`);
+  assert.ok(cli.includes(`runtimeId: '${runtime}'`), `the ${runtime} CLI must parse against its own runtime schema`);
   const helpIndex = cli.search(/--data-dir/);
   assert.ok(helpIndex > -1, `the ${runtime} CLI must document --data-dir`);
   assert.ok(cli.slice(helpIndex, helpIndex + 400).includes('--version'), `the ${runtime} help text must document --version`);
+}
+for (const flag of ['version: {', 'help: {']) {
+  assert.ok(schema.includes(flag), `the shared argument schema must define ${flag.replace(':', '')}`);
 }
 
 const contractVersion = read('shared/report-contract.mjs').match(/REPORT_CONTRACT_VERSION = '([^']+)'/)?.[1];

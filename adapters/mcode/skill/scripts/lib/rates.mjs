@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import { redactPaths } from './error-boundaries.mjs';
 
 export const RATE_PARSER_VERSION = 3;
 export const SOURCE_PARSER_VERSION = Object.freeze({ commandcode: 3, stepfun: 2 });
@@ -130,8 +131,18 @@ export function makeRateRecord({
 }
 
 export function bandForTimestamp(timestamp, rate) {
-  if (!rate?.timeOfDay) return 'flat';
-  const date = new Date(Number(timestamp));
+  if (!rate?.timeOfDay || Object.keys(rate.timeOfDay).length === 0) return 'flat';
+  // `Number(isoString)` is NaN, and `new Date(NaN)` silently yields NaN for every
+  // getter, which made an ISO timestamp always fall through to offPeak and quietly
+  // under-price a peak call. Parse both accepted shapes explicitly.
+  const date = timestamp instanceof Date ? timestamp
+    : typeof timestamp === 'string' ? new Date(Date.parse(timestamp))
+      : new Date(Number(timestamp));
+  if (Number.isNaN(date.getTime())) {
+    // A band we cannot determine must not be guessed: pricing a peak window as
+    // off-peak under-reports cost, and pricing it as peak over-reports it.
+    throw new Error(`cannot determine a time band from timestamp ${JSON.stringify(timestamp)}`);
+  }
   const day = date.getUTCDay();
   const hour = date.getUTCHours();
   const isWeekday = day >= 1 && day <= 5;
@@ -971,12 +982,46 @@ export function parseStepFunRates(markdown) {
   return models;
 }
 
-export async function fetchText(url) {
-  const response = await fetch(url, {
-    headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-  });
-  if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}`);
-  return response.text();
+// A rate refresh talks to third-party pricing pages. Without a deadline a hung socket
+// leaves the refresh running forever; without a size cap a hostile or misconfigured
+// endpoint streams until the process dies. The limit is generous for a real pricing
+// page and still bounded.
+export const MAX_RATE_RESPONSE_BYTES = 8 * 1024 * 1024;
+export const RATE_FETCH_TIMEOUT_MS = 15_000;
+const ALLOWED_CONTENT_TYPES = ['text/html', 'text/plain', 'application/json', 'application/xhtml+xml'];
+
+export async function fetchText(url, { timeoutMs = RATE_FETCH_TIMEOUT_MS, maxBytes = MAX_RATE_RESPONSE_BYTES, fetcher = fetch } = {}) {
+  let response;
+  try {
+    response = await fetcher(url, {
+      headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    // Never surface the raw fetch failure: it can embed the full URL, and on some
+    // platforms a stack trace naming local paths.
+    if (['AbortError', 'TimeoutError'].includes(error?.name)) {
+      throw new Error(`rate source request timed out after ${timeoutMs}ms`);
+    }
+    throw new Error(`rate source request failed: ${redactPaths(error?.message ?? 'unknown error')}`);
+  }
+  if (!response.ok) throw new Error(`rate source returned HTTP ${response.status}`);
+
+  const contentType = response.headers?.get?.('content-type') ?? null;
+  if (contentType && !ALLOWED_CONTENT_TYPES.some((allowed) => contentType.toLowerCase().includes(allowed))) {
+    throw new Error(`rate source returned an unexpected content type (${contentType.split(';')[0]})`);
+  }
+
+  const declared = Number(response.headers?.get?.('content-length') ?? NaN);
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    throw new Error(`rate source response exceeds the ${maxBytes} byte limit`);
+  }
+
+  const text = await response.text();
+  if (Buffer.byteLength(text, 'utf8') > maxBytes) {
+    throw new Error(`rate source response exceeds the ${maxBytes} byte limit`);
+  }
+  return text;
 }
 
 function buildRateTable(previous, preparedProviders, refreshedAt) {
