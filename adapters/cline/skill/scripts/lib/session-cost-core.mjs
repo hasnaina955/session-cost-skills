@@ -66,6 +66,11 @@ export function combineMetrics(target, source) {
 export function usageSummary(metrics) {
   const freshInputTokens = Math.max(0, num(metrics.inputTokens) - num(metrics.cacheReadTokens) - num(metrics.cacheWriteTokens));
   const totalTokens = num(metrics.inputTokens) + num(metrics.outputTokens);
+  // Cline's inputTokens already includes cached prompt tokens, so the ratio is normally
+  // at most 1. A ledger that reports more cache reads than input tokens is internally
+  // inconsistent; that must not crash the whole report over a display ratio. The raw
+  // token counts below still report exactly what the ledger said.
+  const cacheHitRate = num(metrics.inputTokens) ? num(metrics.cacheReadTokens) / num(metrics.inputTokens) : 0;
   return {
     totalTokens,
     inputTokens: num(metrics.inputTokens),
@@ -73,7 +78,7 @@ export function usageSummary(metrics) {
     cacheReadTokens: num(metrics.cacheReadTokens),
     cacheWriteTokens: num(metrics.cacheWriteTokens),
     outputTokens: num(metrics.outputTokens),
-    cacheHitRate: num(metrics.inputTokens) ? num(metrics.cacheReadTokens) / num(metrics.inputTokens) : 0,
+    cacheHitRate: Math.max(0, Math.min(1, cacheHitRate)),
   };
 }
 
