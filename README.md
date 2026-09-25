@@ -100,7 +100,7 @@ The verification command performs syntax and generated-copy checks, validates th
 
 The source code, skill installers, dashboards, and documentation are free under the MIT license. Payment is optional and is never required to use the Cline or MCode skill.
 
-A Gumroad product may be offered for voluntary support, compatibility assistance, or sponsored development. Paid support must not unlock features that are already available in the public repository.
+A Gumroad product may be offered for voluntary support, compatibility assistance, or sponsored development. Paid support must not unlock features that are already available in the public repository. Commercial terms are separate from the MIT grant and require legal review before publication. See [SUPPORT.md](SUPPORT.md).
 
 ## Documentation
 
@@ -109,7 +109,8 @@ A Gumroad product may be offered for voluntary support, compatibility assistance
 - [Architecture](docs/architecture.md)
 - [Normalized report contract](contracts/README.md)
 - [MCode porting plan](docs/porting-plan.md)
-- [Gumroad selling guide](docs/gumroad-selling-guide.html)
+- [Optional support and troubleshooting](SUPPORT.md)
+- [Internal optional-support launch checklist](docs/gumroad-selling-guide.html)
 - [Changelog](CHANGELOG.md)
 - [Security policy](SECURITY.md)
 - [Contributing guide](CONTRIBUTING.md)
