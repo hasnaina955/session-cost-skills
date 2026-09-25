@@ -69,7 +69,10 @@ node $SessionCost --session <id> --include-children
 ```
 
 The default excludes subagents but lists their IDs. `--include-children` recursively folds all
-descendants into the total.
+descendants into the total. Multi-session list, compare, today, and range modes select top-level
+roots before aggregation, so a child is never counted again beneath a selected parent. A selected
+root includes descendants even when they start on another UTC date; a child becomes a root only when
+its parent is outside the filtered candidate set.
 
 ## Account mode
 

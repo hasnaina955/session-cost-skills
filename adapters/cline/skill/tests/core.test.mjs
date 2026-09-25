@@ -4,7 +4,6 @@ import {
   addUsage,
   classifyBilling,
   combineMetrics,
-  descendantIds,
   emptyMetrics,
   resolveSession,
   usageSummary,
@@ -62,16 +61,6 @@ test('combines model and call metrics without losing coverage counters', () => {
   assert.equal(result.unpricedCalls, 1);
   assert.equal(result.inputTokens, 300);
   assert.equal(result.models.get('p|m').calls, 2);
-});
-
-test('descendantIds includes nested subagents', () => {
-  const rows = [
-    { session_id: 'root', parent_session_id: null },
-    { session_id: 'child', parent_session_id: 'root' },
-    { session_id: 'grandchild', parent_session_id: 'child' },
-    { session_id: 'other', parent_session_id: null },
-  ];
-  assert.deepEqual([...descendantIds(rows, 'root')], ['root', 'child', 'grandchild']);
 });
 
 test('session resolver prioritizes explicit and environment IDs', () => {

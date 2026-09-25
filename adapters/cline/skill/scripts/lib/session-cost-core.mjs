@@ -74,21 +74,6 @@ export function usageSummary(metrics) {
   };
 }
 
-export function descendantIds(rows, rootId) {
-  const ids = new Set([rootId]);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const row of rows) {
-      if (row.parent_session_id && ids.has(row.parent_session_id) && !ids.has(row.session_id)) {
-        ids.add(row.session_id);
-        changed = true;
-      }
-    }
-  }
-  return ids;
-}
-
 function modelClass(model) {
   const id = String(model.model ?? model.id ?? '').toLowerCase();
   const provider = String(model.provider ?? '').toLowerCase();

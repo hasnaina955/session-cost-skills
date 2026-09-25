@@ -164,9 +164,9 @@ catalog renamed it.
 
 - Only sessions that actually made LLM calls appear in the ledger. A session with no rows costs
   `$0` and is reported as such, not as an error.
-- Sub-agent sessions are separate `session_id`s. `--include-children` folds in sessions whose
-  `parent_session_id` is the target, one level deep, and each keeps its own model and provider
-  resolution.
+- Sub-agent sessions are separate `session_id`s. `--include-children` recursively folds in every
+  descendant, each keeping its own model and provider resolution. Multi-session modes choose
+  top-level roots first, so a child is never billed again when its parent is also selected.
 - `reasoning_tokens` is tracked but is already included in `output_tokens` for billing by the
   upstream provider, so the script never adds it again. StepFun states this explicitly for its
   models ("output tokens include both the model's reasoning process and final answer").

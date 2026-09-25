@@ -14,12 +14,12 @@ import {
   classifyBilling,
   combineMetrics,
   coverage,
-  descendantIds,
   emptyMetrics,
   num,
   resolveSession,
   usageSummary,
 } from './lib/session-cost-core.mjs';
+import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from './lib/session-graph.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA_DIR = path.resolve(SCRIPT_DIR, '..', '..', '..');
@@ -158,8 +158,10 @@ function costState(metrics) {
   if (metrics.pricedCalls === 0) return { label: 'not recorded', note: `0/${metrics.calls} calls have cost` };
   return { label: usd(metrics.cost), note: `partial; ${metrics.unpricedCalls}/${metrics.calls} calls lack cost` };
 }
-function reportFor(row, all, includeChildren) {
-  const ids = includeChildren ? descendantIds(all, row.session_id) : new Set([row.session_id]);
+function reportFor(row, all, graph, includeChildren) {
+  const ids = collectSessionIds([row.session_id], graph, { includeChildren });
+  const descendants = graph.descendants(row.session_id);
+  const excludedSessionIds = [...descendants].filter((id) => !ids.has(id));
   const chosen = all.filter((item) => ids.has(item.session_id));
   const sessions = chosen.map((item) => ({
     row: {
@@ -208,6 +210,8 @@ function reportFor(row, all, includeChildren) {
     usage: usageSummary(total),
     billing: classifyBilling(total),
     includedSessionIds: chosen.map((item) => item.session_id),
+    excludedSessionIds,
+    duplicateSuppressedSessionIds: [],
     childSessionIds: chosen.filter((item) => item.session_id !== row.session_id).map((item) => item.session_id),
     missingChildSessionIds: missingChildren.map((item) => item.row.sessionId),
     sessions,
@@ -266,8 +270,11 @@ function render(report) {
     if (report.missingChildSessionIds.length) {
       lines.push(`Aggregate fallback: ${report.missingChildSessionIds.length} child session(s) have no local call ledger; headline totals use the root's Cline aggregateUsage.`);
     }
-  } else if (report.childSessionIds.length) {
-    lines.push('', `Excluded subagent sessions: ${report.childSessionIds.length}`, ...report.childSessionIds.map((id) => `  - ${id}`), 'Use --include-children for an end-to-end task total.');
+  } else if (report.excludedSessionIds.length) {
+    lines.push('', `Excluded subagent sessions: ${report.excludedSessionIds.length}`, ...report.excludedSessionIds.map((id) => `  - ${id}`), 'Use --include-children for an end-to-end task total.');
+  }
+  if (report.duplicateSuppressedSessionIds.length) {
+    lines.push('', `Duplicate-suppressed session selections: ${report.duplicateSuppressedSessionIds.join(', ')}`);
   }
   return lines.join('\n');
 }
@@ -314,10 +321,11 @@ function selectedRows(all) {
   }
   return [];
 }
-function aggregateReports(reports, label) {
+function aggregateReports(reports, label, duplicateSuppressedSessionIds = []) {
   const total = emptyMetrics();
   const sessions = reports.flatMap((report) => report.sessions);
   for (const report of reports) combineMetrics(total, report.total);
+  const unique = (values) => [...new Set(values)];
   return {
     schemaVersion: SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
@@ -326,8 +334,14 @@ function aggregateReports(reports, label) {
     selection: { method: label, requestedId: null, ambiguousCandidates: [], warning: null },
     usage: usageSummary(total),
     billing: classifyBilling(total),
-    includedSessionIds: reports.flatMap((report) => report.includedSessionIds),
-    childSessionIds: reports.flatMap((report) => report.childSessionIds),
+    rootSessionIds: reports.map((report) => report.session.id),
+    includedSessionIds: unique(reports.flatMap((report) => report.includedSessionIds)),
+    excludedSessionIds: unique(reports.flatMap((report) => report.excludedSessionIds)),
+    duplicateSuppressedSessionIds: unique([
+      ...duplicateSuppressedSessionIds,
+      ...reports.flatMap((report) => report.duplicateSuppressedSessionIds),
+    ]),
+    childSessionIds: unique(reports.flatMap((report) => report.childSessionIds)),
     missingChildSessionIds: reports.flatMap((report) => report.missingChildSessionIds),
     sessions,
     total,
@@ -352,6 +366,9 @@ function renderAggregate(report) {
   return [
     'Session Cost — Filtered aggregate',
     `Sessions: ${report.includedSessionIds.length}`,
+    `Roots: ${report.rootSessionIds.length}`,
+    `Excluded descendants: ${report.excludedSessionIds.length}`,
+    `Duplicate-suppressed selections: ${report.duplicateSuppressedSessionIds.length}`,
     `Billing: ${report.billing.label}`,
     `Total tokens: ${integer(report.usage.totalTokens)} (${millions(report.usage.totalTokens)})`,
     `Fresh input: ${integer(report.usage.freshInputTokens)} (${millions(report.usage.freshInputTokens)})`,
@@ -441,29 +458,36 @@ try {
   if (!all.length) die('Cline session database contains no sessions');
   const config = loadConfig(dataDir);
   const candidates = filterRows(all);
+  const graph = createSessionGraph(all);
+  const rowsById = new Map(all.map((row) => [row.session_id, row]));
 
   if (opts.list > 0) {
-    const recent = candidates
-      .sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at))
+    const topLevel = selectTopLevelCandidates(candidates.map((row) => row.session_id), graph);
+    const recent = topLevel.includedRootIds
+      .sort((a, b) => Date.parse(rowsById.get(b).started_at) - Date.parse(rowsById.get(a).started_at))
       .slice(0, opts.list)
-      .map((row) => reportFor(row, all, opts.includeChildren));
+      .map((id) => reportFor(rowsById.get(id), all, graph, opts.includeChildren));
     if (opts.json) {
-      console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, generatedAt: new Date().toISOString(), sessions: recent }, replacer, 2));
+      console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, generatedAt: new Date().toISOString(), sessions: recent, duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds }, replacer, 2));
     } else {
       for (const report of recent) {
         const billing = report.billing;
         console.log(`${report.session.id}  ${billing.label.padEnd(12)}  ${millions(report.usage.totalTokens).padStart(10)}  ${String(report.total.calls).padStart(4)} calls  ${clip(report.session.title, 48)}`);
       }
+      if (topLevel.duplicateSuppressedSessionIds.length) {
+        console.log(`\nDuplicate-suppressed child selections: ${topLevel.duplicateSuppressedSessionIds.join(', ')}`);
+      }
     }
   } else if (opts.mode === 'compare') {
-    const reports = candidates
-      .sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at))
+    const topLevel = selectTopLevelCandidates(candidates.map((row) => row.session_id), graph);
+    const reports = topLevel.includedRootIds
+      .sort((a, b) => Date.parse(rowsById.get(b).started_at) - Date.parse(rowsById.get(a).started_at))
       .slice(0, 2)
-      .map((row) => reportFor(row, all, opts.includeChildren));
+      .map((id) => reportFor(rowsById.get(id), all, graph, opts.includeChildren));
     if (reports.length < 2) die('--compare requires at least two matching sessions');
-    const output = { schemaVersion: SCHEMA_VERSION, generatedAt: new Date().toISOString(), comparison: { older: reports[1], newer: reports[0] } };
+    const output = { schemaVersion: SCHEMA_VERSION, generatedAt: new Date().toISOString(), comparison: { older: reports[1], newer: reports[0] }, duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds };
     if (opts.json) console.log(JSON.stringify(output, replacer, 2));
-    else console.log(renderCompare(reports[1], reports[0]));
+    else console.log(`${renderCompare(reports[1], reports[0])}${topLevel.duplicateSuppressedSessionIds.length ? `\nDuplicate-suppressed child selections: ${topLevel.duplicateSuppressedSessionIds.join(', ')}` : ''}`);
   } else if (opts.mode === 'last' || opts.mode === 'today' || opts.from || opts.to || opts.provider || opts.model) {
     let rows = candidates;
     if (opts.mode === 'last') rows = rows.filter((row) => row.status !== 'running').sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at)).slice(0, 1);
@@ -472,8 +496,17 @@ try {
       rows = rows.filter((row) => String(row.started_at).slice(0, 10) === today);
     }
     if (!rows.length) die('no sessions match the requested filters');
-    const reports = rows.sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at)).map((row) => reportFor(row, all, opts.includeChildren));
-    const report = reports.length === 1 ? reports[0] : aggregateReports(reports, opts.mode === 'today' ? 'today' : 'filtered-range');
+    const topLevel = selectTopLevelCandidates(rows.map((row) => row.session_id), graph);
+    const reports = topLevel.includedRootIds
+      .sort((a, b) => Date.parse(rowsById.get(a).started_at) - Date.parse(rowsById.get(b).started_at))
+      .map((id) => reportFor(rowsById.get(id), all, graph, opts.includeChildren));
+    let report;
+    if (reports.length === 1) {
+      reports[0].duplicateSuppressedSessionIds = topLevel.duplicateSuppressedSessionIds;
+      report = reports[0];
+    } else {
+      report = aggregateReports(reports, opts.mode === 'today' ? 'today' : 'filtered-range', topLevel.duplicateSuppressedSessionIds);
+    }
     if (opts.json) console.log(JSON.stringify(report, replacer, 2));
     else console.log(renderAggregate(report));
   } else {
@@ -485,7 +518,7 @@ try {
     });
     if (selection.error) die(selection.error);
     if (!selection.row) die('no Cline session found');
-    const report = reportFor(selection.row, all, opts.includeChildren);
+    const report = reportFor(selection.row, all, graph, opts.includeChildren);
     report.selection = {
       method: selection.method,
       requestedId: selection.requestedId,

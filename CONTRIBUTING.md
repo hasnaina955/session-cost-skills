@@ -16,17 +16,18 @@ Thanks for helping improve the session-cost skills.
 npm run verify
 ```
 
-This checks JavaScript syntax, verifies generated dashboard copies, runs Cline and MCode tests, validates dashboard CSP and DOM-sink safety, and checks MCode CLI modes.
+This checks JavaScript syntax, verifies generated adapter modules, runs Cline and MCode tests, validates dashboard CSP and DOM-sink safety, and checks MCode CLI modes.
 
-### Dashboard changes
+### Generated adapter modules
 
-Edit `shared/dashboard.mjs`, the canonical dashboard renderer, then run:
+Edit `shared/dashboard.mjs` or `shared/session-graph.mjs`, then run the matching sync command:
 
 ```powershell
 npm run sync:dashboard
+npm run sync:session-graph
 ```
 
-Each adapter must retain its own generated renderer so it remains independently installable. `npm run check:dashboard` fails when an adapter copy drifts.
+Each adapter keeps its own generated copy so it remains independently installable. The corresponding `check:*` script fails when an adapter copy drifts.
 
 ## Adapter boundaries
 
