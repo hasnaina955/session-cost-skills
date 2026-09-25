@@ -38,7 +38,8 @@
     "sync:cli-args": "node scripts/sync-cli-args.mjs",
     "check:cli-args": "node scripts/sync-cli-args.mjs --check",
     "sync:error-boundaries": "node scripts/sync-error-boundaries.mjs",
-    "check:error-boundaries": "node scripts/sync-error-boundaries.mjs --check"
+    "check:error-boundaries": "node scripts/sync-error-boundaries.mjs --check",
+    "probe:journal-mode": "node scripts/probe-journal-mode.mjs"
   },
   "engines": {
     "node": ">=22.15"
