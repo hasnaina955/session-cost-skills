@@ -11,17 +11,27 @@
 # See CONTRIBUTING.md for how to run the same checks locally.
 source_of_truth: .github/workflows/ci.yml
 
-# What CI actually exercises on every push and pull request.
+# What CI exercises on every push and pull request.
 supported:
-  # verify job: full cartesian product, fail-fast disabled so one broken
-  # OS/Node pair still reports the others.
-  os: [ubuntu-latest, windows-latest, macos-latest]
-  # '22.15' is the floor in package.json "engines"; 24 is the current release.
-  node: ['22.15', '24']
-  # bun job: smoke subset only, on ubuntu-latest.
-  # release job: rehearsal runs on Ubuntu and Windows, because extraction is done
-  # in-process and there is no external `unzip` dependency.
-  jobs: [verify, bun, release]
+  # verify job: a single runner today. The wider os matrix below is intended,
+  # not enabled - see `not_yet_exercised`.
+  os: [windows-latest]
+  node: ['24']
+  jobs: [verify]
+
+# Declared or intended coverage that CI does not exercise yet. Listed so the
+# gap is visible rather than implied by the `supported` block above.
+not_yet_exercised:
+  # '22.15' is the floor declared in package.json "engines" and printed by
+  # `--version`; no job runs on it.
+  node: ['22.15']
+  os: [ubuntu-latest, macos-latest]
+  # A fail-fast-disabled cartesian product of the above, so one broken OS/Node
+  # pair still reports the others.
+  matrix: disabled
+  # A Bun smoke job and a release-rehearsal job. scripts/rehearse-release.mjs
+  # exists and runs locally; nothing invokes it from CI.
+  jobs: [bun, release]
 
 # Every action is pinned to a full 40-character commit SHA rather than a
 # mutable tag like @v4. Tags are branches that the action owner can re-point at

@@ -4,7 +4,25 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
-Nothing yet. The next batch of changes lands here before it is cut into a release.
+### Fixed
+
+- `tests/release-contract.test.mjs` derived the repository root from
+  `new URL(import.meta.url).pathname`, which yields a `/C:/...` path on Windows and resolved to
+  `C:\C:\...`. The file threw while being imported, so all ten of its tests - including the
+  published-checksum verification - never ran, and `npm run verify` failed on `windows-latest`.
+  It now uses `fileURLToPath`, as the rest of the repository does.
+- `CONTRIBUTING.md` and `docs/ci-matrix.yml` described a CI matrix (ubuntu/windows/macos against
+  Node 22.15 and 24, plus Bun and release-rehearsal jobs) that no workflow implements. Both now
+  describe what CI actually runs, and record the unexercised Node 22.15 floor as a known gap
+  instead of implying coverage.
+
+### Security
+
+- `ci.yml` now pins `actions/checkout` and `actions/setup-node` to full commit SHAs instead of
+  mutable `@v4` tags, and declares least-privilege `contents: read` permissions. A moved tag
+  previously let a third party change what release CI executed with no pull request.
+- `npm run check:workflows` is now part of `npm run verify`, so the pin policy is enforced on
+  every push rather than only when run by hand.
 
 ## 0.3.0
 

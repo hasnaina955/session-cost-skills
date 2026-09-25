@@ -18,12 +18,11 @@ npm run verify
 
 This checks JavaScript syntax, verifies generated adapter modules, validates the shared report contract, runs every discovered adapter/fixture test, and checks dashboard CSP and DOM-sink safety.
 
-`.github/workflows/ci.yml` is the single source of truth for the CI matrix. It runs `npm run verify` on every supported OS (ubuntu, windows, macos) against Node 22.15 and 24, plus a Bun smoke job and a release-rehearsal job. Do not copy a matrix from anywhere else in this repository; edit the workflow itself.
+`.github/workflows/ci.yml` is the single source of truth for what CI runs. Today it runs `npm run verify` on `windows-latest` against Node 24, with every action pinned to a full commit SHA. The wider matrix is not enabled yet: `package.json` declares a Node 22.15 floor in `engines`, and neither that floor nor the ubuntu/macos runners are exercised by CI. Do not copy a matrix from anywhere else in this repository; edit the workflow itself.
 
 `npm run check:workflows` fails if any workflow pins an action to a mutable tag instead of a
-full 40-character commit SHA. It is **not** part of `npm run verify` yet, because the pinned
-`ci.yml` cannot be pushed from every environment: it is wired into `verify` in the same
-change that lands the pinned workflow. Until then, run it explicitly before cutting a release.
+full 40-character commit SHA, and requires `ci.yml` to declare least-privilege
+`contents: read` permissions. It is part of `npm run verify`.
 
 ### Generated adapter modules
 
