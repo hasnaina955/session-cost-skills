@@ -545,7 +545,8 @@ function accountCredential(dataDir) {
   return credential;
 }
 function renderPeriod(period) {
-  return `${usd(period.referenceCostUsd)} reference · ${usd(period.creditsUsedUsd)} credits · ${integer(period.requests)} requests · ${integer(period.totalTokens)} tokens`;
+  const coverage = period.coverage ? ` · ${period.coverage}${period.complete ? '' : ' window'}` : '';
+  return `${usd(period.referenceCostUsd)} reference · ${usd(period.creditsUsedUsd)} credits · ${integer(period.requests)} requests · ${integer(period.totalTokens)} tokens${coverage}`;
 }
 function renderAccount(summary) {
   const plan = summary.plan;
@@ -553,7 +554,8 @@ function renderAccount(summary) {
   const lines = [
     'Cline Account Summary',
     `Account: ${summary.userId}`,
-    `Requests: ${integer(summary.requests)}`,
+    `History window (UTC): ${summary.window?.start ?? 'unbounded'} -> ${summary.window?.end ?? 'unknown'}`,
+    `Requests: ${integer(summary.requests)} (${integer(summary.fetchedRows)} fetched, ${integer(summary.excludedRows)} outside window, ${integer(summary.pages)} pages)`,
     `Plan: ${plan ? `${plan.name} (${plan.active ? 'active' : 'inactive'})` : 'none'}`,
     `Balance: ${usd(summary.billingTotals.balanceUsd)}`,
     `Reference cost: ${usd(summary.billingTotals.referenceCostUsd)}`,
@@ -579,9 +581,10 @@ function renderAccount(summary) {
 async function runAccount(dataDir) {
   const credential = accountCredential(dataDir);
   const days = Number.isFinite(opts.accountDays) && opts.accountDays > 0 ? Math.floor(opts.accountDays) : 45;
-  const since = Date.now() - days * 24 * 60 * 60 * 1000;
-  const account = await fetchClineAccount({ apiKey: credential.apiKey, userId: opts.accountUserId || credential.userId || null, since });
-  const summary = summarizeClineAccount(account);
+  const now = Date.now();
+  const since = now - days * 24 * 60 * 60 * 1000;
+  const account = await fetchClineAccount({ apiKey: credential.apiKey, userId: opts.accountUserId || credential.userId || null, since, now });
+  const summary = summarizeClineAccount(account, new Date(now));
   summary.historyDays = days;
   const output = {
     schemaVersion: SCHEMA_VERSION,

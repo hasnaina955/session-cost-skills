@@ -13,6 +13,7 @@ All notable changes to this project are documented here.
 - Added OpenAI/Anthropic-compatible protocol drivers, custom endpoint profiles, and manual or imported effective rate cards.
 - Made explicit, runtime-provided, active-root, ambiguous, and zero-call session selection explicit across both adapters.
 - Separated Cline end-to-end aggregates from reconstructed session scope and made billing classification provider-aware.
+- Made Cline account history windows exact, period completeness explicit, and malformed API pages fail deterministically.
 
 ### Security
 
