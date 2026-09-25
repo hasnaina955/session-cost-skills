@@ -25,7 +25,9 @@
     "check:docs": "node scripts/check-docs.mjs",
     "check:artifacts": "node scripts/check-artifacts.mjs",
     "check:contracts": "node --check scripts/validate-json-schema.mjs && node --check scripts/run-tests.mjs && node -e \"const fs=require('fs'); for (const file of ['contracts/normalized-report-v1.schema.json','contracts/rate-record-v1.schema.json','contracts/provider-driver-v1.schema.json','contracts/session-config-v1.schema.json']) JSON.parse(fs.readFileSync(file,'utf8'))\"",
-    "verify": "npm run check:docs && npm run check:artifacts && npm run check:dashboard && npm run check:session-graph && npm run check:report-contract && npm run check:provider-driver && npm run check:provider-diagnostics && npm run check:protocol-adapters && npm run check:config && npm run check:contracts && npm run check:cline && npm run check:mcode && npm test"
+    "verify": "npm run check:docs && npm run check:artifacts && npm run check:history && npm run check:dashboard && npm run check:session-graph && npm run check:report-contract && npm run check:provider-driver && npm run check:provider-diagnostics && npm run check:protocol-adapters && npm run check:config && npm run check:contracts && npm run check:cline && npm run check:mcode && npm test",
+    "audit:history": "node scripts/audit-history.mjs",
+    "check:history": "node scripts/audit-history.mjs --check"
   },
   "engines": {
     "node": ">=22.15"

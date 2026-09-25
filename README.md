@@ -86,6 +86,7 @@ Or run individual checks:
 npm test
 npm run check:docs
 npm run check:artifacts
+npm run check:history
 npm run check:report-contract
 npm run check:provider-driver
 npm run check:provider-diagnostics
@@ -116,11 +117,12 @@ A Gumroad product may be offered for voluntary support, compatibility assistance
 - [Cross-platform CI matrix template](docs/ci-matrix.yml)
 - [Changelog](CHANGELOG.md)
 - [Security policy](SECURITY.md)
+- [History secret and data audit](docs/history-audit.md)
 - [Contributing guide](CONTRIBUTING.md)
 
 ## Security and privacy
 
-Never commit API keys, OAuth tokens, `secrets.json`, session databases, generated account reports, or local logs. Local session reporting is offline. Cline account mode makes read-only API requests using the user's own Cline authentication and never prints the credential.
+Never commit API keys, OAuth tokens, `secrets.json`, `providers.json`, session databases, generated account reports, or local logs. `.gitignore`, `npm run check:artifacts`, and `npm run check:history` enforce this; the recorded history audit is in [docs/history-audit.md](docs/history-audit.md). Local session reporting is offline. Cline account mode makes read-only API requests using the user's own Cline authentication and never prints the credential.
 
 ## License
 
