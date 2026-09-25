@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hasnaina955.github.io/session-cost-skills/contracts/provider-driver-v1.schema.json",
+  "title": "Session Cost provider driver v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "contractVersion",
+    "id",
+    "version",
+    "match",
+    "capabilities",
+    "tokenSemantics",
+    "source",
+    "operations",
+    "fingerprint"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "contractVersion": { "const": "1.0.0" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "version": { "type": "string", "minLength": 1 },
+    "match": {
+      "type": "object",
+      "required": ["providerIds", "runtimes"],
+      "properties": {
+        "providerIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+        "runtimes": { "type": "array", "items": { "enum": ["cline", "mcode"] }, "minItems": 1, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "capabilities": {
+      "type": "object",
+      "required": ["pricing", "modelDiscovery", "rateRetrieval", "effectiveDates", "contextTiers", "timeBands"],
+      "properties": {
+        "pricing": { "enum": ["none", "mirrored-rate"] },
+        "modelDiscovery": { "type": "boolean" },
+        "rateRetrieval": { "enum": ["none", "network", "manual", "bundled"] },
+        "effectiveDates": { "type": "boolean" },
+        "contextTiers": { "type": "boolean" },
+        "timeBands": { "type": "boolean" },
+        "supportedComponents": { "type": "array", "items": { "enum": ["input", "output", "cacheRead", "cacheWrite"] }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "tokenSemantics": {
+      "type": "object",
+      "required": ["inputIncludesCache", "cacheReadSeparate", "cacheWriteSeparate", "reasoningIncludedInOutput", "contextSizeIncludesOutput"],
+      "properties": {
+        "inputIncludesCache": { "type": "boolean" },
+        "cacheReadSeparate": { "type": "boolean" },
+        "cacheWriteSeparate": { "type": "boolean" },
+        "reasoningIncludedInOutput": { "enum": [true, false, "unknown"] },
+        "contextSizeIncludesOutput": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "required": ["kind", "url", "parserVersion"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "minLength": 1 },
+        "parserVersion": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "operations": { "type": "array", "items": { "enum": ["detect", "listModels", "fetchRates", "resolveRate"] }, "minItems": 1, "uniqueItems": true },
+    "fingerprint": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "modelAliases": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } },
+    "credentialEnv": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}

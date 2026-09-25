@@ -71,6 +71,8 @@ test('Cline CLI satisfies the shared contract across all report modes', (t) => {
   assert.equal(root.result.status, 0, root.result.stderr);
   assertContract(root.output, 'cline');
   assert.equal(root.output.runtime.costBasis, 'runtime-recorded');
+  assert.equal(root.output.providerDriver.id, 'commandcode');
+  assert.match(root.output.providerDriver.fingerprint, /^sha256:/);
   assert.equal(root.output.usage.semantics.inputTokenMeaning, 'includes-cache');
   assert.deepEqual(root.output.sessionGraph.rootSessionIds, ['cline-root']);
   assert.deepEqual(root.output.sessionGraph.includedSessionIds, ['cline-root', 'cline-child', 'cline-grandchild']);
@@ -153,6 +155,8 @@ test('MCode CLI satisfies the shared contract across all report modes', (t) => {
   assert.deepEqual(root.output.sessionGraph.includedSessionIds, ['mcode-root', 'mcode-child', 'mcode-grandchild']);
   assert.equal(root.output.multiProvider, true);
   assert.ok(root.output.models.length >= 2);
+  assert.deepEqual(root.output.providerDrivers.map((driver) => driver.id).sort(), ['commandcode', 'stepfun']);
+  assert.ok(root.output.providerDrivers.every((driver) => /^sha256:/.test(driver.fingerprint)));
 
   const excluded = runJson(fixture.script, fixture.dataDir, ['--session', fixture.runtimeSession], fixture.environment);
   assert.equal(excluded.result.status, 0, excluded.result.stderr);

@@ -21,6 +21,7 @@ import {
 } from './lib/session-cost-core.mjs';
 import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from './lib/session-graph.mjs';
 import { REPORT_CONTRACT_VERSION, withNormalizedContract } from './lib/report-contract.mjs';
+import { detectBuiltinProvider } from './lib/provider-driver.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA_DIR = path.resolve(SCRIPT_DIR, '..', '..', '..');
@@ -222,6 +223,7 @@ function reportFor(row, all, graph, includeChildren, selection = null) {
       startedAt: row.started_at,
       endedAt: row.ended_at,
     },
+    providerDriver: detectBuiltinProvider(row.provider, 'cline'),
     selection: null,
     usage: usageSummary(total),
     billing: classifyBilling(total),
@@ -260,6 +262,7 @@ function render(report) {
     `Session: ${report.session.id}`,
     `Title: ${clip(report.session.title || '(untitled)', 80)}`,
     `Status: ${report.session.status} (${freshness(report)})`,
+    ...(report.providerDriver ? [`Provider driver: ${report.providerDriver.id}@${report.providerDriver.version} (${report.providerDriver.fingerprint})`] : []),
     `Calls: ${integer(t.calls)} across ${t.models.size} model(s)`,
     `Billing: ${billing.label} — ${billing.evidence}`,
     '',
@@ -342,11 +345,13 @@ function aggregateReports(reports, label, duplicateSuppressedSessionIds = []) {
   const sessions = reports.flatMap((report) => report.sessions);
   for (const report of reports) combineMetrics(total, report.total);
   const unique = (values) => [...new Set(values)];
+  const providerDrivers = [...new Map(reports.flatMap((report) => report.providerDriver ? [[report.providerDriver.id, report.providerDriver]] : [])).values()];
   return normalizeClineReport({
     schemaVersion: SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
     snapshot: { capturedAt: new Date().toISOString(), active: reports.some((report) => report.snapshot.active), state: 'aggregate' },
     session: { id: null, title: label, status: 'aggregate', startedAt: reports.at(-1)?.session.startedAt ?? null, endedAt: reports[0]?.session.endedAt ?? null },
+    providerDrivers,
     selection: { method: label, requestedId: null, ambiguousCandidates: [], warning: null },
     usage: usageSummary(total),
     billing: classifyBilling(total),

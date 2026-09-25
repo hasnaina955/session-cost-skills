@@ -11,11 +11,13 @@
     "check:session-graph": "node scripts/sync-session-graph.mjs --check",
     "sync:report-contract": "node scripts/sync-report-contract.mjs",
     "check:report-contract": "node scripts/sync-report-contract.mjs --check",
+    "sync:provider-driver": "node scripts/sync-provider-driver.mjs",
+    "check:provider-driver": "node scripts/sync-provider-driver.mjs --check",
     "test": "node scripts/run-tests.mjs",
-    "check:cline": "node --check adapters/cline/skill/scripts/session-cost.mjs && node --check adapters/cline/skill/scripts/lib/session-cost-core.mjs && node --check adapters/cline/skill/scripts/lib/cline-account.mjs && node --check adapters/cline/skill/scripts/lib/session-graph.mjs && node --check adapters/cline/skill/scripts/lib/report-contract.mjs",
-    "check:mcode": "node --check adapters/mcode/skill/scripts/session-cost.mjs && node --check adapters/mcode/skill/scripts/lib/dashboard.mjs && node --check adapters/mcode/skill/scripts/lib/rates.mjs && node --check adapters/mcode/skill/scripts/lib/session-graph.mjs && node --check adapters/mcode/skill/scripts/lib/report-contract.mjs",
-    "check:contracts": "node --check scripts/validate-json-schema.mjs && node --check scripts/run-tests.mjs && node -e \"const fs=require('fs'); for (const file of ['contracts/normalized-report-v1.schema.json','contracts/rate-record-v1.schema.json']) JSON.parse(fs.readFileSync(file,'utf8'))\"",
-    "verify": "npm run check:dashboard && npm run check:session-graph && npm run check:report-contract && npm run check:contracts && npm run check:cline && npm run check:mcode && npm test"
+    "check:cline": "node --check adapters/cline/skill/scripts/session-cost.mjs && node --check adapters/cline/skill/scripts/lib/session-cost-core.mjs && node --check adapters/cline/skill/scripts/lib/cline-account.mjs && node --check adapters/cline/skill/scripts/lib/session-graph.mjs && node --check adapters/cline/skill/scripts/lib/report-contract.mjs && node --check adapters/cline/skill/scripts/lib/provider-driver.mjs",
+    "check:mcode": "node --check adapters/mcode/skill/scripts/session-cost.mjs && node --check adapters/mcode/skill/scripts/lib/dashboard.mjs && node --check adapters/mcode/skill/scripts/lib/rates.mjs && node --check adapters/mcode/skill/scripts/lib/session-graph.mjs && node --check adapters/mcode/skill/scripts/lib/report-contract.mjs && node --check adapters/mcode/skill/scripts/lib/provider-driver.mjs && node --check adapters/mcode/skill/scripts/lib/provider-drivers.mjs",
+    "check:contracts": "node --check scripts/validate-json-schema.mjs && node --check scripts/run-tests.mjs && node -e \"const fs=require('fs'); for (const file of ['contracts/normalized-report-v1.schema.json','contracts/rate-record-v1.schema.json','contracts/provider-driver-v1.schema.json']) JSON.parse(fs.readFileSync(file,'utf8'))\"",
+    "verify": "npm run check:dashboard && npm run check:session-graph && npm run check:report-contract && npm run check:provider-driver && npm run check:contracts && npm run check:cline && npm run check:mcode && npm test"
   },
   "engines": {
     "node": ">=22.5"

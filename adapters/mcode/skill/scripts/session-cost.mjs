@@ -22,8 +22,8 @@ import {
   readRateTable as readValidatedRateTable,
   ratesForBand as resolveBandRates,
   refreshRateTable as refreshRateCatalog,
-  resolveRate as resolveProviderRate,
 } from './lib/rates.mjs';
+import { createMCodeProviderRegistry, resolveWithProviderDriver } from './lib/provider-drivers.mjs';
 import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from './lib/session-graph.mjs';
 import { REPORT_CONTRACT_VERSION, withNormalizedContract } from './lib/report-contract.mjs';
 
@@ -285,7 +285,7 @@ function loadSessionGraph(db) {
   return createSessionGraph(db.prepare('SELECT session_id, parent_session_id FROM local_runtime_sessions').all());
 }
 
-function buildPricer(db, dataDir, table, sessionId) {
+function buildPricer(db, dataDir, table, providerRegistry, sessionId) {
   const meta = sessionMeta(db, sessionId);
   const { provider, model } = resolveProviderModel(dataDir, meta);
   const rateCache = new Map();
@@ -299,7 +299,7 @@ function buildPricer(db, dataDir, table, sessionId) {
     rateFor(providerId, modelId, { at, contextTokens }) {
       const cacheKey = `${normalizeProvider(providerId)}::${modelId}::${Math.floor(Number(at) / 3_600_000)}::${contextTokens}`;
       if (!rateCache.has(cacheKey)) {
-        rateCache.set(cacheKey, resolveProviderRate(table, providerId, modelId, { at, contextTokens }));
+        rateCache.set(cacheKey, resolveWithProviderDriver(providerRegistry, { provider: providerId, model: modelId, at, contextTokens }));
       }
       return rateCache.get(cacheKey);
     },
@@ -316,12 +316,12 @@ function modelForRow(pricer, row) {
   return { modelId: pricer.defaultModel, provider: pricer.provider, inferred: true };
 }
 
-function buildReport(db, dataDir, table, graph, sessionId, includeChildren) {
+function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, includeChildren) {
   const childIds = [...graph.descendants(sessionId, false)];
   const includedIds = collectSessionIds([sessionId], graph, { includeChildren });
   const ids = [...includedIds];
   const excludedSessionIds = [...graph.descendants(sessionId)].filter((id) => !includedIds.has(id));
-  const pricers = new Map(ids.map((id) => [id, buildPricer(db, dataDir, table, id)]));
+  const pricers = new Map(ids.map((id) => [id, buildPricer(db, dataDir, table, providerRegistry, id)]));
   const target = pricers.get(sessionId);
 
   const placeholders = ids.map(() => '?').join(',');
@@ -368,6 +368,8 @@ function buildReport(db, dataDir, table, graph, sessionId, includeChildren) {
         rateKey: rateInfo.key,
         rateKnown: Boolean(rate),
         rateIsFree: rateInfo.free,
+        providerDriver: rateInfo.providerDriver ?? null,
+        resolvedModel: rateInfo.resolvedModel ?? modelId,
         rateCoverage: rateInfo.coverage,
         missingRateComponents: new Set(rateInfo.missingComponents ?? []),
         rateRecords: new Map(),
@@ -433,6 +435,9 @@ function buildReport(db, dataDir, table, graph, sessionId, includeChildren) {
   const lastTs = rows.length ? Number(rows[rows.length - 1].ts) : null;
   const snapshotAt = Date.now();
 
+  const providerDrivers = [...new Map(models
+    .filter((model) => model.providerDriver)
+    .map((model) => [model.providerDriver.id, model.providerDriver])).values()];
   const rateProvenance = [...new Map(models.flatMap((model) => model.rateRecords.map((record) => [record.fingerprint, {
     provider: record.provider,
     model: record.model,
@@ -478,6 +483,7 @@ function buildReport(db, dataDir, table, graph, sessionId, includeChildren) {
     sessionActive: lastTs !== null && snapshotAt - lastTs < LIVE_WINDOW_MS,
     ratesRefreshedAt: table._meta?.refreshedAt ?? null,
     rateCoverage: inspectRateTable(table),
+    providerDrivers,
     rateProvenance,
     ...finalize(agg),
   };
@@ -601,6 +607,7 @@ function renderText(rep) {
       .map(([band, r]) => `${band === 'flat' ? 'flat' : band} $${fmtRate(r.input)} in / $${fmtRate(r.cacheRead)} cache read / $${fmtRate(r.output)} out${r.cacheWrite ? ` / $${fmtRate(r.cacheWrite)} cache write` : ''}`)
       .join(', ');
     L.push(`  ${who}${m.modelId} — ${bands} per 1M  (${m.calls} call(s), ${USD(m.totalCost)})`);
+    if (m.providerDriver) L.push(`    driver: ${m.providerDriver.id}@${m.providerDriver.version} (${m.providerDriver.fingerprint})`);
     const effectiveCards = [...new Set((m.rateRecords ?? []).map((record) => (
       `${record.effectiveFrom}..${record.effectiveThrough ?? 'open'} ${record.timeBand} context ${record.context.minTokens}-${record.context.maxTokens ?? 'unbounded'}`
     )))];
@@ -733,12 +740,13 @@ function aggregateMcReports(reports, duplicateSuppressedSessionIds = []) {
   const total = {
     calls: 0, inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0,
     costInput: 0, costOutput: 0, costCacheRead: 0, costCacheWrite: 0, totalCost: 0, totalTokens: 0,
-    promptTokens: 0, bands: { peak: 0, offPeak: 0, flat: 0 }, models: new Map(), sessions: [], rateProvenance: new Map(),
+    promptTokens: 0, bands: { peak: 0, offPeak: 0, flat: 0 }, models: new Map(), sessions: [], providerDrivers: new Map(), rateProvenance: new Map(),
   };
   for (const report of reports) {
     for (const field of ['calls', 'inputTokens', 'outputTokens', 'reasoningTokens', 'cacheReadTokens', 'cacheWriteTokens', 'costInput', 'costOutput', 'costCacheRead', 'costCacheWrite', 'totalCost', 'totalTokens', 'promptTokens']) total[field] += Number(report[field]) || 0;
     for (const band of ['peak', 'offPeak', 'flat']) total.bands[band] += Number(report.bands?.[band]) || 0;
     total.sessions.push(report.sessionId);
+    for (const driver of report.providerDrivers ?? []) total.providerDrivers.set(driver.id, driver);
     for (const record of report.rateProvenance ?? []) total.rateProvenance.set(record.fingerprint, record);
     for (const model of report.models) {
       const key = `${model.providerKey}::${model.modelId}`;
@@ -781,6 +789,7 @@ function aggregateMcReports(reports, duplicateSuppressedSessionIds = []) {
     ...total,
     models: aggregatedModels,
     rateKnown: reports.every((report) => report.rateKnown),
+    providerDrivers: [...total.providerDrivers.values()],
     rateProvenance: [...total.rateProvenance.values()],
     rootSessionIds: reports.map((report) => report.sessionId),
     includedSessionIds: unique(reports.flatMap((report) => report.includedSessionIds)),
@@ -846,14 +855,15 @@ const opts = parseArgs(process.argv.slice(2));
 // <dataDir>/skills/session-cost/scripts/ -> three levels up is <dataDir>.
 const dataDir = opts.dataDir ? path.resolve(opts.dataDir) : path.resolve(__dirname, '..', '..', '..');
 
-function costForSession(db, dataDir, table, graph, sessionId) {
-  return buildReport(db, dataDir, table, graph, sessionId, opts.includeChildren);
+function costForSession(db, dataDir, table, providerRegistry, graph, sessionId) {
+  return buildReport(db, dataDir, table, providerRegistry, graph, sessionId, opts.includeChildren);
 }
 
 async function main() {
   if (opts.refreshRates) await refreshRates();
 
   const table = loadRates();
+  const providerRegistry = createMCodeProviderRegistry(table);
 
   if (opts.rates) {
     const output = {
@@ -887,7 +897,7 @@ async function main() {
     if (opts.list > 0) {
       const topLevel = selectTopLevelCandidates(candidates.map((row) => row.session_id), graph);
       const recent = topLevel.includedRootIds.slice(0, opts.list);
-      const reports = recent.map((sessionId) => costForSession(db, dataDir, table, graph, sessionId));
+      const reports = recent.map((sessionId) => costForSession(db, dataDir, table, providerRegistry, graph, sessionId));
       const out = reports.map((rep, index) => {
         const r = rowsById.get(recent[index]);
         const priced = rep.models.filter((m) => m.rateKnown).length;
@@ -951,7 +961,7 @@ async function main() {
     if (opts.mode === 'compare') {
       const topLevel = selectTopLevelCandidates(candidates.map((row) => row.session_id), graph);
       const reports = topLevel.includedRootIds.slice(0, 2)
-        .map((sessionId) => costForSession(db, dataDir, table, graph, sessionId));
+        .map((sessionId) => costForSession(db, dataDir, table, providerRegistry, graph, sessionId));
       if (reports.length < 2) fail('--compare requires at least two matching sessions');
       if (opts.json) {
         console.log(JSON.stringify({
@@ -985,7 +995,7 @@ async function main() {
       if (!rows.length) fail('no sessions match the requested filters');
       const topLevel = selectTopLevelCandidates(rows.map((row) => row.session_id), graph);
       const reports = topLevel.includedRootIds.slice(0, 200)
-        .map((sessionId) => costForSession(db, dataDir, table, graph, sessionId));
+        .map((sessionId) => costForSession(db, dataDir, table, providerRegistry, graph, sessionId));
       if (reports.length === 1) {
         reports[0].duplicateSuppressedSessionIds = topLevel.duplicateSuppressedSessionIds;
         if (opts.json) console.log(JSON.stringify(enhanceReport(reports[0], { method: opts.mode, requestedId: null, candidates: reports.map((r) => r.sessionId) }), null, 2));
@@ -1010,7 +1020,7 @@ async function main() {
     }
 
     const sessionId = opts.session ?? candidates[0]?.session_id ?? latestSessionId(db);
-    const report = costForSession(db, dataDir, table, graph, sessionId);
+    const report = costForSession(db, dataDir, table, providerRegistry, graph, sessionId);
     const selection = { method: opts.session ? 'explicit' : 'latest-ledger-activity', requestedId: opts.session ?? null, candidates: candidates.slice(0, 5).map((row) => row.session_id) };
 
     if (opts.dashboard) {

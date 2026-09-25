@@ -24,6 +24,7 @@ This repository keeps runtime-specific accounting adapters separate while sharin
 - Cline daily, weekly, and monthly account periods
 - CommandCode and StepFun provider-rate accounting
 - Effective-dated, context-aware MCode rates with immutable refresh history and fingerprints
+- Versioned built-in and user-installed provider driver manifests
 - Cache-read and cache-write semantics preserved per runtime
 - Self-contained HTML dashboards with no external assets
 - Shared normalized JSON report contract with runtime extensions

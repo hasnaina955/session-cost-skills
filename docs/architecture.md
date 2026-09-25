@@ -32,6 +32,8 @@ Runtime-specific report fields remain as schema-approved extensions. The generat
 
 MCode pricing uses `contracts/rate-record-v1.schema.json`. Each input, output, cache-read, and cache-write rate has its own effective interval, context range, time band, source version, raw amount, normalized amount, and fingerprint. Reports include the exact records selected for each call, so estimates can be reproduced after later refreshes.
 
+Provider behavior is isolated behind `contracts/provider-driver-v1.schema.json`. Runtime adapters normalize usage and preserve driver identity/provenance; provider drivers own detection, model discovery, aliases, rate retrieval, and rate selection. Ambiguous provider matches and unsupported capabilities fail explicitly rather than falling back to runtime-specific pricing branches.
+
 ## Shared layer
 
 - Normalized report schema and runtime validator
