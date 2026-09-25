@@ -27,6 +27,7 @@ This repository keeps runtime-specific accounting adapters separate while sharin
 - Versioned built-in and user-installed provider driver manifests
 - Layered project/user configuration with safe provider profiles and model aliases
 - Secret-safe `doctor`, provider discovery, model discovery, and match explanations
+- OpenAI- and Anthropic-compatible providers with manual or imported effective rate cards
 - Cache-read and cache-write semantics preserved per runtime
 - Self-contained HTML dashboards with no external assets
 - Shared normalized JSON report contract with runtime extensions
@@ -85,6 +86,8 @@ Or run individual checks:
 npm test
 npm run check:report-contract
 npm run check:provider-driver
+npm run check:provider-diagnostics
+npm run check:protocol-adapters
 npm run check:config
 npm run check:contracts
 npm run check:cline

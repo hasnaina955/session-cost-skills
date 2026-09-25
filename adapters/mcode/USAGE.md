@@ -57,6 +57,39 @@ profiles map custom provider names and model aliases to a supported driver. Use 
 `--export-config` to inspect effective values and winning sources. Profiles store environment-variable
 names such as `OPENROUTER_API_KEY`, never credential values.
 
+```json
+{
+  "schemaVersion": 1,
+  "runtimeDefaults": {},
+  "providers": [{
+    "id": "company-openai",
+    "driverId": "openai-compatible",
+    "match": { "providerIds": ["company-openai"], "runtimes": ["mcode"] },
+    "baseUrlEnv": "COMPANY_OPENAI_BASE_URL",
+    "credentialEnv": "COMPANY_OPENAI_API_KEY",
+    "region": "eu-west",
+    "currency": "EUR",
+    "pricingMode": "manual",
+    "rateCards": [{
+      "model": "company-model",
+      "effectiveFrom": "2026-01-01T00:00:00Z",
+      "input": 1.5,
+      "output": 6,
+      "cacheRead": 0.15,
+      "cacheWrite": 1.5
+    }]
+  }],
+  "models": [{
+    "runtime": "mcode",
+    "provider": "company-openai",
+    "runtimeModel": "Company/Model",
+    "rateModel": "company-model"
+  }]
+}
+```
+
+The compatible drivers normalize standard usage and streaming responses. Missing usage or rate components remain unknown. Use `importedRateRecords` instead of `rateCards` when importing already-fingerprinted effective records.
+
 ```powershell
 node $SessionCost doctor
 node $SessionCost providers

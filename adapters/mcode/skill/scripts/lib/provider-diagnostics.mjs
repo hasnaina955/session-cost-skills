@@ -141,7 +141,7 @@ export function explainModelMatch({
     matchedOn: model.matchedOn,
     candidates: model.candidates ?? [],
     rateCard,
-    currency: rateCard ? 'USD' : null,
+    currency: rateCard ? selectedRecords[0].currency ?? 'USD' : null,
     coverage: model.status === 'matched' ? (rateCard ? 'complete' : 'model-known-rate-unavailable') : 'unavailable',
     suggestions: model.status === 'unknown' ? suggestModels(modelId, knownModelIds) : [],
   };

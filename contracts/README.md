@@ -49,9 +49,13 @@ MCode selects the four component records that apply to each call timestamp, cont
 
 `doctor`, `providers`, `models discover`, and `config explain` share one diagnostic object for text and JSON. Resolution reports the requested and resolved IDs, exact/alias/normalized/glob rule, selected rate record, currency, coverage, collision candidates, and suggestion-only aliases. Unknown or ambiguous models return a non-zero status and are never applied automatically.
 
+## Compatible protocols
+
+`protocol-adapters.mjs` normalizes OpenAI- and Anthropic-compatible usage for normal, streaming, cached, and missing-usage responses. Their driver manifests require explicit capability and token-semantics declarations. Custom endpoints, regions, currencies, and credentials are supplied by provider profiles; authoritative pricing is optional, and manual or imported effective rate records preserve source and fingerprint provenance.
+
 ## Validation
 
-The canonical runtime validator is `shared/report-contract.mjs`. It is generated into each independently installable adapter and is also checked against the JSON Schema by `tests/normalized-contract.test.mjs`. Rate records are validated across the complete bundled catalog by `tests/rate-record-contract.test.mjs`, provider manifests plus built-in/user-loaded drivers by `tests/provider-driver-contract.test.mjs`, layered configuration by `tests/config-contract.test.mjs`, and deterministic CLI diagnostics by `tests/provider-diagnostics.test.mjs`.
+The canonical runtime validator is `shared/report-contract.mjs`. It is generated into each independently installable adapter and is also checked against the JSON Schema by `tests/normalized-contract.test.mjs`. Rate records are validated across the complete bundled catalog by `tests/rate-record-contract.test.mjs`, provider manifests plus built-in/user-loaded drivers by `tests/provider-driver-contract.test.mjs`, layered configuration by `tests/config-contract.test.mjs`, deterministic CLI diagnostics by `tests/provider-diagnostics.test.mjs`, and offline compatible-protocol fixtures by `tests/protocol-adapters.test.mjs`.
 
 Run:
 

@@ -33,10 +33,69 @@
             "additionalProperties": false
           },
           "endpointEnv": { "type": ["string", "null"] },
+          "baseUrlEnv": { "type": ["string", "null"] },
           "credentialEnv": { "type": ["string", "null"] },
           "region": { "type": ["string", "null"] },
           "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
-          "pricingMode": { "enum": ["bundled", "network", "manual", "none"] }
+          "pricingMode": { "enum": ["bundled", "network", "manual", "none"] },
+          "rateSource": {
+            "type": "object",
+            "required": ["kind", "url"],
+            "properties": {
+              "kind": { "enum": ["manual", "imported"] },
+              "url": { "type": ["string", "null"] }
+            },
+            "additionalProperties": false
+          },
+          "rateCards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["model", "effectiveFrom", "input", "output", "cacheRead", "cacheWrite"],
+              "properties": {
+                "model": { "type": "string", "minLength": 1 },
+                "effectiveFrom": { "type": "string", "format": "date-time" },
+                "effectiveThrough": { "type": ["string", "null"] },
+                "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+                "input": { "type": "number", "minimum": 0 },
+                "output": { "type": "number", "minimum": 0 },
+                "cacheRead": { "type": "number", "minimum": 0 },
+                "cacheWrite": { "type": "number", "minimum": 0 },
+                "context": {
+                  "type": "object",
+                  "required": ["minTokens", "maxTokens"],
+                  "properties": {
+                    "minTokens": { "type": "integer", "minimum": 0 },
+                    "maxTokens": { "type": ["integer", "null"], "minimum": 0 }
+                  },
+                  "additionalProperties": false
+                },
+                "timeBand": { "enum": ["flat", "peak", "offPeak"] }
+              },
+              "additionalProperties": false
+            }
+          },
+          "importedRateRecords": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["model", "component", "sourceAmount", "amount", "currency", "effectiveFrom", "context", "timeBand", "source", "fingerprint"],
+              "properties": {
+                "model": { "type": "string", "minLength": 1 },
+                "component": { "enum": ["input", "output", "cacheRead", "cacheWrite"] },
+                "sourceAmount": { "type": "string", "minLength": 1 },
+                "amount": { "type": "number", "minimum": 0 },
+                "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+                "effectiveFrom": { "type": "string", "format": "date-time" },
+                "effectiveThrough": { "type": ["string", "null"] },
+                "context": { "type": "object", "additionalProperties": true },
+                "timeBand": { "enum": ["flat", "peak", "offPeak"] },
+                "source": { "type": "object", "additionalProperties": true },
+                "fingerprint": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": true
+            }
+          }
         },
         "additionalProperties": false
       }

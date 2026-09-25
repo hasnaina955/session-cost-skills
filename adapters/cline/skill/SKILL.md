@@ -28,7 +28,8 @@ Report what a Cline session consumed and what Cline recorded it as costing. Read
    `--today`, `compare` → `--compare`, `this task end to end` → add `--include-children`.
    Use `--from YYYY-MM-DD --to YYYY-MM-DD`, `--provider <name>`, and `--model <name>` for
    filtered aggregates. Use `doctor`, `providers`, `models discover`, and `config explain` for setup and
-   model/provider diagnostics.
+   model/provider diagnostics. Cline cost remains runtime-recorded; compatible provider drivers supply
+   model and provider identity but do not replace recorded cost with an API estimate.
 
 5. Read the report's **Snapshot**, **Token totals**, **Recorded cost**, **Cost coverage**, and
    **By model** lines before answering.

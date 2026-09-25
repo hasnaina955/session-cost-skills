@@ -10,6 +10,7 @@ All notable changes to this project are documented here.
 - Added a versioned provider-driver contract with deterministic detection, aliases, capability declarations, and safe user-module loading.
 - Added layered project/user configuration, provider profiles, safe secret references, and config lifecycle commands.
 - Added secret-safe doctor/provider/model discovery and deterministic match explanations with suggestion-only aliases.
+- Added OpenAI/Anthropic-compatible protocol drivers, custom endpoint profiles, and manual or imported effective rate cards.
 
 ### Security
 

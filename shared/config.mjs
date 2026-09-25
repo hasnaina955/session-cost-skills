@@ -75,6 +75,17 @@ export function validateConfig(config) {
       throw new Error(`provider profile ${provider.id} requires driverId, match.providerIds, and match.runtimes`);
     }
     if (provider.currency && !/^[A-Z]{3}$/.test(provider.currency)) throw new Error(`provider profile ${provider.id} has invalid currency`);
+    for (const card of provider.rateCards ?? []) {
+      if (!card.model || !Number.isFinite(Date.parse(card.effectiveFrom))) throw new Error(`provider profile ${provider.id} has an invalid manual rate card`);
+      for (const component of ['input', 'output', 'cacheRead', 'cacheWrite']) {
+        if (!Number.isFinite(card[component]) || card[component] < 0) throw new Error(`provider profile ${provider.id} rate card is missing ${component}`);
+      }
+    }
+    for (const record of provider.importedRateRecords ?? []) {
+      if (!record.model || !['input', 'output', 'cacheRead', 'cacheWrite'].includes(record.component) || !Number.isFinite(record.amount) || record.amount < 0) {
+        throw new Error(`provider profile ${provider.id} has an invalid imported rate record`);
+      }
+    }
   }
   const modelKeys = new Set();
   for (const model of migrated.models) {

@@ -23,7 +23,7 @@ import {
   ratesForBand as resolveBandRates,
   refreshRateTable as refreshRateCatalog,
 } from './lib/rates.mjs';
-import { createMCodeProviderRegistry, resolveWithProviderDriver } from './lib/provider-drivers.mjs';
+import { createMCodeProviderRegistry, profileRateRecords, resolveWithProviderDriver } from './lib/provider-drivers.mjs';
 import { discoverModels, doctorReport, explainModelMatch, renderDiagnostics } from './lib/provider-diagnostics.mjs';
 import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, readConfigFile } from './lib/config.mjs';
 import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from './lib/session-graph.mjs';
@@ -394,6 +394,10 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
         rateKey: rateInfo.key,
         rateKnown: Boolean(rate),
         rateIsFree: rateInfo.free,
+        rateCurrency: rate?.currency ?? null,
+        rateRegion: rate?.region ?? null,
+        endpointEnv: rate?.endpointEnv ?? null,
+        credentialEnv: rate?.credentialEnv ?? null,
         providerDriver: rateInfo.providerDriver ?? null,
         resolvedModel: rateInfo.resolvedModel ?? modelId,
         rateCoverage: rateInfo.coverage,
@@ -476,6 +480,9 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
     fingerprint: record.fingerprint,
   }]))).values()];
 
+  const currencies = [...new Set(models.map((model) => model.rateCurrency).filter(Boolean))];
+  const currency = currencies.length === 1 ? currencies[0] : null;
+
   // Per-provider mirror provenance, since a multi-provider session draws on several tables.
   const providersUsed = [...providersSeen].map(([pkey]) => {
     const entry = table.providers?.[pkey];
@@ -489,6 +496,7 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
     provider: target.provider,
     model: target.defaultModel,
     rateKnown: models.every((m) => m.rateKnown),
+    currency,
     isCommandCode: Boolean(target.provider && /commandcode/i.test(target.provider)),
     includeChildren,
     rootSessionIds: [sessionId],
@@ -748,6 +756,7 @@ function enhanceReport(report, selection = null) {
     },
     billing: {
       classification: report.rateKnown ? 'rate-estimated' : 'cost-unavailable',
+      currency: report.currency ?? 'USD',
       recordedCostUsd: null,
       estimatedCostUsd: report.rateKnown ? report.totalCost : null,
       rateKnown: report.rateKnown,
@@ -812,8 +821,10 @@ function aggregateMcReports(reports, duplicateSuppressedSessionIds = []) {
       rateFingerprints: rateRecords.map((record) => record.fingerprint),
     };
   });
+  const aggregateCurrencies = [...new Set(aggregatedModels.map((model) => model.rateCurrency).filter(Boolean))];
   return {
     ...total,
+    currency: aggregateCurrencies.length === 1 ? aggregateCurrencies[0] : null,
     models: aggregatedModels,
     rateKnown: reports.every((report) => report.rateKnown),
     providerDrivers: [...total.providerDrivers.values()],
@@ -913,7 +924,14 @@ function handleConfigAction(configuration) {
 function runDiagnostic(configuration) {
   const table = loadRates();
   const knownModels = Object.fromEntries(Object.entries(table.providers ?? {}).map(([id, provider]) => [id, Object.keys(provider.models ?? {})]));
-  const allRecords = Object.values(table.providers ?? {}).flatMap((provider) => provider.rateRecords ?? []);
+  const configuredRecords = (configuration.config.providers ?? []).flatMap(profileRateRecords);
+  for (const provider of configuration.config.providers ?? []) {
+    knownModels[provider.id] = [...new Set(profileRateRecords(provider).map((record) => record.model))];
+  }
+  const allRecords = [
+    ...Object.values(table.providers ?? {}).flatMap((provider) => provider.rateRecords ?? []),
+    ...configuredRecords,
+  ];
   const allKnownModels = [...new Set(Object.values(knownModels).flat())];
   const diagnosticModels = opts.provider && knownModels[opts.provider] ? knownModels[opts.provider] : allKnownModels;
   let report;

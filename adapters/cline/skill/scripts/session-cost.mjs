@@ -162,14 +162,20 @@ function handleConfigAction(configuration) {
 function runDiagnostic(configuration) {
   let report;
   let status = 0;
-  const knownModels = { commandcode: [], stepfun: [] };
+  const knownModels = Object.fromEntries((configuration?.config?.providers ?? []).map((provider) => [provider.id, [
+    ...new Set([
+      ...(provider.rateCards ?? []).map((card) => card.model),
+      ...(provider.importedRateRecords ?? []).map((record) => record.model),
+    ]),
+  ]]));
+  const allKnownModels = [...new Set(Object.values(knownModels).flat())];
   if (opts.diagnostic === 'providers') {
     report = { action: 'providers', providers: doctorReport({ configuration, runtimeId: 'cline' }).providers };
   } else if (opts.diagnostic === 'models') {
     report = { action: 'models', models: discoverModels({ configuration, runtimeId: 'cline', providerId: opts.provider, knownModels }) };
   } else {
     const explanation = opts.provider || opts.model
-      ? explainModelMatch({ runtimeId: 'cline', providerId: opts.provider, modelId: opts.model, configuration, knownModelIds: [], rateRecords: [] })
+      ? explainModelMatch({ runtimeId: 'cline', providerId: opts.provider, modelId: opts.model, configuration, knownModelIds: allKnownModels, rateRecords: [] })
       : null;
     report = { action: opts.diagnostic, ...doctorReport({ configuration, runtimeId: 'cline', providerId: opts.provider, modelId: opts.model }), explanation };
     if (explanation?.status === 'unknown' || explanation?.status === 'ambiguous') status = 2;
