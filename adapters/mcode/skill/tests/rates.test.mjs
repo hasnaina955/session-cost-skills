@@ -1,0 +1,353 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { fileURLToPath } from 'node:url';
+import {
+  RATE_PARSER_VERSION,
+  RATES_SOURCE,
+  calculateTokenCost,
+  inspectRateTable,
+  parseCommandCodeRates,
+  parseStepFunRates,
+  ratesForBand,
+  readRateTable,
+  refreshRateTable,
+  resolveRate,
+  validateRateTable,
+} from '../scripts/lib/rates.mjs';
+
+function commandModel(overrides = {}) {
+  return {
+    id: 'vendor/current-model',
+    name: 'Current Model',
+    category: 'opensource',
+    provider: 'Vendor',
+    inputCost: 1,
+    outputCost: 2,
+    cacheReadCost: 0.1,
+    cacheWriteCost: 0.25,
+    planBudgetUsd: {},
+    ...overrides,
+  };
+}
+
+function renderedRow(name, { input = '$1.00', output = '$2.00', cacheRead = '$0.10', cacheWrite = '$0.25' } = {}) {
+  const cell = (value, extra = '') => `<div class="px-2 py-3 ${extra}">${value}</div>`;
+  return `<div class="grid" role="row"><div class="model">${name}</div>${cell('1M')}${cell(input)}${cell(output)}${cell(cacheRead)}${cell(cacheWrite)}<div class="caps">caps</div></div>`;
+}
+
+function commandCodeHtml(models, rows = '') {
+  const flights = models.map((model) => (
+    `<script>self.__next_f.push([1,${JSON.stringify(JSON.stringify(model))}])</script>`
+  )).join('');
+  return `<!doctype html><table>${rows}</table>${flights}`;
+}
+
+function stepFunMarkdown() {
+  return [
+    '| Model | Billing unit | Input (cache miss) | Input (cache hit) | Output |',
+    '| --- | --- | --- | --- | --- |',
+    '| `step-5-preview` | 1M tokens | \\$1.00 | \\$0.05 | \\$2.70 |',
+    '| `step-3.7-flash` | 1M tokens | \\$0.20 | \\$0.04 | \\$1.15 |',
+    '',
+  ].join('\n');
+}
+
+function completeStepFunMarkdown() {
+  return stepFunMarkdown().replace(/^\| `step-3\.7-flash`.*\n/m, '');
+}
+
+function validTable() {
+  return {
+    _meta: {
+      parserVersion: RATE_PARSER_VERSION,
+      sourceParserVersion: { commandcode: 2, stepfun: 1 },
+      currency: 'USD',
+      unit: 'per 1M tokens',
+      refreshedAt: '2026-01-01T00:00:00.000Z',
+      sourceCoverage: {
+        commandcode: { sourceModels: 1, publishedModels: 1, excludedModels: 0 },
+        stepfun: { sourceModels: 1, publishedModels: 1, excludedModels: 0 },
+      },
+    },
+    providers: {
+      commandcode: {
+        source: RATES_SOURCE.commandcode,
+        fetchedAt: '2026-01-01T00:00:00.000Z',
+        models: {
+          'vendor/current-model': {
+            name: 'Current Model',
+            provider: 'Vendor',
+            category: 'opensource',
+            input: 1,
+            output: 2,
+            cacheRead: 0.1,
+            cacheWrite: 0.25,
+            cacheWriteSource: 'commandcode-model',
+          },
+        },
+      },
+      stepfun: {
+        source: RATES_SOURCE.stepfun,
+        fetchedAt: '2026-01-01T00:00:00.000Z',
+        models: {
+          'step-5-preview': {
+            name: 'step-5-preview',
+            provider: 'stepfun',
+            category: 'stepfun-docs',
+            input: 1,
+            output: 2.7,
+            cacheRead: 0.05,
+            cacheWrite: 1,
+            cacheWriteSource: 'stepfun-cache-miss-policy',
+          },
+        },
+      },
+    },
+    freeModels: [],
+    aliases: {},
+  };
+}
+
+test('CommandCode current rates parse nonzero cache writes and produce the expected cost', () => {
+  const raw = commandModel();
+  const models = parseCommandCodeRates(commandCodeHtml([raw], renderedRow('Current Model')));
+  const model = models[raw.id];
+
+  assert.equal(model.cacheWrite, 0.25);
+  assert.equal(model.cacheWriteSource, 'commandcode-model');
+  assert.deepEqual(ratesForBand(model), {
+    input: 1,
+    output: 2,
+    cacheRead: 0.1,
+    cacheWrite: 0.25,
+  });
+  assert.deepEqual(calculateTokenCost({ cacheWriteTokens: 1_000_000 }, model), {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0.25,
+  });
+  assert.equal(calculateTokenCost({ cacheWriteTokens: 4_000_000 }, model).cacheWrite, 1);
+});
+
+test('an explicit CommandCode no-charge marker is zero while a missing component stays unknown', () => {
+  const { cacheWriteCost: _omitted, ...withoutCacheWrite } = commandModel();
+  const explicitFree = parseCommandCodeRates(commandCodeHtml(
+    [withoutCacheWrite],
+    renderedRow('Current Model', { cacheWrite: '—' }),
+  ))[withoutCacheWrite.id];
+  assert.equal(explicitFree.cacheWrite, 0);
+  assert.equal(explicitFree.cacheWriteSource, 'commandcode-no-charge');
+  assert.equal(calculateTokenCost({ cacheWriteTokens: 1_000_000 }, explicitFree).cacheWrite, 0);
+
+  const missing = parseCommandCodeRates(commandCodeHtml([withoutCacheWrite]))[withoutCacheWrite.id];
+  assert.equal(missing.cacheWrite, null);
+  const table = validTable();
+  table.providers.commandcode.models = { [withoutCacheWrite.id]: missing };
+  assert.equal(resolveRate(table, 'commandcode', withoutCacheWrite.id).rate, null);
+  const coverage = inspectRateTable(table);
+  assert.equal(coverage.providers.commandcode.components.cacheWrite.complete, false);
+  assert.deepEqual(coverage.providers.commandcode.components.cacheWrite.incompleteModels, [withoutCacheWrite.id]);
+  assert.throws(() => validateRateTable(table), /missing cacheWrite/);
+});
+
+test('StepFun current and historical rows expose only the documented cache-write rate', () => {
+  const models = parseStepFunRates(stepFunMarkdown());
+  assert.equal(models['step-5-preview'].cacheWrite, 1);
+  assert.equal(models['step-5-preview'].cacheWriteSource, 'stepfun-cache-miss-policy');
+  assert.equal(models['step-3.7-flash'].cacheWrite, null);
+  assert.equal(models['step-3.7-flash'].cacheWriteSource, null);
+  assert.equal(calculateTokenCost({ cacheWriteTokens: 500_000 }, models['step-5-preview']).cacheWrite, 0.5);
+
+  const table = validTable();
+  table.providers.stepfun.models = { 'step-5-preview': models['step-5-preview'] };
+  table.providers.stepfun.excludedModelIds = ['step-3.7-flash'];
+  table._meta.sourceCoverage.stepfun = { sourceModels: 2, publishedModels: 1, excludedModels: 1 };
+  assert.doesNotThrow(() => validateRateTable(table));
+  assert.equal(resolveRate(table, 'stepfun', 'step-3.7-flash').rate, null);
+});
+
+test('CommandCode historical peak and off-peak cards require every band component', () => {
+  const raw = commandModel({
+    id: 'vendor/historical-model',
+    name: 'Historical Model',
+    timeOfDay: {
+      effective: '2025-01-01T00:00:00.000Z',
+      windows: '01-04 UTC',
+      peak: { inputCost: 2, outputCost: 4, cacheReadCost: 0.2, cacheWriteCost: 0.5 },
+      offPeak: { inputCost: 1, outputCost: 2, cacheReadCost: 0.1, cacheWriteCost: 0.25 },
+    },
+  });
+  const model = parseCommandCodeRates(commandCodeHtml([raw], renderedRow('Historical Model')))[raw.id];
+  assert.equal(ratesForBand(model, 'peak').cacheWrite, 0.5);
+  assert.equal(ratesForBand(model, 'offPeak').cacheWrite, 0.25);
+  assert.equal(model.timeOfDay.effective, '2025-01-01T00:00:00.000Z');
+
+  const table = validTable();
+  table.providers.commandcode.models = { [raw.id]: model };
+  delete model.timeOfDay.offPeak;
+  assert.throws(() => validateRateTable(table), /missing offPeak band/);
+});
+
+
+test('CommandCode duplicate model IDs and unsupported context tiers fail before publication', () => {
+  const raw = commandModel();
+  assert.throws(
+    () => parseCommandCodeRates(commandCodeHtml([raw, { ...raw }])),
+    /duplicate model id/,
+  );
+
+  const tiered = commandModel({
+    id: 'vendor/tiered-model',
+    contextTiers: [{ maxContext: 200_000, inputCost: 2 }],
+  });
+  const models = parseCommandCodeRates(commandCodeHtml([tiered], renderedRow('Current Model')));
+  const table = validTable();
+  table.providers.commandcode.models = models;
+  assert.throws(() => validateRateTable(table), /unsupported contextTiers/);
+});
+
+test('rate table loading rejects parser-version drift', () => {
+  const table = validTable();
+  table._meta.parserVersion = RATE_PARSER_VERSION - 1;
+  assert.throws(() => validateRateTable(table), /parserVersion must be/);
+});
+
+test('refresh validates both providers and atomically publishes a complete table', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'mcode-rates-refresh-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const ratesPath = path.join(directory, 'provider-rates.json');
+  fs.writeFileSync(ratesPath, JSON.stringify(validTable(), null, 2) + '\n', 'utf8');
+
+  const commandHtml = commandCodeHtml([commandModel()]);
+  const refreshed = await refreshRateTable({
+    ratesPath,
+    refreshedAt: '2026-02-01T00:00:00.000Z',
+    fetchImpl: async (_url, providerKey) => (
+      providerKey === 'commandcode' ? commandHtml : completeStepFunMarkdown()
+    ),
+  });
+
+  assert.equal(refreshed.providers.commandcode.models['vendor/current-model'].cacheWrite, 0.25);
+  assert.equal(refreshed.providers.stepfun.models['step-5-preview'].cacheWrite, 1);
+  assert.equal(readRateTable(ratesPath)._meta.parserVersion, RATE_PARSER_VERSION);
+  assert.deepEqual(
+    fs.readdirSync(directory).filter((name) => name.endsWith('.tmp')),
+    [],
+  );
+});
+
+test('an incomplete refresh fails loudly and preserves the last valid table byte-for-byte', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'mcode-rates-invalid-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const ratesPath = path.join(directory, 'provider-rates.json');
+  const previous = JSON.stringify(validTable(), null, 2) + '\n';
+  fs.writeFileSync(ratesPath, previous, 'utf8');
+
+  const { cacheWriteCost: _omitted, ...incompleteCommandCodeModel } = commandModel();
+  await assert.rejects(
+    () => refreshRateTable({
+      ratesPath,
+      refreshedAt: '2026-02-01T00:00:00.000Z',
+      fetchImpl: async (_url, providerKey) => (
+        providerKey === 'commandcode'
+          ? commandCodeHtml([incompleteCommandCodeModel])
+          : stepFunMarkdown()
+      ),
+    }),
+    /missing cacheWrite/,
+  );
+
+  assert.equal(fs.readFileSync(ratesPath, 'utf8'), previous);
+  assert.deepEqual(
+    fs.readdirSync(directory).filter((name) => name.endsWith('.tmp')),
+    [],
+  );
+});
+
+test('MCode CLI reports a nonzero CommandCode cache-write cost end to end', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'mcode-cache-write-cli-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const sqliteDirectory = path.join(directory, 'v2', 'sqlite');
+  const historyDirectory = path.join(directory, 'v2', 'sessions', 'session-1');
+  fs.mkdirSync(sqliteDirectory, { recursive: true });
+  fs.mkdirSync(historyDirectory, { recursive: true });
+
+  const database = new DatabaseSync(path.join(sqliteDirectory, 'runtime-state.sqlite'));
+  database.exec(`
+    CREATE TABLE local_runtime_sessions (
+      session_id TEXT PRIMARY KEY,
+      agent_name TEXT,
+      title TEXT,
+      parent_session_id TEXT,
+      history_relative_dir TEXT
+    );
+    CREATE TABLE local_runtime_token_usage (
+      id INTEGER PRIMARY KEY,
+      session_id TEXT,
+      agent_name TEXT,
+      turn_id TEXT,
+      ts INTEGER,
+      input_tokens INTEGER,
+      output_tokens INTEGER,
+      reasoning_tokens INTEGER,
+      cache_read_tokens INTEGER,
+      cache_write_tokens INTEGER
+    );
+  `);
+  const timestamp = 1_760_000_000_000;
+  database.prepare('INSERT INTO local_runtime_sessions VALUES (?, ?, ?, ?, ?)').run(
+    'mvs_test',
+    'agent',
+    'Cache write fixture',
+    null,
+    'session-1',
+  );
+  database.prepare('INSERT INTO local_runtime_token_usage VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    1,
+    'mvs_test',
+    'agent',
+    'turn-1',
+    timestamp,
+    0,
+    0,
+    0,
+    0,
+    1_000_000,
+  );
+  database.close();
+
+  fs.writeFileSync(path.join(historyDirectory, 'llm-call.json'), JSON.stringify({
+    provider: 'custom_provider:commandcode',
+    model: 'vendor/current-model',
+  }));
+  fs.writeFileSync(path.join(historyDirectory, 'messages.jsonl'), JSON.stringify({
+    message: {
+      role: 'assistant',
+      timestamp,
+      model: 'vendor/current-model',
+      provider: 'custom_provider:commandcode',
+      usage: { input_tokens: 0, output_tokens: 0, cache_write_tokens: 1_000_000 },
+    },
+  }) + '\n');
+
+  const ratesPath = path.join(directory, 'provider-rates.json');
+  fs.writeFileSync(ratesPath, JSON.stringify(validTable(), null, 2) + '\n', 'utf8');
+  const script = fileURLToPath(new URL('../scripts/session-cost.mjs', import.meta.url));
+  const result = spawnSync(process.execPath, [script, '--data-dir', directory, '--session', 'mvs_test', '--json'], {
+    encoding: 'utf8',
+    env: { ...process.env, SESSION_COST_RATES_PATH: ratesPath },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.usage.cacheWriteTokens, 1_000_000);
+  assert.equal(report.costCacheWrite, 0.25);
+  assert.equal(report.billing.classification, 'rate-priced');
+  assert.equal(report.models[0].rateKnown, true);
+  assert.equal(report.rateCoverage.complete, true);
+});

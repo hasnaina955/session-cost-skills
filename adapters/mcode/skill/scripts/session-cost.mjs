@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Deterministic session cost accounting for MiniMax Code sessions running on the
-// CommandCode provider. See ../references/ledger-internals.md for ledger semantics.
+// CommandCode and StepFun rate accounting for MiniMax Code sessions. See
+// ../references/ledger-internals.md for ledger and rate semantics.
 //
 // Usage:
 //   node session-cost.mjs                      # latest session in the ledger
@@ -8,15 +8,26 @@
 //   node session-cost.mjs --session mvs_xxx --include-children
 //   node session-cost.mjs --list 10            # recent sessions with cost
 //   node session-cost.mjs --json               # machine-readable output
-//   node session-cost.mjs --refresh-rates      # re-fetch the CommandCode rate table
+//   node session-cost.mjs --refresh-rates      # re-fetch and validate both provider rate tables
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeDashboard } from './lib/dashboard.mjs';
+import {
+  calculateTokenCost,
+  inspectRateTable,
+  normalizeProvider,
+  readRateTable as readValidatedRateTable,
+  ratesForBand as resolveBandRates,
+  refreshRateTable as refreshRateCatalog,
+  resolveRate as resolveProviderRate,
+} from './lib/rates.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const RATES_PATH = path.resolve(__dirname, '..', 'references', 'provider-rates.json');
+const RATES_PATH = process.env.SESSION_COST_RATES_PATH
+  ? path.resolve(process.env.SESSION_COST_RATES_PATH)
+  : path.resolve(__dirname, '..', 'references', 'provider-rates.json');
 const PER_MILLION = 1_000_000;
 // A session whose most recent call is this recent is treated as still running, so the report
 // can say the totals are a snapshot rather than a final figure.
@@ -56,7 +67,7 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  console.log(`session-cost — token usage and CommandCode cost of a MiniMax Code session
+  console.log(`session-cost — token usage and provider-rate cost of a MiniMax Code session
 
   --session <mvs_...>     session id (default: current/latest session)
   --last                  latest completed session
@@ -73,7 +84,7 @@ function printHelp() {
   --list [n]              list the n most recent sessions with their cost (default 10)
   --json                  emit JSON instead of the markdown summary
   --config <path>         load standing-summary settings
-  --refresh-rates         re-fetch the CommandCode rate table into references/
+  --refresh-rates         atomically re-fetch and validate CommandCode and StepFun rates
   --data-dir <path>       MiniMax data dir (default: derived from this script's location)`);
 }
 
@@ -86,185 +97,38 @@ function fail(msg) {
 }
 
 // ---------------------------------------------------------------- rates
-
-// ---------------------------------------------------------------- rates
 //
 // The table is keyed by provider, then model. Matching on model id alone is not safe once more
 // than one provider is mirrored: the same id can exist at two providers at different prices.
 
-const RATES_SOURCE = {
-  commandcode: 'https://commandcode.ai/docs/resources/pricing-limits',
-  stepfun: 'https://platform.stepfun.ai/docs/en/guides/pricing/details.md',
-};
-
-function normalizeProvider(p) {
-  // Runtime ids look like "custom_provider:commandcode"; the table keys are the short name.
-  return String(p ?? '')
-    .toLowerCase()
-    .replace(/^custom_provider:/, '')
-    .replace(/^custom:/, '')
-    .replace(/[^a-z0-9]/g, '');
-}
-
-function normalizeModelId(id) {
-  return String(id)
-    .toLowerCase()
-    .replace(/^[^/]*\//, '')      // drop vendor/ prefix
-    .replace(/[^a-z0-9]/g, '');   // drop -, ., :, _ etc.
-}
-
-async function fetchText(url) {
-  const res = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } });
-  if (!res.ok) throw new Error(`${url} returned HTTP ${res.status}`);
-  return res.text();
-}
-
-async function extractCommandCodeRates() {
-  const html = await fetchText(RATES_SOURCE.commandcode);
-
-  // The Next.js RSC flight payload carries the model catalog as embedded JSON.
-  const chunks = [...html.matchAll(/self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)/g)].map((m) => {
-    try { return JSON.parse('"' + m[1] + '"'); } catch { return m[1]; }
-  });
-  const payload = chunks.join('');
-  if (!payload) throw new Error('could not read the rate payload from the docs page');
-
-  const models = {};
-  const re = /\{"id":"([^"]+)","name":"([^"]+)","category":"([^"]*)","provider":"([^"]*)"([^]*?)"planBudgetUsd"/g;
-  let m;
-  while ((m = re.exec(payload)) !== null) {
-    const [, id, name, category, provider, rest] = m;
-    const num = (key) => {
-      const hit = rest.match(new RegExp('"' + key + '":([0-9.]+)'));
-      return hit ? Number(hit[1]) : null;
-    };
-    const band = (label) => {
-      const hit = rest.match(new RegExp('"' + label + '":\\{"inputCost":([0-9.]+),"outputCost":([0-9.]+),"cacheReadCost":([0-9.]+)\\}'));
-      return hit ? { input: +hit[1], output: +hit[2], cacheRead: +hit[3] } : null;
-    };
-    const peak = band('peak');
-    const offPeak = band('offPeak');
-    const entry = { name, provider, category, input: num('inputCost'), output: num('outputCost'), cacheRead: num('cacheReadCost') };
-    if (peak || offPeak) {
-      entry.timeOfDay = { peak, offPeak };
-      const win = rest.match(/"windows":"([^"]*)"/);
-      if (win) entry.timeOfDay.windows = win[1];
-    }
-    models[id] = entry;
-  }
-  if (Object.keys(models).length === 0) throw new Error('rate payload contained no models');
-  return models;
-}
-
-async function extractStepFunRates() {
-  // StepFun publishes markdown directly, so the token-billed models parse cleanly.
-  const md = await fetchText(RATES_SOURCE.stepfun);
-  const models = {};
-  const money = (cell) => {
-    const hit = String(cell).match(/\\\$([0-9]+(?:\.[0-9]+)?)/);
-    return hit ? Number(hit[1]) : null;
-  };
-
-  // Only rows billed per 1M tokens are relevant; speech/image rows use other units.
-  for (const line of md.split(/\r?\n/)) {
-    const m = line.match(/^\|\s*`([^`]+)`\s*\|\s*1M tokens\s*\|([^|]*)\|([^|]*)\|([^|]*)\|/);
-    if (!m) continue;
-    const [, id, missCell, hitCell, outCell] = m;
-    const input = money(missCell);
-    const cacheRead = money(hitCell);
-    const output = money(outCell);
-    if (input === null || cacheRead === null || output === null) continue;
-    models[id] = {
-      name: id,
-      provider: 'stepfun',
-      category: 'stepfun-docs',
-      input,
-      output,
-      cacheRead,
-      // StepFun: "For step-5-preview, the cache-miss input price includes writing new content
-      // to the cache." So cache writes bill at the input rate for that model. The docs do not
-      // state this for the others, so they keep 0 rather than being guessed at.
-      ...(id === 'step-5-preview' ? { cacheWrite: input, cacheWriteNote: 'billed at the input rate' } : {}),
-    };
-  }
-  if (!('step-5-preview' in models)) throw new Error('step-5-preview row not found in the StepFun pricing page');
-  return models;
-}
-
 async function refreshRates() {
-  const previous = fs.existsSync(RATES_PATH) ? JSON.parse(fs.readFileSync(RATES_PATH, 'utf8')) : null;
-  const now = new Date().toISOString();
-
-  const sources = {
-    commandcode: { fetch: extractCommandCodeRates, note: 'CommandCode publishes no cache-write rate; cache writes bill at 0.' },
-    stepfun: { fetch: extractStepFunRates, note: 'StepFun bills cache writes at the input rate for step-5-preview.' },
-  };
-
-  const providers = {};
-  for (const [key, { fetch: fn }] of Object.entries(sources)) {
-    try {
-      const models = await fn();
-      providers[key] = { source: RATES_SOURCE[key], fetchedAt: now, models };
-      console.error(`session-cost: refreshed ${Object.keys(models).length} ${key} model rates`);
-    } catch (err) {
-      // Keep the previously mirrored rates rather than dropping the provider on a network blip.
-      if (previous?.providers?.[key]) {
-        providers[key] = previous.providers[key];
-        console.error(`session-cost: ${key} refresh FAILED (${err.message}); kept rates from ${previous.providers[key].fetchedAt}`);
-      } else {
-        console.error(`session-cost: ${key} refresh FAILED (${err.message}) and no cached rates exist`);
-      }
-    }
+  try {
+    const table = await refreshRateCatalog({ ratesPath: RATES_PATH });
+    const counts = Object.entries(table.providers ?? {})
+      .map(([key, entry]) => `${key}=${Object.keys(entry.models ?? {}).length}`)
+      .join(', ');
+    console.error(`session-cost: wrote validated rate table (${counts}) -> ${RATES_PATH}`);
+    return table;
+  } catch (error) {
+    fail(error.message);
   }
-  if (!Object.keys(providers).length) throw new Error('no rate sources could be refreshed');
-
-  const table = {
-    _meta: {
-      currency: 'USD',
-      unit: 'per 1M tokens',
-      refreshedAt: now,
-      cacheWriteNote: 'Per-provider: CommandCode charges no separate cache-write rate (bills 0); StepFun bills cache writes at the input rate for step-5-preview.',
-      peakWindows: {
-        peakHoursPerDay: 7,
-        offPeakHoursPerDay: 17,
-        windows: '01-04 & 06-10 UTC, Mon-Fri',
-        rule: 'peak when UTC weekday is Mon-Fri and 1 <= utcHour < 4 or 6 <= utcHour < 10',
-        note: 'CommandCode only; StepFun publishes a single flat rate per model.',
-      },
-    },
-    providers,
-    // Model ids that bill at $0 on these providers.
-    freeModels: ['poolside/laguna-s-2.1-free', 'inclusionai/ling-3.0-flash-sante:free', 'laguna-s-2.1', 'ling-3.0-flash-sante'],
-    // Explicit overrides for ids the normalizer cannot resolve on its own.
-    aliases: previous?.aliases ?? {},
-  };
-
-  fs.mkdirSync(path.dirname(RATES_PATH), { recursive: true });
-  fs.writeFileSync(RATES_PATH, JSON.stringify(table, null, 2) + '\n', 'utf8');
-  console.error(`session-cost: wrote rate table -> ${RATES_PATH}`);
-  return table;
 }
 
 function loadRates() {
-  if (!fs.existsSync(RATES_PATH)) fail(`rate table missing at ${RATES_PATH} — run with --refresh-rates`);
-  return JSON.parse(fs.readFileSync(RATES_PATH, 'utf8'));
+  try {
+    return readValidatedRateTable(RATES_PATH);
+  } catch (error) {
+    fail(error.message);
+  }
 }
 
-// Rate lookup is provider-first: the model id is only matched inside that provider's table.
-function resolveRate(table, provider, providerModelId) {
-  const pkey = normalizeProvider(provider);
-  const entry = table.providers?.[pkey];
-  if (!entry) return { key: null, rate: null, free: false, providerKey: pkey };
-
-  const normalized = normalizeModelId(providerModelId);
-  const alias = table.aliases?.[`${pkey}/${providerModelId}`] ?? table.aliases?.[providerModelId];
-  const key = alias ?? Object.keys(entry.models).find((k) => normalizeModelId(k) === normalized);
-  if (key && entry.models[key]) return { key, rate: entry.models[key], free: false, providerKey: pkey };
-
-  const isFree = (table.freeModels ?? []).some((f) => normalizeModelId(f) === normalized);
-  if (isFree) return { key: providerModelId, rate: { name: providerModelId, input: 0, output: 0, cacheRead: 0 }, free: true, providerKey: pkey };
-  return { key: null, rate: null, free: false, providerKey: pkey };
-}
+const UNPRICED_ZERO_RATE = Object.freeze({
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  cacheWriteSource: 'unpriced-call-excluded',
+});
 
 // ---------------------------------------------------------------- billing
 
@@ -277,15 +141,6 @@ function bandForTimestamp(ts, rate) {
   const isWeekday = day >= 1 && day <= 5;
   const inWindow = (hour >= 1 && hour < 4) || (hour >= 6 && hour < 10);
   return isWeekday && inWindow ? 'peak' : 'offPeak';
-}
-
-function ratesForBand(rate, band) {
-  if (band === 'flat') {
-    return { input: rate.input ?? 0, output: rate.output ?? 0, cacheRead: rate.cacheRead ?? 0, cacheWrite: rate.cacheWrite ?? 0 };
-  }
-  const bandRates = rate.timeOfDay?.[band] ?? {};
-  const pick = (k) => bandRates[k] ?? rate[k] ?? 0;
-  return { input: pick('input'), output: pick('output'), cacheRead: pick('cacheRead'), cacheWrite: bandRates.cacheWrite ?? rate.cacheWrite ?? 0 };
 }
 
 function emptyAggregate() {
@@ -302,7 +157,8 @@ function emptyAggregate() {
 
 function accumulate(agg, row, rate, bandOverride) {
   const band = bandOverride ?? bandForTimestamp(row.ts, rate);
-  const r = ratesForBand(rate, band);
+  const r = resolveBandRates(rate, band);
+  const costs = calculateTokenCost(row, rate, band);
   const input = Number(row.input_tokens) || 0;
   const output = Number(row.output_tokens) || 0;
   const cacheRead = Number(row.cache_read_tokens) || 0;
@@ -314,10 +170,10 @@ function accumulate(agg, row, rate, bandOverride) {
   agg.reasoningTokens += Number(row.reasoning_tokens) || 0;
   agg.cacheReadTokens += cacheRead;
   agg.cacheWriteTokens += cacheWrite;
-  agg.costInput += (input / PER_MILLION) * r.input;
-  agg.costOutput += (output / PER_MILLION) * r.output;
-  agg.costCacheRead += (cacheRead / PER_MILLION) * r.cacheRead;
-  agg.costCacheWrite += (cacheWrite / PER_MILLION) * r.cacheWrite;
+  agg.costInput += costs.input;
+  agg.costOutput += costs.output;
+  agg.costCacheRead += costs.cacheRead;
+  agg.costCacheWrite += costs.cacheWrite;
   agg.bands[band] = (agg.bands[band] ?? 0) + 1;
   agg.rateBandsUsed[band] = r;
   const ts = Number(row.ts);
@@ -440,7 +296,7 @@ function buildPricer(db, dataDir, table, sessionId) {
     // Rate lookup is provider-aware, so the cache key is provider + model.
     rateFor(providerId, modelId) {
       const cacheKey = `${normalizeProvider(providerId)}::${modelId}`;
-      if (!rateCache.has(cacheKey)) rateCache.set(cacheKey, resolveRate(table, providerId, modelId));
+      if (!rateCache.has(cacheKey)) rateCache.set(cacheKey, resolveProviderRate(table, providerId, modelId));
       return rateCache.get(cacheKey);
     },
   };
@@ -482,7 +338,7 @@ function buildReport(db, dataDir, table, sessionId, includeChildren) {
     const { modelId, provider, inferred, rateInfo, rate } = priceRow(pricer, row);
     if (inferred) inferredRows += 1;
 
-    accumulate(agg, row, rate ?? { input: 0, output: 0, cacheRead: 0 });
+    accumulate(agg, row, rate ?? UNPRICED_ZERO_RATE);
 
     const pkey = normalizeProvider(provider);
     const key = `${pkey}::${modelId ?? '(unknown)'}`;
@@ -501,7 +357,7 @@ function buildReport(db, dataDir, table, sessionId, includeChildren) {
     }
     const entry = perModel.get(key);
     if (inferred) entry.inferredCalls += 1;
-    accumulate(entry, row, rate ?? { input: 0, output: 0, cacheRead: 0 });
+    accumulate(entry, row, rate ?? UNPRICED_ZERO_RATE);
 
     if (pkey) providersSeen.set(pkey, true);
   }
@@ -511,7 +367,7 @@ function buildReport(db, dataDir, table, sessionId, includeChildren) {
     const sub = emptyAggregate();
     for (const row of rows.filter((r) => r.session_id === id)) {
       const { rate } = priceRow(pricers.get(id), row);
-      accumulate(sub, row, rate ?? { input: 0, output: 0, cacheRead: 0 });
+      accumulate(sub, row, rate ?? UNPRICED_ZERO_RATE);
     }
     const fin = finalize(sub);
     perSession[id] = { role: id === sessionId ? 'target' : 'child', billed: true, calls: fin.calls, totalTokens: fin.totalTokens, cacheRate: fin.cacheRate, totalCost: fin.totalCost };
@@ -552,6 +408,7 @@ function buildReport(db, dataDir, table, sessionId, includeChildren) {
     ledgerLastCallAt: lastTs,
     sessionActive: lastTs !== null && snapshotAt - lastTs < LIVE_WINDOW_MS,
     ratesRefreshedAt: table._meta?.refreshedAt ?? null,
+    rateCoverage: inspectRateTable(table),
     ...finalize(agg),
   };
 }
@@ -830,10 +687,22 @@ function renderCompareMc(older, newer) {
   ].join('\n');
 }
 function renderRates(table) {
-  const lines = ['MCode rate coverage', `Refreshed: ${table._meta?.refreshedAt ?? 'unknown'}`];
-  for (const [key, entry] of Object.entries(table.providers ?? {})) {
-    lines.push(`${key}: ${Object.keys(entry.models ?? {}).length} model(s), source ${entry.source ?? 'unknown'}, fetched ${entry.fetchedAt ?? 'unknown'}`);
+  const coverage = inspectRateTable(table);
+  const lines = [
+    'MCode rate coverage',
+    `Parser: v${coverage.parserVersion ?? 'unknown'}`,
+    `Refreshed: ${table._meta?.refreshedAt ?? 'unknown'}`,
+    `Published table complete: ${coverage.complete ? 'yes' : 'no'}`,
+  ];
+  for (const [key, entry] of Object.entries(coverage.providers ?? {})) {
+    const components = Object.entries(entry.components ?? {})
+      .map(([name, value]) => `${name} ${value.complete ? 'complete' : `${value.completeModels}/${entry.models}`}`)
+      .join(', ');
+    lines.push(`${key}: ${entry.completeModels}/${entry.models} complete model(s); ${components}`);
+    if (entry.excludedModels?.length) lines.push(`  source excluded ${entry.excludedModels.length} incomplete model(s): ${entry.excludedModels.slice(0, 8).join(', ')}${entry.excludedModels.length > 8 ? ', ...' : ''}`);
+    lines.push(`  source ${entry.source ?? 'unknown'}, fetched ${entry.fetchedAt ?? 'unknown'}`);
   }
+  if (!coverage.complete) lines.push(`Issues: ${coverage.issues.join('; ')}`);
   lines.push(`Free models: ${(table.freeModels ?? []).join(', ') || 'none'}`);
   return lines.join('\n');
 }
@@ -860,6 +729,7 @@ async function main() {
       rates: {
         refreshedAt: table._meta?.refreshedAt ?? null,
         providers: Object.fromEntries(Object.entries(table.providers ?? {}).map(([key, entry]) => [key, { models: Object.keys(entry.models ?? {}).length, source: entry.source ?? null, fetchedAt: entry.fetchedAt ?? null }])),
+        coverage: inspectRateTable(table),
         freeModels: table.freeModels ?? [],
       },
     };

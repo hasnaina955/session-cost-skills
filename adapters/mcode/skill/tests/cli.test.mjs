@@ -25,6 +25,16 @@ test('MCode --rates works without reading the session ledger and emits versioned
   assert.equal(typeof output.rates.refreshedAt, 'string');
   assert.ok(output.rates.providers.commandcode.models > 0);
   assert.ok(output.rates.providers.stepfun.models > 0);
+  assert.equal(output.rates.coverage.complete, true);
+  assert.ok(output.rates.coverage.providers.commandcode.excludedModels.length > 0);
+  assert.ok(output.rates.coverage.providers.stepfun.excludedModels.length > 0);
+  assert.equal(
+    output.rates.coverage.providers.commandcode.excludedModels.length,
+    output.rates.coverage.sourceCoverage.commandcode.excludedModels,
+  );
+  for (const provider of Object.values(output.rates.coverage.providers)) {
+    assert.deepEqual(Object.values(provider.components).map((component) => component.complete), [true, true, true, true]);
+  }
 });
 
 test('MCode rates dashboard writes a self-contained HTML file', () => {

@@ -21,8 +21,8 @@ Mirrored providers and their sources:
 
 | Provider key | Source |
 | --- | --- |
-| `commandcode` | `https://commandcode.ai/docs/resources/pricing-limits` (71 models, peak/off-peak bands) |
-| `stepfun` | `https://platform.stepfun.ai/docs/en/guides/pricing/details.md` (10 token-billed models, flat) |
+| `commandcode` | `https://commandcode.ai/docs/resources/pricing-limits` (79 source cards; incomplete/context-tier cards are excluded) |
+| `stepfun` | `https://platform.stepfun.ai/docs/en/guides/pricing/details.md` (10 token-billed source cards; only cards with documented cache-write pricing are published) |
 
 ## `local_runtime_token_usage` columns
 
@@ -108,17 +108,20 @@ by timestamp.
 
 ## Cache-write billing differs by provider
 
-This is the one place where a single billing rule would be wrong, and it is why the table stores a
-per-model `cacheWrite` rate:
+The table stores a per-model `cacheWrite` rate and refuses to convert a missing component to zero:
 
-- **CommandCode** publishes no cache-write rate for these models, so cache writes bill at `$0`.
-- **StepFun** states *"For `step-5-preview`, the cache-miss input price includes writing new
-  content to the cache."* So for `step-5-preview` cache writes bill at the **input rate ($1.00/M)**.
-  The docs do not say this for the other StepFun models, so they keep `$0` rather than being
-  guessed at.
+- **CommandCode** publishes nonzero `cacheWriteCost` values for supported cards. A rendered `—` is
+  recorded as an explicit no-charge zero; a card with no cache-write value is incomplete and blocks
+  the entire refresh. The bundled snapshot publishes only complete cards and lists the remaining
+  source IDs as excluded rather than treating them as free.
+- **StepFun** states *"For `step-5-preview`, the cache-miss input price includes writing new content
+  to the cache."* That model uses the input rate (`$1.00/M` in the current snapshot). The other
+  StepFun cards do not publish a cache-write component, so the bundled snapshot excludes them rather
+  than assuming they are free.
 
-Cache writes are rare but real — 9 ledger rows on 2026-09-20 carried up to 47,293 cache-write
-tokens — so the rule is worth getting right rather than hard-coding `$0` everywhere.
+A refresh validates both providers, parser versions, model IDs, peak/off-peak bands, and every input,
+output, cache-read, and cache-write component before replacing the file. The replacement itself is
+atomic, so a fetch or validation failure leaves the last valid table untouched.
 
 ## Peak / off-peak bands
 
@@ -171,5 +174,6 @@ catalog renamed it.
   snapshot instant and warns when the last call is recent. Reading the same session twice will
   legitimately give different totals.
 - Rates drift. Each provider's `fetchedAt` is recorded in the rate file and printed in the report
-  footer; `--refresh-rates` re-fetches both sources, keeping the previous rates for a source that
-  fails.
+  footer. `--refresh-rates` fetches and validates both sources before one atomic replacement.
+- Context-tier cards are rejected until effective-dated/context-aware selection is implemented;
+  publishing their flat base rate would be unsafe.
