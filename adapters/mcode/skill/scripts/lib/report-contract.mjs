@@ -140,7 +140,7 @@ export function withNormalizedContract(report, {
     ...(sessionGraph.duplicateSuppressedSessionIds.length ? [`${sessionGraph.duplicateSuppressedSessionIds.length} child session selection(s) were duplicate-suppressed`] : []),
     ...coverage.unknownReasons,
   ]);
-  const provenance = {
+  const provenance = report.provenance ?? {
     kind: runtime.provenanceKind,
     source: runtime.provenanceSource,
     rateSources: unique(runtime.rateSources),

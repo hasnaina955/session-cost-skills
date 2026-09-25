@@ -49,6 +49,19 @@ test('classifies ClinePass, free, billed, partial, and unavailable calls', () =>
 
   const unavailable = classifyBilling(metrics([{ metrics: { inputTokens: 10 }, modelInfo: { provider: 'unknown', id: 'mystery' } }]));
   assert.equal(unavailable.classification, 'cost-unavailable');
+  assert.equal(unavailable.recordedCostUsd, null);
+
+  const positivePass = classifyBilling(metrics([
+    { metrics: { inputTokens: 10, cost: 0.42 }, modelInfo: { provider: 'cline-pass', id: 'stealth/model' } },
+  ]));
+  assert.equal(positivePass.classification, 'cline-pass-included');
+  assert.equal(positivePass.recordedCostUsd, 0);
+  assert.match(positivePass.evidence, /not an additional charge/i);
+
+  const aggregate = classifyBilling({ ...emptyMetrics(), callCountKnown: false, cost: 0.75 });
+  assert.equal(aggregate.classification, 'aggregate-usage');
+  assert.equal(aggregate.recordedCostUsd, 0.75);
+  assert.equal(aggregate.coverage, 'aggregate');
 });
 
 test('combines model and call metrics without losing coverage counters', () => {
