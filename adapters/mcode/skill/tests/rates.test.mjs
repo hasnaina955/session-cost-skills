@@ -135,6 +135,39 @@ test('CommandCode current rates parse nonzero cache writes and produce the expec
   assert.equal(calculateTokenCost({ cacheWriteTokens: 4_000_000 }, model).cacheWrite, 1);
 });
 
+test('CommandCode rendered rows support non-1M context windows and promo badges', () => {
+  const { cacheWriteCost: _omitted, ...withoutCacheWrite } = commandModel({ name: 'Alternate Context Model' });
+  const alternateContext = parseCommandCodeRates(commandCodeHtml(
+    [withoutCacheWrite],
+    renderedRow('Alternate Context Model', { cacheWrite: '—' }).replace('1M', '200K'),
+  ))[withoutCacheWrite.id];
+  assert.equal(alternateContext.cacheWrite, 0);
+  assert.equal(alternateContext.cacheWriteSource, 'commandcode-no-charge');
+
+  const promo = parseCommandCodeRates(commandCodeHtml(
+    [withoutCacheWrite],
+    renderedRow('Alternate Context Model', { input: '$0.60$0.30', cacheWrite: '—' })
+      .replace('>Alternate Context Model<', '>Alternate Context Model-50%<'),
+  ))[withoutCacheWrite.id];
+  assert.equal(promo.cacheWrite, 0);
+  assert.equal(promo.cacheWriteSource, 'commandcode-no-charge');
+  assert.equal(promo.input, 1);
+});
+
+test('the bundled CommandCode catalog priceable includes the MiniMax flagship', () => {
+  const table = readRateTable(fileURLToPath(new URL('../references/provider-rates.json', import.meta.url)));
+  assert.equal(table._meta.sourceCoverage.commandcode.sourceModels, 79);
+  assert.equal(table._meta.sourceCoverage.commandcode.publishedModels, 78);
+  assert.equal(table._meta.sourceCoverage.commandcode.excludedModels, 1);
+  const resolved = resolveRate(table, 'commandcode', 'minimax-m3', {
+    at: '2026-09-26T00:00:00Z',
+    contextTokens: 1_000,
+  });
+  assert.equal(resolved.rate.cacheWrite, 0);
+  assert.equal(resolved.rate.input, 0.3);
+  assert.equal(resolved.coverage, 'complete');
+});
+
 test('an explicit CommandCode no-charge marker is zero while a missing component stays unknown', () => {
   const { cacheWriteCost: _omitted, ...withoutCacheWrite } = commandModel();
   const explicitFree = parseCommandCodeRates(commandCodeHtml(

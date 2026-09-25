@@ -14,9 +14,9 @@
         "parserVersion": 3,
         "providers": {
           "commandcode": {
-            "models": 59,
-            "excludedModels": 20,
-            "rateRecords": 288
+            "models": 78,
+            "excludedModels": 1,
+            "rateRecords": 372
           },
           "stepfun": {
             "models": 1,
@@ -29,8 +29,8 @@
     "sourceCoverage": {
       "commandcode": {
         "sourceModels": 79,
-        "publishedModels": 59,
-        "excludedModels": 20
+        "publishedModels": 78,
+        "excludedModels": 1
       },
       "stepfun": {
         "sourceModels": 10,
@@ -68,6 +68,22 @@
             "cacheWrite": "—"
           }
         },
+        "tencent/hy3-paid": {
+          "name": "Tencent Hy3",
+          "provider": "Tencent",
+          "category": "opensource",
+          "input": 0.14,
+          "output": 0.58,
+          "cacheRead": 0.035,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 0.14,
+            "output": 0.58,
+            "cacheRead": 0.035,
+            "cacheWrite": "—"
+          }
+        },
         "kimi-k3": {
           "name": "Kimi K3",
           "provider": "Moonshot AI",
@@ -81,6 +97,70 @@
             "input": 3,
             "output": 15,
             "cacheRead": 0.3,
+            "cacheWrite": "—"
+          }
+        },
+        "kimi-k2.7-code": {
+          "name": "Kimi K2.7 Code",
+          "provider": "Moonshot AI",
+          "category": "opensource",
+          "input": 0.95,
+          "output": 4,
+          "cacheRead": 0.19,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 0.95,
+            "output": 4,
+            "cacheRead": 0.19,
+            "cacheWrite": "—"
+          }
+        },
+        "kimi-k2.7-code-highspeed": {
+          "name": "Kimi K2.7 Code HighSpeed",
+          "provider": "Moonshot AI",
+          "category": "opensource",
+          "input": 1.9,
+          "output": 8,
+          "cacheRead": 0.38,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 1.9,
+            "output": 8,
+            "cacheRead": 0.38,
+            "cacheWrite": "—"
+          }
+        },
+        "kimi-k2.6": {
+          "name": "Kimi K2.6",
+          "provider": "Moonshot AI",
+          "category": "opensource",
+          "input": 0.95,
+          "output": 4,
+          "cacheRead": 0.16,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 0.95,
+            "output": 4,
+            "cacheRead": 0.16,
+            "cacheWrite": "—"
+          }
+        },
+        "kimi-k2.5": {
+          "name": "Kimi K2.5",
+          "provider": "Moonshot AI",
+          "category": "opensource",
+          "input": 0.6,
+          "output": 3,
+          "cacheRead": 0.1,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 0.6,
+            "output": 3,
+            "cacheRead": 0.1,
             "cacheWrite": "—"
           }
         },
@@ -161,6 +241,86 @@
             "input": 3,
             "output": 10.25,
             "cacheRead": 0.5,
+            "cacheWrite": "—"
+          }
+        },
+        "glm-5.1": {
+          "name": "GLM-5.1",
+          "provider": "Z.ai",
+          "category": "opensource",
+          "input": 1.4,
+          "output": 4.4,
+          "cacheRead": 0.26,
+          "cacheWrite": 0.26,
+          "cacheWriteSource": "commandcode-rate",
+          "sourceAmounts": {
+            "input": 1.4,
+            "output": 4.4,
+            "cacheRead": 0.26,
+            "cacheWrite": "$0.26"
+          }
+        },
+        "glm-5": {
+          "name": "GLM-5",
+          "provider": "Z.ai",
+          "category": "opensource",
+          "input": 1,
+          "output": 3.2,
+          "cacheRead": 0.2,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 1,
+            "output": 3.2,
+            "cacheRead": 0.2,
+            "cacheWrite": "—"
+          }
+        },
+        "minimax-m3": {
+          "name": "MiniMax M3",
+          "provider": "MiniMax",
+          "category": "opensource",
+          "input": 0.3,
+          "output": 1.2,
+          "cacheRead": 0.06,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 0.3,
+            "output": 1.2,
+            "cacheRead": 0.06,
+            "cacheWrite": "—"
+          }
+        },
+        "minimax-m2.7": {
+          "name": "MiniMax M2.7",
+          "provider": "MiniMax",
+          "category": "opensource",
+          "input": 0.3,
+          "output": 1.2,
+          "cacheRead": 0.06,
+          "cacheWrite": 0.06,
+          "cacheWriteSource": "commandcode-rate",
+          "sourceAmounts": {
+            "input": 0.3,
+            "output": 1.2,
+            "cacheRead": 0.06,
+            "cacheWrite": "$0.06"
+          }
+        },
+        "minimax-m2.5": {
+          "name": "MiniMax M2.5",
+          "provider": "MiniMax",
+          "category": "opensource",
+          "input": 0.3,
+          "output": 1.2,
+          "cacheRead": 0.03,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 0.3,
+            "output": 1.2,
+            "cacheRead": 0.03,
             "cacheWrite": "—"
           }
         },
@@ -420,6 +580,22 @@
             "cacheWrite": 2.5
           }
         },
+        "qwen-3.8-27b": {
+          "name": "Qwen 3.8 27B",
+          "provider": "Alibaba",
+          "category": "opensource",
+          "input": 0.4,
+          "output": 3,
+          "cacheRead": 0.04,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 0.4,
+            "output": 3,
+            "cacheRead": 0.04,
+            "cacheWrite": "—"
+          }
+        },
         "qwen-3.6-max": {
           "name": "Qwen 3.6 Max Preview",
           "provider": "Alibaba",
@@ -569,6 +745,38 @@
             "cacheWrite": "—"
           }
         },
+        "step-3.7-flash": {
+          "name": "Step 3.7 Flash",
+          "provider": "StepFun",
+          "category": "opensource",
+          "input": 0.2,
+          "output": 1.15,
+          "cacheRead": 0.04,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 0.2,
+            "output": 1.15,
+            "cacheRead": 0.04,
+            "cacheWrite": "—"
+          }
+        },
+        "step-3.5-flash": {
+          "name": "Step 3.5 Flash",
+          "provider": "StepFun",
+          "category": "opensource",
+          "input": 0.09,
+          "output": 0.3,
+          "cacheRead": 0.02,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 0.09,
+            "output": 0.3,
+            "cacheRead": 0.02,
+            "cacheWrite": "—"
+          }
+        },
         "mimo-v2.6-pro": {
           "name": "MiMo V2.6 Pro",
           "provider": "Xiaomi",
@@ -617,6 +825,38 @@
             "cacheWrite": "—"
           }
         },
+        "mimo-v2.5-pro": {
+          "name": "MiMo V2.5 Pro",
+          "provider": "Xiaomi",
+          "category": "opensource",
+          "input": 0.435,
+          "output": 0.87,
+          "cacheRead": 0.0036,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 0.435,
+            "output": 0.87,
+            "cacheRead": 0.0036,
+            "cacheWrite": "—"
+          }
+        },
+        "mimo-v2.5": {
+          "name": "MiMo V2.5",
+          "provider": "Xiaomi",
+          "category": "opensource",
+          "input": 0.14,
+          "output": 0.28,
+          "cacheRead": 0.0028,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 0.14,
+            "output": 0.28,
+            "cacheRead": 0.0028,
+            "cacheWrite": "—"
+          }
+        },
         "nemotron-3-ultra": {
           "name": "Nemotron 3 Ultra",
           "provider": "NVIDIA",
@@ -630,6 +870,22 @@
             "input": 0.6,
             "output": 2.4,
             "cacheRead": 0.12,
+            "cacheWrite": "—"
+          }
+        },
+        "inkling": {
+          "name": "Inkling",
+          "provider": "Thinking Machines",
+          "category": "opensource",
+          "input": 1,
+          "output": 4.05,
+          "cacheRead": 0.17,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 1,
+            "output": 4.05,
+            "cacheRead": 0.17,
             "cacheWrite": "—"
           }
         },
@@ -1256,51 +1512,87 @@
             "cacheRead": 0.002,
             "cacheWrite": "—"
           }
+        },
+        "grok-4.5": {
+          "name": "Grok 4.5",
+          "provider": "xAI",
+          "category": "opensource",
+          "input": 2,
+          "output": 6,
+          "cacheRead": 0.5,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 2,
+            "output": 6,
+            "cacheRead": 0.5,
+            "cacheWrite": "—"
+          }
+        },
+        "grok-4.6": {
+          "name": "Grok 4.6",
+          "provider": "xAI",
+          "category": "opensource",
+          "input": 2,
+          "output": 6,
+          "cacheRead": 0.5,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 2,
+            "output": 6,
+            "cacheRead": 0.5,
+            "cacheWrite": "—"
+          },
+          "contextTiers": [
+            {
+              "maxContext": 200000,
+              "inputCost": 2,
+              "outputCost": 6,
+              "cacheReadCost": 0.5
+            },
+            {
+              "inputCost": 4,
+              "outputCost": 12,
+              "cacheReadCost": 1
+            }
+          ]
+        },
+        "grok-4.7": {
+          "name": "Grok 4.7",
+          "provider": "xAI",
+          "category": "opensource",
+          "input": 1.2,
+          "output": 3.6,
+          "cacheRead": 0.3,
+          "cacheWrite": 0,
+          "cacheWriteSource": "commandcode-no-charge",
+          "sourceAmounts": {
+            "input": 1.2,
+            "output": 3.6,
+            "cacheRead": 0.3,
+            "cacheWrite": "—"
+          },
+          "contextTiers": [
+            {
+              "maxContext": 200000,
+              "inputCost": 1.2,
+              "outputCost": 3.6,
+              "cacheReadCost": 0.3
+            },
+            {
+              "inputCost": 2.4,
+              "outputCost": 7.2,
+              "cacheReadCost": 0.6
+            }
+          ]
         }
       },
       "excludedModelIds": [
-        "tencent/hy3-paid",
-        "kimi-k2.7-code",
-        "kimi-k2.7-code-highspeed",
-        "kimi-k2.6",
-        "kimi-k2.5",
-        "glm-5.1",
-        "glm-5",
-        "minimax-m3",
-        "minimax-m2.7",
-        "minimax-m2.5",
-        "qwen-3.8-27b",
-        "qwen-3.6-plus",
-        "step-3.7-flash",
-        "step-3.5-flash",
-        "mimo-v2.5-pro",
-        "mimo-v2.5",
-        "inkling",
-        "grok-4.5",
-        "grok-4.6",
-        "grok-4.7"
+        "qwen-3.6-plus"
       ],
       "excludedModelReasons": {
-        "tencent/hy3-paid": "commandcode/tencent/hy3-paid has incomplete flat context rate for cacheWrite",
-        "kimi-k2.7-code": "commandcode/kimi-k2.7-code has incomplete flat context rate for cacheWrite",
-        "kimi-k2.7-code-highspeed": "commandcode/kimi-k2.7-code-highspeed has incomplete flat context rate for cacheWrite",
-        "kimi-k2.6": "commandcode/kimi-k2.6 has incomplete flat context rate for cacheWrite",
-        "kimi-k2.5": "commandcode/kimi-k2.5 has incomplete flat context rate for cacheWrite",
-        "glm-5.1": "commandcode/glm-5.1 has incomplete flat context rate for cacheWrite",
-        "glm-5": "commandcode/glm-5 has incomplete flat context rate for cacheWrite",
-        "minimax-m3": "commandcode/minimax-m3 has incomplete flat context rate for cacheWrite",
-        "minimax-m2.7": "commandcode/minimax-m2.7 has incomplete flat context rate for cacheWrite",
-        "minimax-m2.5": "commandcode/minimax-m2.5 has incomplete flat context rate for cacheWrite",
-        "qwen-3.8-27b": "commandcode/qwen-3.8-27b has incomplete flat context rate for cacheWrite",
-        "qwen-3.6-plus": "commandcode/qwen-3.6-plus has incomplete flat context rate for cacheWrite",
-        "step-3.7-flash": "commandcode/step-3.7-flash has incomplete flat context rate for cacheWrite",
-        "step-3.5-flash": "commandcode/step-3.5-flash has incomplete flat context rate for cacheWrite",
-        "mimo-v2.5-pro": "commandcode/mimo-v2.5-pro has incomplete flat context rate for cacheWrite",
-        "mimo-v2.5": "commandcode/mimo-v2.5 has incomplete flat context rate for cacheWrite",
-        "inkling": "commandcode/inkling has incomplete flat context rate for cacheWrite",
-        "grok-4.5": "commandcode/grok-4.5 has incomplete flat context rate for cacheWrite",
-        "grok-4.6": "commandcode/grok-4.6 has incomplete flat context rate for cacheWrite",
-        "grok-4.7": "commandcode/grok-4.7 has incomplete flat context rate for cacheWrite"
+        "qwen-3.6-plus": "commandcode/qwen-3.6-plus has incomplete flat context rate for cacheWrite"
       },
       "rateRecords": [
         {
@@ -3801,6 +4093,198 @@
         },
         {
           "schemaVersion": 1,
+          "id": "commandcode|glm-5|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "glm-5",
+          "component": "cacheRead",
+          "sourceAmount": "0.2",
+          "amount": 0.2,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:bce336ca2225542555a7f529928a54c08ce0b70035c32cea7f4b6cfc0182b1d7"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|glm-5|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "glm-5",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:cb763ddac061a1edf6e6aa0b292080000be869346008c2d4d2f42fd9d877e8f7"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|glm-5|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "glm-5",
+          "component": "input",
+          "sourceAmount": "1",
+          "amount": 1,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:ff1734c7a063eb7a797e6156ffe48352b797503f36703f58cab5cd5550b4fc29"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|glm-5|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "glm-5",
+          "component": "output",
+          "sourceAmount": "3.2",
+          "amount": 3.2,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:3d45504e55f3aeea931b9eb22830e7b2cb8558bb2a60689d27324807a77f2441"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|glm-5.1|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "glm-5.1",
+          "component": "cacheRead",
+          "sourceAmount": "0.26",
+          "amount": 0.26,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:53e800e3028216980fd0ab41235fe3cc4cf701fe61752ce5a3e1c13095c952eb"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|glm-5.1|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "glm-5.1",
+          "component": "cacheWrite",
+          "sourceAmount": "$0.26",
+          "amount": 0.26,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:6e7101e186cbace37a7844cf541349275f4cb8269e92f1ae94ff205de9dfb0a3"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|glm-5.1|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "glm-5.1",
+          "component": "input",
+          "sourceAmount": "1.4",
+          "amount": 1.4,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:50b75a5d6af2bb93ddcec6f4028f755b076d63f6b9d12682ddfad6476edbe972"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|glm-5.1|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "glm-5.1",
+          "component": "output",
+          "sourceAmount": "4.4",
+          "amount": 4.4,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:dc7fb79a859a5c6b3d4abda4453a9822aaa25766ba333aff0fa2f2460e09ca77"
+        },
+        {
+          "schemaVersion": 1,
           "id": "commandcode|glm-5.2|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
           "provider": "commandcode",
           "model": "glm-5.2",
@@ -5817,6 +6301,582 @@
         },
         {
           "schemaVersion": 1,
+          "id": "commandcode|grok-4.5|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "grok-4.5",
+          "component": "cacheRead",
+          "sourceAmount": "0.5",
+          "amount": 0.5,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:693616728b7b57485bce913c5188a96f144524c2d81bb5238537e0af86af87b9"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.5|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "grok-4.5",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:9e1c11a134caac484232742f624422a9a08c712d84825051ba50279b0c8f3b11"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.5|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "grok-4.5",
+          "component": "input",
+          "sourceAmount": "2",
+          "amount": 2,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:a0b4fbaafcc8eb2132f39bbc6196c1740d2833089d2f0641a0d84f946e538f08"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.5|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "grok-4.5",
+          "component": "output",
+          "sourceAmount": "6",
+          "amount": 6,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:029f006648111218b44d78b3a5e88d790eb299daa649c07994cb8459ec9f7d4a"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.6|cacheRead|2026-09-25T09:01:23.164Z|flat|0|200000",
+          "provider": "commandcode",
+          "model": "grok-4.6",
+          "component": "cacheRead",
+          "sourceAmount": "0.5",
+          "amount": 0.5,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": 200000
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:2cff1ba38974d39dbc6d17a0a9ee96f300aee169e975d7363962ea3107f767a0"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.6|cacheRead|2026-09-25T09:01:23.164Z|flat|200001|unbounded",
+          "provider": "commandcode",
+          "model": "grok-4.6",
+          "component": "cacheRead",
+          "sourceAmount": "1",
+          "amount": 1,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 200001,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:eec76752c92b1a05d31dab30d2bc4f6ea0b3d49265b23982b65cbe7b9b4fee5d"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.6|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|200000",
+          "provider": "commandcode",
+          "model": "grok-4.6",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": 200000
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:d1ea56445143b289512b04616a7905d04086cd73a1726a3f3d4838f6ea594a01"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.6|cacheWrite|2026-09-25T09:01:23.164Z|flat|200001|unbounded",
+          "provider": "commandcode",
+          "model": "grok-4.6",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 200001,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:56213cf7f30ab4749d0fe0bcde2981039c6c61ee1712812dafe4c6629573fee6"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.6|input|2026-09-25T09:01:23.164Z|flat|0|200000",
+          "provider": "commandcode",
+          "model": "grok-4.6",
+          "component": "input",
+          "sourceAmount": "2",
+          "amount": 2,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": 200000
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:cfffac22462e48bc7e6a42e9a55028e0a9b074a97ca1026072a2a6b1b1324451"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.6|input|2026-09-25T09:01:23.164Z|flat|200001|unbounded",
+          "provider": "commandcode",
+          "model": "grok-4.6",
+          "component": "input",
+          "sourceAmount": "4",
+          "amount": 4,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 200001,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:bcc9b145155999d0d92f4d1dd8987c80a8435b2f9824979a6ae1f44918b5c6b3"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.6|output|2026-09-25T09:01:23.164Z|flat|0|200000",
+          "provider": "commandcode",
+          "model": "grok-4.6",
+          "component": "output",
+          "sourceAmount": "6",
+          "amount": 6,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": 200000
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:a4c3a9fad898ed970a4627206c53be7dfc53a7d9a8303a7f06b788bc58b4b9a4"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.6|output|2026-09-25T09:01:23.164Z|flat|200001|unbounded",
+          "provider": "commandcode",
+          "model": "grok-4.6",
+          "component": "output",
+          "sourceAmount": "12",
+          "amount": 12,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 200001,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:1cb0ab4c0d2c0a7fafd05b779a24ca62fa580f4390318063fcdfc863bc68bf00"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.7|cacheRead|2026-09-25T09:01:23.164Z|flat|0|200000",
+          "provider": "commandcode",
+          "model": "grok-4.7",
+          "component": "cacheRead",
+          "sourceAmount": "0.3",
+          "amount": 0.3,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": 200000
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:65a692fc1acf630cc47aac1f2655a34cca08d4a1d8ea3c92065ceb4f08c9f9b4"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.7|cacheRead|2026-09-25T09:01:23.164Z|flat|200001|unbounded",
+          "provider": "commandcode",
+          "model": "grok-4.7",
+          "component": "cacheRead",
+          "sourceAmount": "0.6",
+          "amount": 0.6,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 200001,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:a935dc58477f557ef68ff105f0007b3a04e34016bdd4d05050c4940aa5453d03"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.7|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|200000",
+          "provider": "commandcode",
+          "model": "grok-4.7",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": 200000
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:332a508783e0c0c7509f5a0375788c6e37c3fb4fb25249d7e67b7664d59f997a"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.7|cacheWrite|2026-09-25T09:01:23.164Z|flat|200001|unbounded",
+          "provider": "commandcode",
+          "model": "grok-4.7",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 200001,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:021a1fd9552b1f6cad412ad6b8bbbe51e4788c3d0068474d24590d9682dd9d08"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.7|input|2026-09-25T09:01:23.164Z|flat|0|200000",
+          "provider": "commandcode",
+          "model": "grok-4.7",
+          "component": "input",
+          "sourceAmount": "1.2",
+          "amount": 1.2,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": 200000
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:be4f7bc840c5662ceed2c50f9262066dfbe3fe2b22eed5b4d46067ab5cad99e8"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.7|input|2026-09-25T09:01:23.164Z|flat|200001|unbounded",
+          "provider": "commandcode",
+          "model": "grok-4.7",
+          "component": "input",
+          "sourceAmount": "2.4",
+          "amount": 2.4,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 200001,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:b49f04b5351ab89cf92bfafbedd76a5c4e2d8b57c64980335b18725735c2faf3"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.7|output|2026-09-25T09:01:23.164Z|flat|0|200000",
+          "provider": "commandcode",
+          "model": "grok-4.7",
+          "component": "output",
+          "sourceAmount": "3.6",
+          "amount": 3.6,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": 200000
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:20a49fc7d32923224ce14a19b939c38a5197632cd3436fd5597c42889efabf2b"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|grok-4.7|output|2026-09-25T09:01:23.164Z|flat|200001|unbounded",
+          "provider": "commandcode",
+          "model": "grok-4.7",
+          "component": "output",
+          "sourceAmount": "7.2",
+          "amount": 7.2,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 200001,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:a044e18803d60c89866d4a5310463479e95bdf97e0aab35bd429e054df3d9d11"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|inkling|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "inkling",
+          "component": "cacheRead",
+          "sourceAmount": "0.17",
+          "amount": 0.17,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:4a220e1cee93b95a542ca2dad92764b47984db5a299a96a4ddf9fc2d69c05b46"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|inkling|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "inkling",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:c801f9bed47082a6ff3640c86cc211ca6671457dacaee0e68b91e69458c25631"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|inkling|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "inkling",
+          "component": "input",
+          "sourceAmount": "1",
+          "amount": 1,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:36e3b1d4ca3f6307ff37ef6ffd5d9fb438c2063abd5159d4076bc0cd7c9a6d92"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|inkling|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "inkling",
+          "component": "output",
+          "sourceAmount": "4.05",
+          "amount": 4.05,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:06a2f5a9b8d61a3aa5345af0215787b164975e44c25d777923d141f81c4da975"
+        },
+        {
+          "schemaVersion": 1,
           "id": "commandcode|inkling-small|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
           "provider": "commandcode",
           "model": "inkling-small",
@@ -5910,6 +6970,390 @@
             "fetchedAt": "2026-09-25T09:01:23.164Z"
           },
           "fingerprint": "sha256:73087b4338d39259961e3d95c7ba1ab9dd81b36dabf493e35255a5ad486d15bf"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|kimi-k2.5|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "kimi-k2.5",
+          "component": "cacheRead",
+          "sourceAmount": "0.1",
+          "amount": 0.1,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:b6269d4dd60b29c509fa63fa7b1ed9f599a087ee4cee623798f5267f7f7e5f47"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|kimi-k2.5|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "kimi-k2.5",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:6fe1a7c614484339bd889f6b54601cb59590d6d5b93f2dd5a047d234d5e249a3"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|kimi-k2.5|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "kimi-k2.5",
+          "component": "input",
+          "sourceAmount": "0.6",
+          "amount": 0.6,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:8764ccafe2a8e895855aef45634e0b333d736b83a867870b014be5e7a5d36e89"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|kimi-k2.5|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "kimi-k2.5",
+          "component": "output",
+          "sourceAmount": "3",
+          "amount": 3,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:b5365efc78416147d8fca9f8ebbda21151496aa826b5210b83e304188109e67f"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|kimi-k2.6|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "kimi-k2.6",
+          "component": "cacheRead",
+          "sourceAmount": "0.16",
+          "amount": 0.16,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:ff333bb685b0051884b4798b25bc3eaa2193ad40294506cf4b794afdcf346c6e"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|kimi-k2.6|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "kimi-k2.6",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:139129bca3f23c421c8318317694ce198e247df4475ab98b0873acee662a3917"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|kimi-k2.6|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "kimi-k2.6",
+          "component": "input",
+          "sourceAmount": "0.95",
+          "amount": 0.95,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:6e941445d927116845531eee5dfa55fca67b35ee94631f48c6f99ec2edc99773"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|kimi-k2.6|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "kimi-k2.6",
+          "component": "output",
+          "sourceAmount": "4",
+          "amount": 4,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:f1c2efe5d6724f16d20d946b0dc05e1ff50bb4a57207e2d90198cb12c5c08af3"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|kimi-k2.7-code|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "kimi-k2.7-code",
+          "component": "cacheRead",
+          "sourceAmount": "0.19",
+          "amount": 0.19,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:c7842adfb623c04bc2abfd964e5c65a99de162dc496d5490766dfc7fe659dced"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|kimi-k2.7-code|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "kimi-k2.7-code",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:e5138e8b48bce6e85b0322bbeca05ded4286c27b6e45d065650d0b699652cdc2"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|kimi-k2.7-code|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "kimi-k2.7-code",
+          "component": "input",
+          "sourceAmount": "0.95",
+          "amount": 0.95,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:9e6622859df097f8223687b3e991dae9598d0269218274995359ec47a4594a20"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|kimi-k2.7-code|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "kimi-k2.7-code",
+          "component": "output",
+          "sourceAmount": "4",
+          "amount": 4,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:0d903f3c1bf5d26acfdb9db07012ac881bcfd7f4a52a87a5b5571b6525182d82"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|kimi-k2.7-code-highspeed|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "kimi-k2.7-code-highspeed",
+          "component": "cacheRead",
+          "sourceAmount": "0.38",
+          "amount": 0.38,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:7ff43b82f6133def4da2e2b56aefb124e0bfd17ce30eae977dc20232818f90af"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|kimi-k2.7-code-highspeed|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "kimi-k2.7-code-highspeed",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:ce48bc3b2d35ab5b6fb54692371b75ae99d6e71fb4576a1950e90b9fb4e845ea"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|kimi-k2.7-code-highspeed|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "kimi-k2.7-code-highspeed",
+          "component": "input",
+          "sourceAmount": "1.9",
+          "amount": 1.9,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:e7cae957ce1cd027392b3b9dde1fe45cb9fbb8679822b636b73a685d4066a3a3"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|kimi-k2.7-code-highspeed|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "kimi-k2.7-code-highspeed",
+          "component": "output",
+          "sourceAmount": "8",
+          "amount": 8,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:c65cf838af0950c539d98ae991ee1e0893484afb4ab8fba594be7e5c3a2f169a"
         },
         {
           "schemaVersion": 1,
@@ -6102,6 +7546,198 @@
             "fetchedAt": "2026-09-25T09:01:23.164Z"
           },
           "fingerprint": "sha256:1146439cb82481bfa0e9d223a5ab007e30e6f8bfe3169b7315eb54e2a988155d"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|mimo-v2.5|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "mimo-v2.5",
+          "component": "cacheRead",
+          "sourceAmount": "0.0028",
+          "amount": 0.0028,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:071e84c21a40dbe714d78057252b29e7eb769dc7f8d7e8fafabbf079dde2967a"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|mimo-v2.5|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "mimo-v2.5",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:29939df36c1ed67c3d13dfe4ca164ad8336ea534b2257bcb4a81102ad4bd46e7"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|mimo-v2.5|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "mimo-v2.5",
+          "component": "input",
+          "sourceAmount": "0.14",
+          "amount": 0.14,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:38f51e8477489f2dc9f60af55786f24ec05b9678f0e2a28a83e72e38c52decdb"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|mimo-v2.5|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "mimo-v2.5",
+          "component": "output",
+          "sourceAmount": "0.28",
+          "amount": 0.28,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:4166debceab879d959f0d2a693faee3fd32fe15e0e0f9ee13cbd20b7609ca45f"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|mimo-v2.5-pro|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "mimo-v2.5-pro",
+          "component": "cacheRead",
+          "sourceAmount": "0.0036",
+          "amount": 0.0036,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:37a75d7732b1eb0ea3fce66f5c57ca8ca6e3f19574a7431b0b92bab966ccead9"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|mimo-v2.5-pro|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "mimo-v2.5-pro",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:0ca90f45dadab755626ff558fe901dd07bda5e99441140537c439538677dfe9a"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|mimo-v2.5-pro|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "mimo-v2.5-pro",
+          "component": "input",
+          "sourceAmount": "0.435",
+          "amount": 0.435,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:f9c5d10f3fa20c4734e216f7e3972682b39372239c7db8f88e9bd8599ffe83ff"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|mimo-v2.5-pro|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "mimo-v2.5-pro",
+          "component": "output",
+          "sourceAmount": "0.87",
+          "amount": 0.87,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:263302bd3bbd963abbb5ba8909c2af5768b90421efedd6ae2f9886d534371a76"
         },
         {
           "schemaVersion": 1,
@@ -6390,6 +8026,294 @@
             "fetchedAt": "2026-09-25T09:01:23.164Z"
           },
           "fingerprint": "sha256:329e6ab8b9733e4bfe7de18a7de02baff532fb14b11097dfaaecac319b5dd6fc"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|minimax-m2.5|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "minimax-m2.5",
+          "component": "cacheRead",
+          "sourceAmount": "0.03",
+          "amount": 0.03,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:42d2cf5669eb3e79cb84f786dd3a4e8ab2cb74a79e00d165d8f4f22980329060"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|minimax-m2.5|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "minimax-m2.5",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:b1e8201d331e589918c29e6e9045ae860ccafad15679d53f72d3c701b4259345"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|minimax-m2.5|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "minimax-m2.5",
+          "component": "input",
+          "sourceAmount": "0.3",
+          "amount": 0.3,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:510baf6ca580a7f922960948eebca5b6867273b3f4f8cb734e47dda45283e9a3"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|minimax-m2.5|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "minimax-m2.5",
+          "component": "output",
+          "sourceAmount": "1.2",
+          "amount": 1.2,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:beed08ef79a7e1adb307c26b53941b5478a84e2710c5aff4053ee48a72dd9441"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|minimax-m2.7|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "minimax-m2.7",
+          "component": "cacheRead",
+          "sourceAmount": "0.06",
+          "amount": 0.06,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:be2a0c4134f08eb55a2b0d8e2c9d24b01fac1ae78e698ad8e39b16be2be4f2ae"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|minimax-m2.7|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "minimax-m2.7",
+          "component": "cacheWrite",
+          "sourceAmount": "$0.06",
+          "amount": 0.06,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:0d55697064ce98c326a563c416a0f6910c01178bab51f22c164fa4de965d48c4"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|minimax-m2.7|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "minimax-m2.7",
+          "component": "input",
+          "sourceAmount": "0.3",
+          "amount": 0.3,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:b9c5e47393291660be35ca5e233d9a4d8db91ead5a80ea8398c05efc36c4364f"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|minimax-m2.7|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "minimax-m2.7",
+          "component": "output",
+          "sourceAmount": "1.2",
+          "amount": 1.2,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:e075da533c42e14e911569d7e04274f9116263e510c9cfa9a0985663896236ac"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|minimax-m3|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "minimax-m3",
+          "component": "cacheRead",
+          "sourceAmount": "0.06",
+          "amount": 0.06,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:42313b85266035463f8c8ab54457ca0debadc1056cdca5dc50abf40dd2e0ef76"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|minimax-m3|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "minimax-m3",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:5acd6e01f1a672aab25c6b19af7dbe7cd6e9b3f1cdd725a09f7ff8efba9882e0"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|minimax-m3|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "minimax-m3",
+          "component": "input",
+          "sourceAmount": "0.3",
+          "amount": 0.3,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:d7a999989b94ff61e562dba809e63f02fc4d271886b8e697dc3379ba8e630a14"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|minimax-m3|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "minimax-m3",
+          "component": "output",
+          "sourceAmount": "1.2",
+          "amount": 1.2,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:b4713cd4c40a7ea2b9be2f2eb2c133dcabce0694292890aeed629b16c05fbfc1"
         },
         {
           "schemaVersion": 1,
@@ -7641,6 +9565,102 @@
         },
         {
           "schemaVersion": 1,
+          "id": "commandcode|qwen-3.8-27b|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "qwen-3.8-27b",
+          "component": "cacheRead",
+          "sourceAmount": "0.04",
+          "amount": 0.04,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:ffbca076a529786486c7238197e83d213e97971c867f49e7b1b52fff5de8f82a"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|qwen-3.8-27b|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "qwen-3.8-27b",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:75a5a4a55f7b1c1a739fc5797df1b07115e356088acab0a19ab8bfbec69d49e7"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|qwen-3.8-27b|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "qwen-3.8-27b",
+          "component": "input",
+          "sourceAmount": "0.4",
+          "amount": 0.4,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:0fa70344d3706b2f7fdbae9c2ed2b4a1b16524dfd28ffa648eadbbebdac39cb8"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|qwen-3.8-27b|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "qwen-3.8-27b",
+          "component": "output",
+          "sourceAmount": "3",
+          "amount": 3,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:bbc57dcf1ef6f93eef3c496724606806091b4990d23ed1bab1dcf7b589f1befa"
+        },
+        {
+          "schemaVersion": 1,
           "id": "commandcode|qwen-3.8-flash|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
           "provider": "commandcode",
           "model": "qwen-3.8-flash",
@@ -8025,6 +10045,198 @@
         },
         {
           "schemaVersion": 1,
+          "id": "commandcode|step-3.5-flash|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "step-3.5-flash",
+          "component": "cacheRead",
+          "sourceAmount": "0.02",
+          "amount": 0.02,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:262cc2980e1b7791efeac803cf2fd9bd58448e8fc9e53c97d15d278447c12551"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|step-3.5-flash|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "step-3.5-flash",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:bd2b56388c81da1640a11f0fd3987a7df1f3769fe76c317d501115d77373a62a"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|step-3.5-flash|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "step-3.5-flash",
+          "component": "input",
+          "sourceAmount": "0.09",
+          "amount": 0.09,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:08a1c6c7963aeda617e0db44502364a1279a0b3dd95547179e210995be6747b1"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|step-3.5-flash|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "step-3.5-flash",
+          "component": "output",
+          "sourceAmount": "0.3",
+          "amount": 0.3,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:ea877a87f05fa19fdd59fe8dd32893bc1c2457dfa418aef4074efd29ab8e667b"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|step-3.7-flash|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "step-3.7-flash",
+          "component": "cacheRead",
+          "sourceAmount": "0.04",
+          "amount": 0.04,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:014219602514d7267c2612fba09f11385704efc4dd551385d01da13938447a11"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|step-3.7-flash|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "step-3.7-flash",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:7b698c7e76f5baeb560169ea7c66cdeac4fe71ed1b803e38beec0db3c0de8bb2"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|step-3.7-flash|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "step-3.7-flash",
+          "component": "input",
+          "sourceAmount": "0.2",
+          "amount": 0.2,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:cfc7602156af34c27dfcad0ff09a29b3771396382e39c608af74c22b79a8f4d9"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|step-3.7-flash|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "step-3.7-flash",
+          "component": "output",
+          "sourceAmount": "1.15",
+          "amount": 1.15,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:e176207b01a964aaafe497e2fc55a57f4fca6f0ac80c61940eb8ac3a9a1c0ce6"
+        },
+        {
+          "schemaVersion": 1,
           "id": "commandcode|step-5-preview|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
           "provider": "commandcode",
           "model": "step-5-preview",
@@ -8118,6 +10330,102 @@
             "fetchedAt": "2026-09-25T09:01:23.164Z"
           },
           "fingerprint": "sha256:6a181a44e9a63acc3f40edd2b74e370c9e8cb5a4ecd54da3efc35632117928ae"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|tencent/hy3-paid|cacheRead|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "tencent/hy3-paid",
+          "component": "cacheRead",
+          "sourceAmount": "0.035",
+          "amount": 0.035,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:6b76267f573acb95504a9de431574f0a8ad765f3df4907a80ca904a30f2b782d"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|tencent/hy3-paid|cacheWrite|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "tencent/hy3-paid",
+          "component": "cacheWrite",
+          "sourceAmount": "—",
+          "amount": 0,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:cfdeaddaf54cbd6a7ac4938b50a6a2b5cfc03951f1c51cd2b668c57a9164fcb4"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|tencent/hy3-paid|input|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "tencent/hy3-paid",
+          "component": "input",
+          "sourceAmount": "0.14",
+          "amount": 0.14,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:6fa6a9ee4c9fa717c49c101b326da54019b0557b2a5e0fbc092b5f44a92fde31"
+        },
+        {
+          "schemaVersion": 1,
+          "id": "commandcode|tencent/hy3-paid|output|2026-09-25T09:01:23.164Z|flat|0|unbounded",
+          "provider": "commandcode",
+          "model": "tencent/hy3-paid",
+          "component": "output",
+          "sourceAmount": "0.58",
+          "amount": 0.58,
+          "currency": "USD",
+          "unit": "per_1m_tokens",
+          "effectiveFrom": "2026-09-25T09:01:23.164Z",
+          "effectiveThrough": null,
+          "context": {
+            "minTokens": 0,
+            "maxTokens": null
+          },
+          "timeBand": "flat",
+          "source": {
+            "url": "https://commandcode.ai/docs/resources/pricing-limits",
+            "parserVersion": 3,
+            "fetchedAt": "2026-09-25T09:01:23.164Z"
+          },
+          "fingerprint": "sha256:b336292786206fe9ed91c1df9ab58760bc82729d6707151b2a98718c08067bef"
         },
         {
           "schemaVersion": 1,
