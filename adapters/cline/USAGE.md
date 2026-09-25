@@ -27,7 +27,7 @@ node $SessionCost
 | `--model <name>` | Model substring filter |
 | `--include-children` | Include recursive subagent sessions |
 | `--list [n]` | Recent-session table, default 10 |
-| `--json` | Schema-versioned JSON |
+| `--json` | Shared normalized contract JSON |
 | `--config <path>` | Standing-summary config |
 | `--account` | Live read-only account API view |
 | `--account-days <n>` | Account history window, default 45 |
@@ -37,6 +37,8 @@ node $SessionCost
 | `--data-dir <path>` | Override Cline data directory |
 | `--help` / `-h` | CLI help |
 
+
+`--json` reports use normalized contract version `1.0.0`. Cline labels its value as a runtime-recorded cost; token semantics, selection, coverage, provenance, warnings, and session-graph state are explicit.
 ## Session modes
 
 ```powershell

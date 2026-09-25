@@ -20,6 +20,7 @@ import {
   usageSummary,
 } from './lib/session-cost-core.mjs';
 import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from './lib/session-graph.mjs';
+import { REPORT_CONTRACT_VERSION, withNormalizedContract } from './lib/report-contract.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA_DIR = path.resolve(SCRIPT_DIR, '..', '..', '..');
@@ -42,6 +43,21 @@ const opts = {
   dashboard: false,
   out: null,
 };
+
+const CONTRACT_RUNTIME = Object.freeze({
+  id: 'cline',
+  costBasis: 'runtime-recorded',
+  storageSource: 'data/db/sessions.db and session message records',
+  inputTokenMeaning: 'includes-cache',
+  reasoningIncludedInOutput: 'not-reported',
+  provenanceKind: 'runtime-ledger',
+  provenanceSource: 'Cline sessions.db/messages',
+  rateSources: [],
+});
+
+function normalizeClineReport(report, selection = null) {
+  return withNormalizedContract(report, { runtime: CONTRACT_RUNTIME, selection });
+}
 
 for (let i = 2; i < process.argv.length; i++) {
   const arg = process.argv[i];
@@ -158,7 +174,7 @@ function costState(metrics) {
   if (metrics.pricedCalls === 0) return { label: 'not recorded', note: `0/${metrics.calls} calls have cost` };
   return { label: usd(metrics.cost), note: `partial; ${metrics.unpricedCalls}/${metrics.calls} calls lack cost` };
 }
-function reportFor(row, all, graph, includeChildren) {
+function reportFor(row, all, graph, includeChildren, selection = null) {
   const ids = collectSessionIds([row.session_id], graph, { includeChildren });
   const descendants = graph.descendants(row.session_id);
   const excludedSessionIds = [...descendants].filter((id) => !ids.has(id));
@@ -195,7 +211,7 @@ function reportFor(row, all, graph, includeChildren) {
     }
   }
 
-  return {
+  return normalizeClineReport({
     schemaVersion: SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
     snapshot: reportStatus(row),
@@ -218,7 +234,7 @@ function reportFor(row, all, graph, includeChildren) {
     total,
     totalSource,
     includedChildren: includeChildren,
-  };
+  }, selection);
 }
 function reportStatus(row) {
   return {
@@ -326,7 +342,7 @@ function aggregateReports(reports, label, duplicateSuppressedSessionIds = []) {
   const sessions = reports.flatMap((report) => report.sessions);
   for (const report of reports) combineMetrics(total, report.total);
   const unique = (values) => [...new Set(values)];
-  return {
+  return normalizeClineReport({
     schemaVersion: SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
     snapshot: { capturedAt: new Date().toISOString(), active: reports.some((report) => report.snapshot.active), state: 'aggregate' },
@@ -347,7 +363,11 @@ function aggregateReports(reports, label, duplicateSuppressedSessionIds = []) {
     total,
     totalSource: 'filtered-session-reports',
     includedChildren: opts.includeChildren,
-  };
+  }, {
+    method: label,
+    requestedId: null,
+    candidateIds: reports.map((report) => report.session.id),
+  });
 }
 function renderCompare(older, newer) {
   const delta = newer.usage.totalTokens - older.usage.totalTokens;
@@ -466,9 +486,13 @@ try {
     const recent = topLevel.includedRootIds
       .sort((a, b) => Date.parse(rowsById.get(b).started_at) - Date.parse(rowsById.get(a).started_at))
       .slice(0, opts.list)
-      .map((id) => reportFor(rowsById.get(id), all, graph, opts.includeChildren));
+      .map((id) => reportFor(rowsById.get(id), all, graph, opts.includeChildren, {
+        method: 'list',
+        requestedId: null,
+        candidateIds: topLevel.includedRootIds,
+      }));
     if (opts.json) {
-      console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, generatedAt: new Date().toISOString(), sessions: recent, duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds }, replacer, 2));
+      console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'cline', kind: 'report-list', generatedAt: new Date().toISOString(), sessions: recent, duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds }, replacer, 2));
     } else {
       for (const report of recent) {
         const billing = report.billing;
@@ -483,9 +507,13 @@ try {
     const reports = topLevel.includedRootIds
       .sort((a, b) => Date.parse(rowsById.get(b).started_at) - Date.parse(rowsById.get(a).started_at))
       .slice(0, 2)
-      .map((id) => reportFor(rowsById.get(id), all, graph, opts.includeChildren));
+      .map((id) => reportFor(rowsById.get(id), all, graph, opts.includeChildren, {
+        method: 'compare',
+        requestedId: null,
+        candidateIds: topLevel.includedRootIds,
+      }));
     if (reports.length < 2) die('--compare requires at least two matching sessions');
-    const output = { schemaVersion: SCHEMA_VERSION, generatedAt: new Date().toISOString(), comparison: { older: reports[1], newer: reports[0] }, duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds };
+    const output = { schemaVersion: SCHEMA_VERSION, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'cline', kind: 'report-comparison', generatedAt: new Date().toISOString(), comparison: { older: reports[1], newer: reports[0] }, duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds };
     if (opts.json) console.log(JSON.stringify(output, replacer, 2));
     else console.log(`${renderCompare(reports[1], reports[0])}${topLevel.duplicateSuppressedSessionIds.length ? `\nDuplicate-suppressed child selections: ${topLevel.duplicateSuppressedSessionIds.join(', ')}` : ''}`);
   } else if (opts.mode === 'last' || opts.mode === 'today' || opts.from || opts.to || opts.provider || opts.model) {
@@ -499,11 +527,19 @@ try {
     const topLevel = selectTopLevelCandidates(rows.map((row) => row.session_id), graph);
     const reports = topLevel.includedRootIds
       .sort((a, b) => Date.parse(rowsById.get(a).started_at) - Date.parse(rowsById.get(b).started_at))
-      .map((id) => reportFor(rowsById.get(id), all, graph, opts.includeChildren));
+      .map((id) => reportFor(rowsById.get(id), all, graph, opts.includeChildren, {
+        method: opts.mode,
+        requestedId: null,
+        candidateIds: topLevel.includedRootIds,
+      }));
     let report;
     if (reports.length === 1) {
       reports[0].duplicateSuppressedSessionIds = topLevel.duplicateSuppressedSessionIds;
-      report = reports[0];
+      report = normalizeClineReport(reports[0], {
+        method: opts.mode,
+        requestedId: null,
+        candidateIds: topLevel.includedRootIds,
+      });
     } else {
       report = aggregateReports(reports, opts.mode === 'today' ? 'today' : 'filtered-range', topLevel.duplicateSuppressedSessionIds);
     }
@@ -518,20 +554,21 @@ try {
     });
     if (selection.error) die(selection.error);
     if (!selection.row) die('no Cline session found');
-    const report = reportFor(selection.row, all, graph, opts.includeChildren);
-    report.selection = {
+    let report = reportFor(selection.row, all, graph, opts.includeChildren);
+    const selectionMetadata = {
       method: selection.method,
       requestedId: selection.requestedId,
-      ambiguousCandidates: selection.ambiguousCandidates,
+      candidateIds: selection.ambiguousCandidates,
       warning: selection.warning ?? null,
     };
     if (selection.warning) report.snapshot.warning = selection.warning;
+    report = normalizeClineReport(report, selectionMetadata);
     if (opts.dashboard) {
       const outputPath = writeDashboard(report, {
         outPath: opts.out ?? path.join(dataDir, 'data', 'reports', 'session-cost', 'session-dashboard.html'),
         title: 'Cline Session Cost Dashboard',
       });
-      if (opts.json) console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, dashboardPath: outputPath, report }, replacer, 2));
+      if (opts.json) console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'cline', kind: 'dashboard', generatedAt: new Date().toISOString(), dashboardPath: outputPath, report }, replacer, 2));
       else console.log(`Dashboard written: ${outputPath}`);
     } else if (opts.json) console.log(JSON.stringify(report, replacer, 2));
     else console.log(render(report));

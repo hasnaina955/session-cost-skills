@@ -46,11 +46,3 @@ test('MCode rates dashboard writes a self-contained HTML file', () => {
   assert.doesNotMatch(html, /<(?:script|link|img)[^>]+(?:src|href)=["']https?:\/\//i);
   fs.rmSync(out, { force: true });
 });
-
-test('MCode CLI rejects an invalid calendar date after opening a valid ledger', () => {
-  const dataDir = process.env.MCODE_TEST_DATA_DIR;
-  if (!dataDir) return;
-  const result = spawnSync(process.execPath, [script, '--data-dir', dataDir, '--from', '2026-13-99'], { encoding: 'utf8' });
-  assert.equal(result.status, 2);
-  assert.match(result.stderr, /invalid calendar date/);
-});

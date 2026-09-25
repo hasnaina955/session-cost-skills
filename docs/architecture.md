@@ -16,13 +16,27 @@ shared reporting and UX
     └── provider-rate catalog
 ```
 
-## Shared layer candidates
+## Shared reporting contract
 
-- Report schema and versioning
+`contracts/normalized-report-v1.schema.json` is the formal cross-adapter report envelope. Both CLIs pass their runtime-specific report through `shared/report-contract.mjs`, which requires:
+
+- runtime identity, storage source, and cost basis
+- token semantics for cache and reasoning fields
+- selection and snapshot metadata
+- separate recorded and estimated cost fields
+- coverage state and unknown-cost reasons
+- session-graph inclusion/exclusion/suppression sets
+- provenance and warnings
+
+Runtime-specific report fields remain as schema-approved extensions. The generated adapter copies keep each skill independently installable.
+
+## Shared layer
+
+- Normalized report schema and runtime validator
+- Recursive session-graph resolver
 - Date/provider/model filters
 - Current/last/today/compare modes
 - Snapshot metadata
-- Subagent aggregation orchestration
 - Common formatting and error types
 - Packaging and release validation
 

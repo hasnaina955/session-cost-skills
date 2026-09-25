@@ -31,12 +31,14 @@ node $SessionCost
 | `--dashboard` | Write a self-contained HTML dashboard |
 | `--out <path>` | Dashboard output path |
 | `--refresh-rates` | Re-fetch mirrored provider rates |
-| `--json` | Versioned JSON |
+| `--json` | Shared normalized contract JSON |
 | `--config <path>` | Standing-summary config |
 | `--data-dir <path>` | Override MCode data directory |
 | `--help` / `-h` | CLI help |
 
 ## Session modes
+
+`--json` reports use normalized contract version `1.0.0`. MCode labels its value as a provider-rate estimate, keeps `recordedCostUsd` null, and exposes token semantics, coverage, provenance, warnings, and session-graph state.
 
 ```powershell
 node $SessionCost
