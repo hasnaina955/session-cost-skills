@@ -15,6 +15,8 @@ All notable changes to this project are documented here.
 - Separated Cline end-to-end aggregates from reconstructed session scope and made billing classification provider-aware.
 - Made Cline account history windows exact, period completeness explicit, and malformed API pages fail deterministically.
 - Reconciled MIT and optional-support terms, corrected install paths, and added UTF-8/legal-copy documentation checks.
+- Added cross-platform/Bun CI matrix templates, artifact allowlist checks, and a Node.js 22.15 runtime floor.
+- Added repository secret/data ignore rules, a history-wide audit, and a documented audit result.
 
 ### Security
 
@@ -53,6 +55,6 @@ All notable changes to this project are documented here.
 
 ### Compatibility
 
-- Node.js 22.5 or newer
+- Node.js 22.15 or newer
 - Windows 10/11
 - Cline CLI and MiniMax Code CLI have separate adapters and installation targets

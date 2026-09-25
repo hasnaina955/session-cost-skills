@@ -19,3 +19,26 @@ dist/
 Thumbs.db
 .vscode/
 .idea/
+
+# Runtime credential files
+**/data/secrets.json
+**/data/settings/providers.json
+
+# Cline session databases, transcripts, and reports
+**/data/db/
+**/data/logs/
+**/data/reports/
+**/data/sessions/
+
+# MCode runtime databases and session transcripts
+**/v2/sqlite/
+**/v2/sessions/
+**/runtime-state.sqlite*
+
+# Local generated dashboards and customer archives
+**/*dashboard*.html
+**/*.7z
+**/*.tar.gz
+
+# Local session-cost state
+**/.session-cost/

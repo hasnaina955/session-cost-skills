@@ -1,0 +1,36 @@
+name: Verify session-cost skills
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [22.15, 24]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@1e60f620b9541dca151540f0bdec7c55d6b766c0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Verify
+        run: npm run verify
+
+  bun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: oven-sh/setup-bun@735343b65c2c7c9a92e630ae25a3e4dc8daf2dd
+      - name: Bun smoke tests
+        run: bun run scripts/check-docs.mjs && bun run scripts/check-artifacts.mjs && bun run scripts/run-tests.mjs

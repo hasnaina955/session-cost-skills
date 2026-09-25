@@ -31,7 +31,7 @@ This repository keeps runtime-specific accounting adapters separate while sharin
 - Cache-read and cache-write semantics preserved per runtime
 - Self-contained HTML dashboards with no external assets
 - Shared normalized JSON report contract with runtime extensions
-- Windows and Node.js 22.5+ support
+- Windows and Node.js 22.15+ support
 
 ## Installation
 
@@ -74,7 +74,7 @@ Never use the Cline fresh-input formula on MCode data.
 
 ## Development
 
-Install no npm dependencies is required for the current skill tests; Node.js 22.5+ and the built-in `node:sqlite` module are required.
+Install no npm dependencies is required for the current skill tests; Node.js 22.15+ and the built-in `node:sqlite` module are required.
 
 ```powershell
 npm run verify
@@ -84,6 +84,9 @@ Or run individual checks:
 
 ```powershell
 npm test
+npm run check:docs
+npm run check:artifacts
+npm run check:history
 npm run check:report-contract
 npm run check:provider-driver
 npm run check:provider-diagnostics
@@ -111,13 +114,15 @@ A Gumroad product may be offered for voluntary support, compatibility assistance
 - [MCode porting plan](docs/porting-plan.md)
 - [Optional support and troubleshooting](SUPPORT.md)
 - [Internal optional-support launch checklist](docs/gumroad-selling-guide.html)
+- [Cross-platform CI matrix template](docs/ci-matrix.yml)
 - [Changelog](CHANGELOG.md)
 - [Security policy](SECURITY.md)
+- [History secret and data audit](docs/history-audit.md)
 - [Contributing guide](CONTRIBUTING.md)
 
 ## Security and privacy
 
-Never commit API keys, OAuth tokens, `secrets.json`, session databases, generated account reports, or local logs. Local session reporting is offline. Cline account mode makes read-only API requests using the user's own Cline authentication and never prints the credential.
+Never commit API keys, OAuth tokens, `secrets.json`, `providers.json`, session databases, generated account reports, or local logs. `.gitignore`, `npm run check:artifacts`, and `npm run check:history` enforce this; the recorded history audit is in [docs/history-audit.md](docs/history-audit.md). Local session reporting is offline. Cline account mode makes read-only API requests using the user's own Cline authentication and never prints the credential.
 
 ## License
 
