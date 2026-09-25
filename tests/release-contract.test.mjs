@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import {
   FORBIDDEN_PACKAGE_PATTERNS,
   buildDeterministicZip,
@@ -15,7 +16,7 @@ import {
 import { readSkillVersion, versionBanner, formatVersionBanner } from '../adapters/cline/skill/scripts/lib/skill-version.mjs';
 import { clineScript, mcodeScript, runCli } from './helpers/contract-fixtures.mjs';
 
-const repositoryRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(repositoryRoot, file), 'utf8');
 const packageJson = JSON.parse(read('package.json'));
 

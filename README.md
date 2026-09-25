@@ -145,7 +145,7 @@ A Gumroad product may be offered for voluntary support, compatibility assistance
 - [Optional support and troubleshooting](SUPPORT.md)
 - [Release, version, and package contract](docs/release.md)
 - [Internal optional-support launch checklist](docs/gumroad-selling-guide.html)
-- [Cross-platform CI matrix template](docs/ci-matrix.yml)
+- [CI matrix reference](docs/ci-matrix.yml)
 - [Changelog](CHANGELOG.md)
 - [Security policy](SECURITY.md)
 - [History secret and data audit](docs/history-audit.md)
