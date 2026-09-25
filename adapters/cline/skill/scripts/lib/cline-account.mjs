@@ -54,7 +54,16 @@ export async function requestCline(pathname, { apiKey, baseUrl = DEFAULT_BASE_UR
       }
       let envelope;
       try { envelope = await response.json(); } catch { throw new Error(`Cline API returned HTTP ${response.status} without JSON`); }
-      if (!response.ok || !envelope?.success) throw new Error(envelope?.error || `Cline API returned HTTP ${response.status}`);
+      if (!response.ok || !envelope?.success) {
+        const detail = typeof envelope?.error === 'string'
+          ? envelope.error
+          : envelope?.error?.message ?? envelope?.message ?? `Cline API returned HTTP ${response.status}`;
+        const error = new Error(detail);
+        error.status = response.status;
+        error.code = envelope?.error?.code ?? envelope?.code ?? null;
+        error.attempts = attempt + 1;
+        throw error;
+      }
       return envelope.data ?? null;
     } catch (error) {
       if (attempt < retries && (error instanceof TypeError || ['AbortError', 'TimeoutError'].includes(error?.name))) {
@@ -68,7 +77,12 @@ export async function requestCline(pathname, { apiKey, baseUrl = DEFAULT_BASE_UR
   throw new Error('Cline API request failed after retries');
 }
 
-export async function fetchClineAccount({ apiKey, userId, baseUrl, fetcher, timeoutMs, retries, maxPages = 100, since = null } = {}) {
+export async function fetchClineAccount({ apiKey, userId, baseUrl, fetcher, timeoutMs, retries, maxPages = 100, since = null, now = Date.now() } = {}) {
+  const windowEnd = new Date(now).toISOString();
+  const windowStartMs = since === null ? null : (typeof since === 'number' ? since : Date.parse(since));
+  if (windowStartMs !== null && !Number.isFinite(windowStartMs)) throw new Error('Cline account history window start is invalid');
+  const windowStart = windowStartMs === null ? null : new Date(windowStartMs).toISOString();
+
   const profile = await requestCline('/api/v1/users/me', { apiKey, baseUrl, fetcher, timeoutMs, retries });
   if (!profile?.id) throw new Error('Cline profile response did not include a user id');
   const resolvedUserId = userId || profile.id;
@@ -80,7 +94,7 @@ export async function fetchClineAccount({ apiKey, userId, baseUrl, fetcher, time
     requestCline('/api/v1/users/me/plan/usage-limits', { apiKey, baseUrl, fetcher, timeoutMs, retries }),
   ]);
 
-  const items = [];
+  const fetched = [];
   const seen = new Set();
   let cursor = null;
   let pages = 0;
@@ -88,21 +102,38 @@ export async function fetchClineAccount({ apiKey, userId, baseUrl, fetcher, time
     const query = new URLSearchParams({ limit: '1000' });
     if (cursor) query.set('cursor', cursor);
     const page = await requestCline(`/api/v1/users/${encodeURIComponent(resolvedUserId)}/usages?${query}`, { apiKey, baseUrl, fetcher, timeoutMs, retries });
-    const rows = Array.isArray(page?.items) ? page.items : [];
-    items.push(...rows);
-    cursor = page?.nextToken || null;
+    if (!page || !Array.isArray(page.items)) throw new Error(`Cline usage page ${pages + 1} did not include an items array`);
+    for (const item of page.items) {
+      if (!item || typeof item !== 'object' || !Number.isFinite(Date.parse(item.createdAt))) {
+        throw new Error(`Cline usage page ${pages + 1} contained a row without a valid createdAt timestamp`);
+      }
+    }
+    fetched.push(...page.items);
+    cursor = typeof page.nextToken === 'string' && page.nextToken ? page.nextToken : null;
     pages++;
-    const oldest = rows.reduce((value, item) => {
-      const timestamp = Date.parse(item?.createdAt);
-      return Number.isFinite(timestamp) ? Math.min(value, timestamp) : value;
-    }, Number.POSITIVE_INFINITY);
-    if (since !== null && Number.isFinite(oldest) && oldest <= since) cursor = null;
+    const oldest = page.items.reduce((value, item) => Math.min(value, Date.parse(item.createdAt)), Number.POSITIVE_INFINITY);
+    if (windowStartMs !== null && Number.isFinite(oldest) && oldest <= windowStartMs) cursor = null;
     if (cursor && seen.has(cursor)) throw new Error('Cline API returned a repeated pagination cursor');
     if (cursor) seen.add(cursor);
-    if (pages >= maxPages) throw new Error(`Cline usage history exceeded ${maxPages} pages`);
+    if (pages >= maxPages && cursor) throw new Error(`Cline usage history exceeded ${maxPages} pages`);
   } while (cursor);
 
-  return { profile, userId: resolvedUserId, balance, plan, usageLimits, usages: items, pages };
+  const usages = fetched.filter((item) => {
+    const timestamp = Date.parse(item.createdAt);
+    return timestamp <= now && (windowStartMs === null || timestamp >= windowStartMs);
+  });
+  return {
+    profile,
+    userId: resolvedUserId,
+    balance,
+    plan,
+    usageLimits,
+    usages,
+    pages,
+    window: { start: windowStart, end: windowEnd },
+    fetchedRows: fetched.length,
+    excludedRows: fetched.length - usages.length,
+  };
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -154,10 +185,26 @@ function sumUsage(items) {
     usageBillingRequests: 0,
   });
 }
-function periodSummary(items, label, from, to) {
-  return { label, from, to, ...sumUsage(items) };
+function periodSummary(items, label, from, to, window = {}, now = new Date()) {
+  const periodStart = Date.parse(`${from}T00:00:00.000Z`);
+  const periodEnd = Date.parse(`${to}T23:59:59.999Z`);
+  const windowStart = window?.start ? Date.parse(window.start) : null;
+  const windowEnd = window?.end ? Date.parse(window.end) : now.getTime();
+  const coveredStart = windowStart === null || windowStart <= periodStart;
+  const coveredEnd = Number.isFinite(windowEnd) && windowEnd >= periodEnd;
+  return {
+    label,
+    from,
+    to,
+    complete: coveredStart && coveredEnd,
+    coverage: windowStart === null ? 'unknown' : coveredStart && coveredEnd ? 'complete' : 'partial',
+    completeThrough: new Date(Math.min(periodEnd, windowEnd, now.getTime())).toISOString(),
+    windowStart: window?.start ?? null,
+    windowEnd: window?.end ?? null,
+    ...sumUsage(items),
+  };
 }
-function buildPeriods(usages, now = new Date()) {
+function buildPeriods(usages, now = new Date(), window = {}) {
   const end = now.getTime();
   const todayKey = utcDateKey(now);
   const weekStart = new Date(now);
@@ -169,7 +216,7 @@ function buildPeriods(usages, now = new Date()) {
   const monthlyMap = new Map();
   for (const item of usages) {
     const timestamp = Date.parse(item.createdAt);
-    if (!Number.isFinite(timestamp) || timestamp > end + DAY_MS) continue;
+    if (!Number.isFinite(timestamp) || timestamp > end) continue;
     const date = utcDateKey(item.createdAt);
     const week = utcWeekKey(item.createdAt);
     const month = utcMonthKey(item.createdAt);
@@ -179,25 +226,32 @@ function buildPeriods(usages, now = new Date()) {
       map.set(key, rows);
     }
   }
-  const current = (items) => items.filter((item) => {
-    const timestamp = Date.parse(item.createdAt);
-    return Number.isFinite(timestamp) && timestamp <= end;
-  });
-  const daily = [...dailyMap.entries()].sort(([a], [b]) => b.localeCompare(a)).slice(0, 14).map(([date, rows]) => periodSummary(rows, 'day', date, date));
-  const weekly = [...weeklyMap.entries()].sort(([a], [b]) => b.localeCompare(a)).slice(0, 8).map(([week, rows]) => periodSummary(rows, 'week', week, week));
-  function monthEnd(monthKey) {
-  const [year, month] = monthKey.split('-').map(Number);
-  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
-}
-const monthly = [...monthlyMap.entries()].sort(([a], [b]) => b.localeCompare(a)).slice(0, 12).map(([month, rows]) => periodSummary(rows, 'month', `${month}-01`, monthEnd(month)));
+  const current = (items) => items.filter((item) => Date.parse(item.createdAt) <= end);
+  const daily = [...dailyMap.entries()].sort(([a], [b]) => b.localeCompare(a)).slice(0, 14)
+    .map(([date, rows]) => periodSummary(rows, 'day', date, date, window, now));
+  const weekly = [...weeklyMap.entries()].sort(([a], [b]) => b.localeCompare(a)).slice(0, 8)
+    .map(([week, rows]) => periodSummary(rows, 'week', week, weekEnd(week), window, now));
+  const monthly = [...monthlyMap.entries()].sort(([a], [b]) => b.localeCompare(a)).slice(0, 12)
+    .map(([month, rows]) => periodSummary(rows, 'month', `${month}-01`, monthEnd(month), window, now));
   return {
-    today: periodSummary(current(usages).filter((item) => utcDateKey(item.createdAt) === todayKey), 'day', todayKey, todayKey),
-    last7Days: periodSummary(current(usages).filter((item) => Date.parse(item.createdAt) >= weekStart.getTime()), 'rolling-7-days', weekStart.toISOString().slice(0, 10), todayKey),
-    currentMonth: periodSummary(current(usages).filter((item) => Date.parse(item.createdAt) >= monthStart.getTime()), 'calendar-month', monthStart.toISOString().slice(0, 10), todayKey),
+    today: periodSummary(current(usages).filter((item) => utcDateKey(item.createdAt) === todayKey), 'day', todayKey, todayKey, window, now),
+    last7Days: periodSummary(current(usages).filter((item) => Date.parse(item.createdAt) >= weekStart.getTime()), 'rolling-7-days', weekStart.toISOString().slice(0, 10), todayKey, window, now),
+    currentMonth: periodSummary(current(usages).filter((item) => Date.parse(item.createdAt) >= monthStart.getTime()), 'calendar-month', monthStart.toISOString().slice(0, 10), monthEnd(utcMonthKey(now)), window, now),
     daily,
     weekly,
     monthly,
   };
+}
+
+function weekEnd(weekKey) {
+  const date = new Date(`${weekKey}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + 6);
+  return date.toISOString().slice(0, 10);
+}
+
+function monthEnd(monthKey) {
+  const [year, month] = monthKey.split('-').map(Number);
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
 }
 
 function modelSummaries(usages) {
@@ -223,11 +277,22 @@ function modelSummaries(usages) {
 }
 
 export function summarizeClineAccount(data, now = new Date()) {
-  const summary = sumUsage(data.usages);
+  const window = data.window ?? {};
+  const windowStart = window.start ? Date.parse(window.start) : null;
+  const windowEnd = window.end ? Date.parse(window.end) : now.getTime();
+  const usages = (data.usages ?? []).filter((item) => {
+    const timestamp = Date.parse(item.createdAt);
+    return Number.isFinite(timestamp)
+      && timestamp <= now.getTime()
+      && (windowStart === null || timestamp >= windowStart)
+      && (!Number.isFinite(windowEnd) || timestamp <= windowEnd);
+  });
+  const summary = sumUsage(usages);
   const balanceUsd = finiteNumberOrZero(data.balance?.balance) / MICRO_USD;
   return {
     userId: data.userId,
     accountCreatedAt: data.profile?.createdAt ?? null,
+    window: { start: window.start ?? null, end: window.end ?? now.toISOString() },
     requests: summary.requests,
     tokenTotals: { promptTokens: summary.promptTokens, completionTokens: summary.completionTokens, cachedTokens: summary.cachedTokens, totalTokens: summary.totalTokens },
     billingTotals: { referenceCostUsd: summary.referenceCostUsd, creditsUsedUsd: summary.creditsUsedUsd, balanceUsd },
@@ -235,8 +300,10 @@ export function summarizeClineAccount(data, now = new Date()) {
     usageLimits: data.usageLimits?.limits ?? [],
     clinePassRequests: summary.clinePassRequests,
     usageBillingRequests: summary.usageBillingRequests,
-    models: modelSummaries(data.usages),
-    periods: buildPeriods(data.usages, now),
-    pages: data.pages,
+    models: modelSummaries(usages),
+    periods: buildPeriods(usages, now, window),
+    pages: data.pages ?? 0,
+    fetchedRows: data.fetchedRows ?? usages.length,
+    excludedRows: data.excludedRows ?? 0,
   };
 }

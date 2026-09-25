@@ -190,6 +190,11 @@ The HTML is self-contained and does not load external assets or make network req
 - Cline `inputTokens` includes cached tokens; fresh input subtracts cache read/write.
 - Missing recorded cost is reported as not recorded, never guessed.
 
+`--account-days` defines the exact UTC history window. Rows before the cutoff and future-dated rows
+are excluded from totals but counted in request metadata. Every period exposes `windowStart`, `windowEnd`,
+`complete`, and `coverage`; text output labels partial windows. Malformed usage pages or rows fail with the
+page number instead of being treated as empty history.
+
 ## Troubleshooting
 
 | Symptom | Action |

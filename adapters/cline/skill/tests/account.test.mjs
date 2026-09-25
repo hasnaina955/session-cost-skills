@@ -76,9 +76,10 @@ test('account client paginates, validates identity, and redacts credentials', as
     if (url.endsWith('/plan')) return jsonResponse(null);
     if (url.endsWith('/usage-limits')) return jsonResponse(null);
     if (url.includes('/usages?')) {
+      const createdAt = '2026-01-01T00:00:00.000Z';
       return calls.filter((item) => item.includes('/usages?')).length === 1
-        ? jsonResponse({ items: [{ promptTokens: 1 }], nextToken: 'next' })
-        : jsonResponse({ items: [{ promptTokens: 2 }], nextToken: '' });
+        ? jsonResponse({ items: [{ promptTokens: 1, createdAt }], nextToken: 'next' })
+        : jsonResponse({ items: [{ promptTokens: 2, createdAt }], nextToken: '' });
     }
     throw new Error(`unexpected URL ${url}`);
   };
@@ -88,6 +89,82 @@ test('account client paginates, validates identity, and redacts credentials', as
   assert.equal(data.pages, 2);
   assert.equal(calls.some((url) => url.includes('secret-token')), false);
   await assert.rejects(() => fetchClineAccount({ apiKey: 'secret-token', userId: 'usr-wrong', fetcher, retries: 0 }), /does not match/);
+});
+
+test('account history filters exact window boundaries and exposes period completeness', async () => {
+  const now = Date.parse('2026-01-10T12:00:00.000Z');
+  const since = Date.parse('2026-01-05T12:00:00.000Z');
+  const base = {
+    promptTokens: 10,
+    completionTokens: 2,
+    totalTokens: 12,
+    costUsd: 100_000_000,
+    creditsUsed: 1_000_000,
+    aiModelTypeName: 'other',
+  };
+  const fetcher = async (url) => {
+    if (url.endsWith('/users/me')) return jsonResponse({ id: 'usr-window' });
+    if (url.includes('/balance')) return jsonResponse({ balance: 0 });
+    if (url.endsWith('/plan')) return jsonResponse(null);
+    if (url.endsWith('/usage-limits')) return jsonResponse(null);
+    if (url.includes('/usages?')) {
+      return jsonResponse({ items: [
+        { ...base, id: 'before', createdAt: new Date(since - 1).toISOString() },
+        { ...base, id: 'at-start', createdAt: new Date(since).toISOString() },
+        { ...base, id: 'future', createdAt: new Date(now + 1).toISOString() },
+      ] });
+    }
+    throw new Error(`unexpected URL ${url}`);
+  };
+  const data = await fetchClineAccount({ apiKey: 'token', fetcher, retries: 0, since, now });
+  assert.deepEqual(data.usages.map((item) => item.id), ['at-start']);
+  assert.equal(data.fetchedRows, 3);
+  assert.equal(data.excludedRows, 2);
+  assert.equal(data.window.start, '2026-01-05T12:00:00.000Z');
+  assert.equal(data.window.end, '2026-01-10T12:00:00.000Z');
+
+  const summary = summarizeClineAccount(data, new Date(now));
+  assert.equal(summary.requests, 1);
+  assert.equal(summary.tokenTotals.totalTokens, 12);
+  assert.equal(summary.periods.currentMonth.complete, false);
+  assert.equal(summary.periods.currentMonth.coverage, 'partial');
+  assert.equal(summary.periods.today.complete, false);
+  assert.equal(summary.periods.daily.find((period) => period.from === '2026-01-05').coverage, 'partial');
+});
+
+test('account client rejects malformed pages and rows deterministically', async () => {
+  const makeFetcher = (usageData) => async (url) => {
+    if (url.endsWith('/users/me')) return jsonResponse({ id: 'usr-malformed' });
+    if (url.includes('/balance')) return jsonResponse({ balance: 0 });
+    if (url.endsWith('/plan')) return jsonResponse(null);
+    if (url.endsWith('/usage-limits')) return jsonResponse(null);
+    if (url.includes('/usages?')) return jsonResponse(usageData);
+    throw new Error(`unexpected URL ${url}`);
+  };
+  await assert.rejects(
+    () => fetchClineAccount({ apiKey: 'token', fetcher: makeFetcher({ notItems: [] }), retries: 0 }),
+    /did not include an items array/,
+  );
+  await assert.rejects(
+    () => fetchClineAccount({ apiKey: 'token', fetcher: makeFetcher({ items: [{ promptTokens: 1 }] }), retries: 0 }),
+    /without a valid createdAt timestamp/,
+  );
+});
+
+test('structured account API errors preserve message, status, code, and attempts', async () => {
+  const response = new Response(JSON.stringify({ success: false, error: { message: 'quota exhausted', code: 'RATE_LIMIT' } }), {
+    status: 429,
+    headers: { 'content-type': 'application/json' },
+  });
+  const error = await requestCline('/api/v1/users/me', {
+    apiKey: 'token',
+    fetcher: async () => response,
+    retries: 0,
+  }).catch((caught) => caught);
+  assert.equal(error.message, 'quota exhausted');
+  assert.equal(error.status, 429);
+  assert.equal(error.code, 'RATE_LIMIT');
+  assert.equal(error.attempts, 1);
 });
 
 test('dashboard renderer escapes report text and embeds no external assets', () => {
