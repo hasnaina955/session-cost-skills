@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Security
+
+- Replaced browser-side dashboard HTML sinks with DOM text construction and locked dashboards to a hash-scoped, offline content security policy.
+- Added regression coverage for malicious model, provider, session, title, filter, and rate metadata in both adapters.
+
+### Changed
+
+- Generate independently installable Cline and MCode dashboard renderers from one canonical implementation and fail verification when copies drift.
+
 ## 0.2.0
 
 ### Added

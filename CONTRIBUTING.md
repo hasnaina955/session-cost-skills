@@ -16,7 +16,17 @@ Thanks for helping improve the session-cost skills.
 npm run verify
 ```
 
-This checks JavaScript syntax, runs Cline and MCode tests, validates dashboard escaping and self-contained output, and checks MCode CLI modes.
+This checks JavaScript syntax, verifies generated dashboard copies, runs Cline and MCode tests, validates dashboard CSP and DOM-sink safety, and checks MCode CLI modes.
+
+### Dashboard changes
+
+Edit `shared/dashboard.mjs`, the canonical dashboard renderer, then run:
+
+```powershell
+npm run sync:dashboard
+```
+
+Each adapter must retain its own generated renderer so it remains independently installable. `npm run check:dashboard` fails when an adapter copy drifts.
 
 ## Adapter boundaries
 
