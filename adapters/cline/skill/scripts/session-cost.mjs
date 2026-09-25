@@ -21,6 +21,7 @@ import {
 } from './lib/session-cost-core.mjs';
 import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from './lib/session-graph.mjs';
 import { REPORT_CONTRACT_VERSION, withNormalizedContract } from './lib/report-contract.mjs';
+import { formatVersionBanner, versionBanner } from './lib/skill-version.mjs';
 import { detectConfiguredProvider } from './lib/provider-driver.mjs';
 import { discoverModels, doctorReport, explainModelMatch, renderDiagnostics } from './lib/provider-diagnostics.mjs';
 import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, readConfigFile } from './lib/config.mjs';
@@ -103,6 +104,7 @@ for (let i = 2; i < process.argv.length; i++) {
   else if (arg === '--json') opts.json = true;
   else if (arg === '--data-dir') opts.dataDir = process.argv[++i];
   else if (arg === '--help' || arg === '-h') { help(); process.exit(0); }
+  else if (arg === '--version' || arg === '-v') { console.log(formatVersionBanner(versionBanner('cline'))); process.exit(0); }
   else die(`unknown argument: ${arg}`);
 }
 
@@ -132,6 +134,7 @@ function help() {
   --list [n]           list the n most recent sessions (default 10)
   --json              emit schema-versioned JSON
   --data-dir <path>    Cline data directory (default: %USERPROFILE%\\.cline)
+  --version           print the installed skill, report-contract, and Node versions
   doctor               inspect config, providers, and detected coverage
   providers             list configured/built-in provider drivers
   models discover       list configured model mappings

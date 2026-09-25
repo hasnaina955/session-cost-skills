@@ -18,6 +18,8 @@ npm run verify
 
 This checks JavaScript syntax, verifies generated adapter modules, validates the shared report contract, runs every discovered adapter/fixture test, and checks dashboard CSP and DOM-sink safety.
 
+`.github/workflows/ci.yml` is the single source of truth for the CI matrix. It runs `npm run verify` on every supported OS (ubuntu, windows, macos) against Node 22.15 and 24, plus a Bun smoke job and a release-rehearsal job. Do not copy a matrix from anywhere else in this repository; edit the workflow itself.
+
 ### Generated adapter modules
 
 Edit `shared/dashboard.mjs`, `shared/session-graph.mjs`, `shared/report-contract.mjs`, `shared/provider-driver.mjs`, `shared/provider-diagnostics.mjs`, `shared/protocol-adapters.mjs`, or `shared/config.mjs`, then run the matching sync command:

@@ -51,11 +51,14 @@ It should report:
 
 ## Phase 5 — release
 
-Build separate artifacts:
+Build separate, reproducible archives. The release version contract, archive contents, and
+the full release process live in [release.md](release.md).
 
 ```text
-dist/cline-session-cost-vX.Y.Z.zip
-dist/mcode-session-cost-vX.Y.Z.zip
+dist/session-cost-cline-vX.Y.Z.zip
+dist/session-cost-mcode-vX.Y.Z.zip
+dist/session-cost-bundle-vX.Y.Z.zip
+dist/SHA256SUMS.txt
 ```
 
-Run both adapter test suites before creating either artifact.
+Run both adapter test suites and `npm run rehearse:release` before creating any artifact.

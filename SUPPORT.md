@@ -28,6 +28,18 @@ Confirm:
 
 The two skills may be updated independently. Do not merge their ledgers, token semantics, or rate catalogs.
 
+## Released archives
+
+Releases publish three archives plus a `SHA256SUMS.txt` file: one installable Cline skill, one
+installable MCode skill, and a bundle containing both. Verify the checksum before installing:
+
+```powershell
+Get-FileHash .\session-cost-cline-v0.3.0.zip -Algorithm SHA256
+```
+
+Confirm what you installed with `--version`. The release version contract, archive contents,
+and the full release process are documented in [docs/release.md](docs/release.md).
+
 ## Optional paid support
 
 Paid support may cover installation, compatibility investigation, confirmed bug triage, runtime migration guidance, or sponsored development. It does not remove MIT rights, relicense the code, rebrand the public project, or withhold functionality already available in the repository.
@@ -37,8 +49,9 @@ Any paid listing must publish its scope, delivery period, response target, price
 ## Troubleshooting
 
 - Run `npm run verify` from a source checkout.
-- Confirm Node.js 22.5 or newer with `node --version`.
+- Confirm Node.js 22.15 or newer with `node --version`.
 - Run the adapter help command and verify the installed `SKILL.md` path.
+- Run `--version` to confirm the installed skill matches the release you expected.
 - Use `--doctor`, `--providers`, and `config explain` to diagnose provider configuration.
 - Never send credentials, session databases, message logs, or generated reports in a support request.
 

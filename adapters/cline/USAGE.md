@@ -44,6 +44,7 @@ node $SessionCost
 | `--dashboard` | Write a self-contained HTML dashboard |
 | `--out <path>` | Dashboard output path |
 | `--data-dir <path>` | Override Cline data directory |
+| `--version` / `-v` | Installed skill, report-contract, and Node versions |
 | `--help` / `-h` | CLI help |
 
 
