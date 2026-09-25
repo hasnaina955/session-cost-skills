@@ -62,6 +62,7 @@ Natural language mapping:
 - `which providers are configured` → `providers`
 - `find my model` → `models discover`
 - `why was this model selected` → `config explain --provider <id> --model <id>`
+- `I use a custom OpenAI-compatible endpoint` → configure a provider profile with a manual or imported rate card, then run `doctor`
 
 ## Inputs to collect
 

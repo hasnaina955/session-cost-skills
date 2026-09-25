@@ -38,6 +38,8 @@ Layered configuration is defined by `contracts/session-config-v1.schema.json`. T
 
 Provider diagnostics use the same resolver as pricing and report the exact/alias/normalized/glob decision, selected rate record, collision candidates, coverage, and suggestion-only aliases. Unknown or ambiguous matches never mutate configuration or select a model automatically.
 
+OpenAI- and Anthropic-compatible usage is normalized by protocol adapters, while endpoint, region, currency, credential, and pricing data stay in the provider profile. Manual and imported rate records are converted into the same effective, fingerprinted records used by built-in providers.
+
 ## Shared layer
 
 - Normalized report schema and runtime validator

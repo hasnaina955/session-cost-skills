@@ -95,7 +95,7 @@ function fingerprintRateRecord(record) {
   return `sha256:${createHash('sha256').update(JSON.stringify(payload)).digest('hex')}`;
 }
 
-function makeRateRecord({
+export function makeRateRecord({
   providerKey,
   modelKey,
   component,
@@ -106,6 +106,7 @@ function makeRateRecord({
   context,
   timeBand,
   source,
+  currency = 'USD',
 }) {
   const contextToken = context.maxTokens === null ? 'unbounded' : context.maxTokens;
   const id = [providerKey, modelKey, component, effectiveFrom, timeBand, context.minTokens, contextToken].join('|');
@@ -117,7 +118,7 @@ function makeRateRecord({
     component,
     sourceAmount: String(sourceAmount),
     amount,
-    currency: 'USD',
+    currency,
     unit: 'per_1m_tokens',
     effectiveFrom,
     effectiveThrough,
@@ -318,7 +319,7 @@ function inspectRateRecord(record, providerKey, index) {
     issues.push(`${location} is missing sourceAmount`);
   }
   if (!isRateAmount(record?.amount)) issues.push(`${location} amount must be nonnegative`);
-  if (record?.currency !== 'USD') issues.push(`${location} currency must be USD`);
+  if (!/^[A-Z]{3}$/.test(record?.currency ?? '')) issues.push(`${location} currency must be an ISO code`);
   if (record?.unit !== 'per_1m_tokens') issues.push(`${location} unit must be per_1m_tokens`);
   if (!Number.isFinite(Date.parse(record?.effectiveFrom))) issues.push(`${location} effectiveFrom is invalid`);
   if (record?.effectiveThrough !== null && !Number.isFinite(Date.parse(record?.effectiveThrough))) {

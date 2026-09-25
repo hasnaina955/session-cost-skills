@@ -65,7 +65,7 @@
       },
       "additionalProperties": false
     },
-    "operations": { "type": "array", "items": { "enum": ["detect", "listModels", "fetchRates", "resolveRate"] }, "minItems": 1, "uniqueItems": true },
+    "operations": { "type": "array", "items": { "enum": ["detect", "listModels", "normalizeUsage", "parseStream", "fetchRates", "resolveRate"] }, "minItems": 1, "uniqueItems": true },
     "fingerprint": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "modelAliases": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } },
     "credentialEnv": { "type": ["string", "null"] }
