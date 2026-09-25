@@ -45,9 +45,13 @@ MCode selects the four component records that apply to each call timestamp, cont
 
 `provider-driver-v1.schema.json` defines the versioned manifest for built-in and user-installed provider drivers. A manifest declares deterministic provider matching, supported operations and capabilities, token semantics, model aliases, credential environment-variable references, source metadata, and a SHA-256 fingerprint. Driver implementations may contain functions, but reports serialize only the safe manifest and never credential values.
 
+## Provider diagnostics
+
+`doctor`, `providers`, `models discover`, and `config explain` share one diagnostic object for text and JSON. Resolution reports the requested and resolved IDs, exact/alias/normalized/glob rule, selected rate record, currency, coverage, collision candidates, and suggestion-only aliases. Unknown or ambiguous models return a non-zero status and are never applied automatically.
+
 ## Validation
 
-The canonical runtime validator is `shared/report-contract.mjs`. It is generated into each independently installable adapter and is also checked against the JSON Schema by `tests/normalized-contract.test.mjs`. Rate records are validated across the complete bundled catalog by `tests/rate-record-contract.test.mjs`, provider manifests plus built-in/user-loaded drivers by `tests/provider-driver-contract.test.mjs`, and layered configuration by `tests/config-contract.test.mjs`.
+The canonical runtime validator is `shared/report-contract.mjs`. It is generated into each independently installable adapter and is also checked against the JSON Schema by `tests/normalized-contract.test.mjs`. Rate records are validated across the complete bundled catalog by `tests/rate-record-contract.test.mjs`, provider manifests plus built-in/user-loaded drivers by `tests/provider-driver-contract.test.mjs`, layered configuration by `tests/config-contract.test.mjs`, and deterministic CLI diagnostics by `tests/provider-diagnostics.test.mjs`.
 
 Run:
 

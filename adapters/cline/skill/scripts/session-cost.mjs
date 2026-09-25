@@ -22,6 +22,7 @@ import {
 import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from './lib/session-graph.mjs';
 import { REPORT_CONTRACT_VERSION, withNormalizedContract } from './lib/report-contract.mjs';
 import { detectConfiguredProvider } from './lib/provider-driver.mjs';
+import { discoverModels, doctorReport, explainModelMatch, renderDiagnostics } from './lib/provider-diagnostics.mjs';
 import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, readConfigFile } from './lib/config.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -47,6 +48,7 @@ const opts = {
   sessionConfigPath: null,
   configAction: null,
   configImportPath: null,
+  diagnostic: null,
 };
 
 let effectiveConfiguration = null;
@@ -87,6 +89,15 @@ for (let i = 2; i < process.argv.length; i++) {
   else if (arg === '--validate-config') opts.configAction = 'validate';
   else if (arg === '--export-config') opts.configAction = 'export';
   else if (arg === '--import-config') { opts.configAction = 'import'; opts.configImportPath = process.argv[++i]; }
+  else if (arg === 'doctor' || arg === '--doctor') opts.diagnostic = 'doctor';
+  else if (arg === 'providers' || arg === '--providers') opts.diagnostic = 'providers';
+  else if ((arg === 'models' && process.argv[i + 1] === 'discover') || arg === '--models-discover') {
+    if (arg === 'models') i += 1;
+    opts.diagnostic = 'models';
+  } else if ((arg === 'config' && process.argv[i + 1] === 'explain') || arg === '--config-explain') {
+    if (arg === 'config') i += 1;
+    opts.diagnostic = 'config-explain';
+  }
   else if (arg === '--list') opts.list = Number(process.argv[++i] ?? 10);
   else if (arg === '--include-children') { opts.includeChildren = true; opts.includeChildrenExplicit = true; }
   else if (arg === '--json') opts.json = true;
@@ -120,7 +131,11 @@ function help() {
   --include-children  include all descendant subagent sessions
   --list [n]           list the n most recent sessions (default 10)
   --json              emit schema-versioned JSON
-  --data-dir <path>    Cline data directory (default: %USERPROFILE%\\.cline)`);
+  --data-dir <path>    Cline data directory (default: %USERPROFILE%\\.cline)
+  doctor               inspect config, providers, and detected coverage
+  providers             list configured/built-in provider drivers
+  models discover       list configured model mappings
+  config explain        explain provider/model resolution`);
 }
 function handleConfigAction(configuration) {
   if (!opts.configAction) return false;
@@ -142,6 +157,25 @@ function handleConfigAction(configuration) {
     configuration: { ...publicConfigResult(configuration), config: actionResult?.config ?? configuration.config },
   }, null, 2));
   return true;
+}
+
+function runDiagnostic(configuration) {
+  let report;
+  let status = 0;
+  const knownModels = { commandcode: [], stepfun: [] };
+  if (opts.diagnostic === 'providers') {
+    report = { action: 'providers', providers: doctorReport({ configuration, runtimeId: 'cline' }).providers };
+  } else if (opts.diagnostic === 'models') {
+    report = { action: 'models', models: discoverModels({ configuration, runtimeId: 'cline', providerId: opts.provider, knownModels }) };
+  } else {
+    const explanation = opts.provider || opts.model
+      ? explainModelMatch({ runtimeId: 'cline', providerId: opts.provider, modelId: opts.model, configuration, knownModelIds: [], rateRecords: [] })
+      : null;
+    report = { action: opts.diagnostic, ...doctorReport({ configuration, runtimeId: 'cline', providerId: opts.provider, modelId: opts.model }), explanation };
+    if (explanation?.status === 'unknown' || explanation?.status === 'ambiguous') status = 2;
+  }
+  console.log(opts.json ? JSON.stringify(report, null, 2) : renderDiagnostics(report));
+  return status;
 }
 
 function die(message) { console.error(`session-cost: ${message}`); process.exit(2); }
@@ -518,6 +552,7 @@ try {
     },
   });
   if (handleConfigAction(effectiveConfiguration)) process.exit(0);
+  if (opts.diagnostic) process.exit(runDiagnostic(effectiveConfiguration));
   if (!opts.provider && effectiveConfiguration.config.runtimeDefaults.provider) opts.provider = effectiveConfiguration.config.runtimeDefaults.provider;
   if (!opts.model && effectiveConfiguration.config.runtimeDefaults.model) opts.model = effectiveConfiguration.config.runtimeDefaults.model;
   if (!opts.includeChildrenExplicit && effectiveConfiguration.config.runtimeDefaults.includeChildren === true) opts.includeChildren = true;

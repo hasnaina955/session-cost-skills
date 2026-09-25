@@ -20,13 +20,14 @@ This checks JavaScript syntax, verifies generated adapter modules, validates the
 
 ### Generated adapter modules
 
-Edit `shared/dashboard.mjs`, `shared/session-graph.mjs`, `shared/report-contract.mjs`, `shared/provider-driver.mjs`, or `shared/config.mjs`, then run the matching sync command:
+Edit `shared/dashboard.mjs`, `shared/session-graph.mjs`, `shared/report-contract.mjs`, `shared/provider-driver.mjs`, `shared/provider-diagnostics.mjs`, or `shared/config.mjs`, then run the matching sync command:
 
 ```powershell
 npm run sync:dashboard
 npm run sync:session-graph
 npm run sync:report-contract
 npm run sync:provider-driver
+npm run sync:provider-diagnostics
 npm run sync:config
 ```
 

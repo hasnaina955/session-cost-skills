@@ -27,7 +27,8 @@ Report what a Cline session consumed and what Cline recorded it as costing. Read
    Map natural requests to flags: `current` → no flag, `last` → `--last`, `today` →
    `--today`, `compare` → `--compare`, `this task end to end` → add `--include-children`.
    Use `--from YYYY-MM-DD --to YYYY-MM-DD`, `--provider <name>`, and `--model <name>` for
-   filtered aggregates.
+   filtered aggregates. Use `doctor`, `providers`, `models discover`, and `config explain` for setup and
+   model/provider diagnostics.
 
 5. Read the report's **Snapshot**, **Token totals**, **Recorded cost**, **Cost coverage**, and
    **By model** lines before answering.
