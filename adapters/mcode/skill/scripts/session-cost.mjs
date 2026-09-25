@@ -29,6 +29,7 @@ import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, read
 import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from './lib/session-graph.mjs';
 import { REPORT_CONTRACT_VERSION, withNormalizedContract } from './lib/report-contract.mjs';
 import { formatVersionBanner, versionBanner } from './lib/skill-version.mjs';
+import { CliUsageError, parseCliArgs } from './lib/cli-args.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RATES_PATH = process.env.SESSION_COST_RATES_PATH
@@ -49,53 +50,47 @@ const CONTRACT_RUNTIME = Object.freeze({
 // can say the totals are a snapshot rather than a final figure.
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
 
-// ---------------------------------------------------------------- arguments
+
+const DEFAULT_OPTIONS = Object.freeze({
+  session: null,
+  mode: 'current',
+  list: 0,
+  json: false,
+  includeChildren: false,
+  includeChildrenExplicit: false,
+  refreshRates: false,
+  rates: false,
+  dataDir: null,
+  from: null,
+  to: null,
+  provider: null,
+  model: null,
+  configPath: null,
+  dashboard: false,
+  out: null,
+  sessionConfigPath: null,
+  configAction: null,
+  configImportPath: null,
+  diagnostic: null,
+});
 
 function parseArgs(argv) {
-  const opts = {
-    session: null, mode: 'current', list: 0, json: false, includeChildren: false, includeChildrenExplicit: false,
-    refreshRates: false, dataDir: null, from: null, to: null, provider: null, model: null, configPath: null, rates: false,
-    dashboard: false, out: null,
-    sessionConfigPath: null, configAction: null, configImportPath: null, diagnostic: null,
-  };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === '--session') opts.session = argv[++i];
-    else if (a === '--last') opts.mode = 'last';
-    else if (a === '--today') opts.mode = 'today';
-    else if (a === '--compare') opts.mode = 'compare';
-    else if (a === '--from') opts.from = argv[++i];
-    else if (a === '--to') opts.to = argv[++i];
-    else if (a === '--provider') opts.provider = argv[++i];
-    else if (a === '--model') opts.model = argv[++i];
-    else if (a === '--config') opts.configPath = argv[++i];
-    else if (a === '--session-config') opts.sessionConfigPath = argv[++i];
-    else if (a === '--init-config') opts.configAction = 'init';
-    else if (a === '--validate-config') opts.configAction = 'validate';
-    else if (a === '--export-config') opts.configAction = 'export';
-    else if (a === '--import-config') { opts.configAction = 'import'; opts.configImportPath = argv[++i]; }
-    else if (a === 'doctor' || a === '--doctor') opts.diagnostic = 'doctor';
-    else if (a === 'providers' || a === '--providers') opts.diagnostic = 'providers';
-    else if ((a === 'models' && argv[i + 1] === 'discover') || a === '--models-discover') {
-      if (a === 'models') i += 1;
-      opts.diagnostic = 'models';
-    } else if ((a === 'config' && argv[i + 1] === 'explain') || a === '--config-explain') {
-      if (a === 'config') i += 1;
-      opts.diagnostic = 'config-explain';
+  let options;
+  try {
+    options = parseCliArgs(argv, { runtimeId: 'mcode', defaults: DEFAULT_OPTIONS });
+  } catch (error) {
+    // Parsing runs at module top level, before the main error handler exists, so a
+    // usage error must exit directly rather than throwing a CostError nobody catches.
+    if (error instanceof CliUsageError) {
+      console.error(`session-cost: ${error.message}`);
+      process.exit(2);
     }
-    else if (a === '--rates') opts.rates = true;
-    else if (a === '--dashboard') opts.dashboard = true;
-    else if (a === '--out') opts.out = argv[++i];
-    else if (a === '--list') opts.list = Number(argv[++i] ?? 10);
-    else if (a === '--json') opts.json = true;
-    else if (a === '--include-children') { opts.includeChildren = true; opts.includeChildrenExplicit = true; }
-    else if (a === '--refresh-rates') opts.refreshRates = true;
-    else if (a === '--data-dir') opts.dataDir = argv[++i];
-    else if (a === '--help' || a === '-h') { printHelp(); process.exit(0); }
-    else if (a === '--version' || a === '-v') { console.log(formatVersionBanner(versionBanner('mcode'))); process.exit(0); }
-    else fail(`unknown argument: ${a}`);
+    throw error;
   }
-  return opts;
+  options.includeChildrenExplicit = options.includeChildren === true;
+  if (options.help) { printHelp(); process.exit(0); }
+  if (options.version) { console.log(formatVersionBanner(versionBanner('mcode'))); process.exit(0); }
+  return options;
 }
 
 function printHelp() {
@@ -124,10 +119,10 @@ function printHelp() {
   --refresh-rates         atomically re-fetch and validate CommandCode and StepFun rates
   --data-dir <path>       MiniMax data dir (default: derived from this script's location)
   --version              print the installed skill, report-contract, and Node versions
-  doctor                  inspect config, providers, and rate coverage
-  providers                list configured/built-in provider drivers
-  models discover          list provider models and aliases
-  config explain           explain provider/model resolution`);
+  doctor | --doctor        inspect config, providers, and rate coverage
+  providers | --providers  list configured/built-in provider drivers
+  models discover | --models-discover  list provider models and aliases
+  config explain | --config-explain   explain provider/model matching`);
 }
 
 // Thrown instead of process.exit(): exiting while undici/fetch handles are still open

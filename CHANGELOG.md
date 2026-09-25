@@ -4,7 +4,25 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
-Nothing yet. The next batch of changes lands here before it is cut into a release.
+### Fixed
+
+- Replaced two hand-rolled argument parsers with one shared option schema, so both adapters
+  accept, reject, and explain the same flags identically.
+- `--list` no longer consumes the following flag as its count. `--list --json` used to
+  silently discard `--json` and return a single-session report instead of a list.
+- Every value-taking flag now requires a value. `--session` with no value used to swallow
+  the next flag and report it as a session id.
+- Conflicting flags are rejected instead of silently overridden. `--last --today` used to
+  discard `--last` and run `--today`.
+- Numeric ranges (`--list`, `--account-days`) and calendar dates are validated before any
+  storage is opened, so a bad invocation fails immediately instead of after loading a ledger.
+- `--account-days abc` no longer crashes MCode with a raw stack trace.
+
+### Changed
+
+- Both help texts now document the `--models-discover` and `--config-explain` spellings, which
+  the schema accepted but the help text never mentioned.
+- `--help` and `--version` answer immediately even when combined with invalid flags.
 
 ## 0.3.0
 
