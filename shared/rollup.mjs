@@ -190,3 +190,64 @@ export function rollupTotals(report) {
   for (const entry of report.sessions) addSession(bucket, entry);
   return { ...finishBucket(bucket, 'total'), sessions: rows.length };
 }
+
+// ---------------------------------------------------------------- text rendering
+
+function formatUsd(value) {
+  return value == null ? 'unavailable' : `$${value.toFixed(6)}`;
+}
+
+function formatTokens(value) {
+  return value == null ? 'unavailable' : `${(value / 1_000_000).toFixed(2)} M`;
+}
+
+const pad = (value, width) => String(value ?? '').padEnd(width);
+const padStart = (value, width) => String(value ?? '').padStart(width);
+
+/** Render daily or weekly rollups of a set of reports as a plain-text table. */
+export function renderRollupText(reports, period = 'daily', { basis = 'unknown' } = {}) {
+  // Each report contributes its own session rows, so one aggregate covers the whole set.
+  const combined = { sessions: reports.flatMap((report) => report?.sessions ?? []) };
+  const buckets = rollupSessions(combined, { period });
+  if (!buckets.length) {
+    return `No ${period} spend could be measured for this selection: ${rollupTotals(combined).reason ?? 'no per-session data'}`;
+  }
+  const label = basis === 'provider-rate-estimate' ? 'estimated' : 'recorded';
+  const out = [];
+  out.push(`${period === 'daily' ? 'Daily' : 'Weekly'} spend (${label})`);
+  out.push('');
+  out.push(`  ${pad('period', 12)}${padStart('tokens', 11)}${padStart('cost', 14)}${padStart('sessions', 10)}${padStart('coverage', 11)}`);
+  for (const bucket of buckets) {
+    out.push(`  ${pad(bucket.periodStart, 12)}${padStart(formatTokens(bucket.totalTokens), 11)}${padStart(formatUsd(bucket.costUsd), 14)}${padStart(bucket.sessionCount, 10)}${padStart(bucket.coverage, 11)}`);
+  }
+  const totals = rollupTotals(combined);
+  out.push(`  ${pad('TOTAL', 12)}${padStart(formatTokens(totals.totalTokens), 11)}${padStart(formatUsd(totals.costUsd), 14)}${padStart(totals.sessionCount, 10)}${padStart(totals.coverage, 11)}`);
+  if (totals.knownCostUsd != null && totals.costUsd === null) {
+    out.push('');
+    out.push(`  Some spend in this range could not be priced. The known portion is ${formatUsd(totals.knownCostUsd)};`);
+    out.push('  the total is reported as unavailable rather than as a smaller real number.');
+  }
+  return out.join('\n');
+}
+
+/** Render sessions ranked by cost, most expensive first, unknowns last. */
+export function renderRankingText(reports, top = null) {
+  const combined = { sessions: reports.flatMap((report) => report?.sessions ?? []) };
+  const rows = rankSessions(combined, { top });
+  if (!rows.length) {
+    return 'No sessions could be ranked: this report carries no per-session data.';
+  }
+  const out = [];
+  out.push(`Sessions by cost${top ? ` (top ${top})` : ''}`);
+  out.push('');
+  out.push(`  ${pad('session', 24)}${padStart('cost', 14)}${padStart('tokens', 11)}  coverage`);
+  for (const row of rows) {
+    out.push(`  ${pad(row.sessionId ?? 'unknown', 24)}${padStart(formatUsd(row.costUsd), 14)}${padStart(formatTokens(row.totalTokens), 11)}  ${row.coverage}`);
+  }
+  const unknown = rows.filter((row) => row.costUsd === null).length;
+  if (unknown) {
+    out.push('');
+    out.push(`  ${unknown} session(s) could not be priced and are listed with an unavailable cost rather than $0.`);
+  }
+  return out.join('\n');
+}

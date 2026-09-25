@@ -24,6 +24,8 @@ import { REPORT_CONTRACT_VERSION, withNormalizedContract } from './lib/report-co
 import { formatVersionBanner, versionBanner } from './lib/skill-version.mjs';
 import { CliUsageError, parseCliArgs } from './lib/cli-args.mjs';
 import { describeStorageError } from './lib/error-boundaries.mjs';
+import { renderExplanation } from './lib/explain.mjs';
+import { renderRankingText as renderRanking, renderRollupText as renderRollup } from './lib/rollup.mjs';
 import { detectConfiguredProvider } from './lib/provider-driver.mjs';
 import { discoverModels, doctorReport, explainModelMatch, renderDiagnostics } from './lib/provider-diagnostics.mjs';
 import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, readConfigFile } from './lib/config.mjs';
@@ -112,6 +114,9 @@ function help() {
   --import-config <path> validate and import a config file
   --include-children  include all descendant subagent sessions
   --list [n]           list the n most recent sessions (default 10)
+  --rollup <when>      with --list, total spend per day or per week
+  --top <n>            with --list, rank sessions by cost, most expensive first
+  --explain            show the arithmetic behind the reported cost
   --json              emit schema-versioned JSON
   --data-dir <path>    Cline data directory (default: %USERPROFILE%\\.cline)
   --version           print the installed skill, report-contract, and Node versions
@@ -652,6 +657,10 @@ try {
       }));
     if (opts.json) {
       console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'cline', kind: 'report-list', generatedAt: new Date().toISOString(), sessions: recent, duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds }, replacer, 2));
+    } else if (opts.rollup) {
+      console.log(renderRollup(recent, opts.rollup));
+    } else if (opts.top) {
+      console.log(renderRanking(recent, opts.top));
     } else {
       for (const report of recent) {
         const billing = report.billing;
@@ -703,6 +712,7 @@ try {
       report = aggregateReports(reports, opts.mode === 'today' ? 'today' : 'filtered-range', topLevel.duplicateSuppressedSessionIds);
     }
     if (opts.json) console.log(JSON.stringify(report, replacer, 2));
+    else if (opts.explain) console.log(renderExplanation(report));
     else console.log(renderAggregate(report));
   } else {
     const selection = resolveSession(all, {
@@ -730,6 +740,7 @@ try {
       if (opts.json) console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'cline', kind: 'dashboard', generatedAt: new Date().toISOString(), dashboardPath: outputPath, report }, replacer, 2));
       else console.log(`Dashboard written: ${outputPath}`);
     } else if (opts.json) console.log(JSON.stringify(report, replacer, 2));
+    else if (opts.explain) console.log(renderExplanation(report));
     else console.log(render(report));
   }
 } finally {

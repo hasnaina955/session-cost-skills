@@ -31,6 +31,8 @@ import { REPORT_CONTRACT_VERSION, withNormalizedContract } from './lib/report-co
 import { formatVersionBanner, versionBanner } from './lib/skill-version.mjs';
 import { CliUsageError, parseCliArgs } from './lib/cli-args.mjs';
 import { describeStorageError } from './lib/error-boundaries.mjs';
+import { renderExplanation } from './lib/explain.mjs';
+import { renderRankingText as renderRanking, renderRollupText as renderRollup } from './lib/rollup.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RATES_PATH = process.env.SESSION_COST_RATES_PATH
@@ -110,6 +112,9 @@ function printHelp() {
   --out <path>            dashboard output path
   --include-children      also bill sub-agent sessions parented to the target
   --list [n]              list the n most recent sessions with their cost (default 10)
+  --rollup <when>         with --list, total spend per day or per week
+  --top <n>               with --list, rank sessions by cost, most expensive first
+  --explain               show the arithmetic behind the reported cost
   --json                  emit JSON instead of the markdown summary
   --config <path>         load standing-summary settings
   --session-config <path> load provider/session configuration
@@ -1105,6 +1110,12 @@ async function main() {
           })),
           duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds,
         }, null, 2));
+      } else if (opts.rollup) {
+        // MCode reports carry no per-session rows yet, so this reports the gap rather
+        // than a confident $0.00. See the note inside the renderer.
+        console.log(renderRollup(reports, opts.rollup, { basis: 'provider-rate-estimate' }));
+      } else if (opts.top) {
+        console.log(renderRanking(reports, opts.top));
       } else {
         const clip = (s, n) => (s.length <= n ? s : s.slice(0, n - 1) + '…');
         console.log('recent sessions (newest first)\n');
@@ -1209,6 +1220,7 @@ async function main() {
       if (opts.json) console.log(JSON.stringify({ schemaVersion: 1, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'mcode', kind: 'dashboard', generatedAt: new Date().toISOString(), dashboardPath: outputPath, report: enhanceReport(report, selection) }, null, 2));
       else console.log(`Dashboard written: ${outputPath}`);
     } else if (opts.json) console.log(JSON.stringify(enhanceReport(report, selection), null, 2));
+    else if (opts.explain) console.log(renderExplanation(enhanceReport(report, selection)));
     else console.log(renderText(report, selection));
 
     return report.rateKnown ? 0 : 2;
