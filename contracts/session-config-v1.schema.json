@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hasnaina955.github.io/session-cost-skills/contracts/session-config-v1.schema.json",
+  "title": "Session Cost configuration v1",
+  "type": "object",
+  "required": ["schemaVersion", "runtimeDefaults", "providers", "models"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "runtimeDefaults": {
+      "type": "object",
+      "properties": {
+        "provider": { "type": "string" },
+        "model": { "type": "string" },
+        "includeChildren": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "providers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "driverId", "match"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "driverId": { "type": "string", "minLength": 1 },
+          "match": {
+            "type": "object",
+            "required": ["providerIds", "runtimes"],
+            "properties": {
+              "providerIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+              "runtimes": { "type": "array", "items": { "enum": ["cline", "mcode"] }, "minItems": 1, "uniqueItems": true }
+            },
+            "additionalProperties": false
+          },
+          "endpointEnv": { "type": ["string", "null"] },
+          "credentialEnv": { "type": ["string", "null"] },
+          "region": { "type": ["string", "null"] },
+          "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+          "pricingMode": { "enum": ["bundled", "network", "manual", "none"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["runtime", "provider", "runtimeModel", "rateModel"],
+        "properties": {
+          "runtime": { "enum": ["cline", "mcode"] },
+          "provider": { "type": "string", "minLength": 1 },
+          "runtimeModel": { "type": "string", "minLength": 1 },
+          "rateModel": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

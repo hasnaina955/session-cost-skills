@@ -39,6 +39,25 @@ test('one provider fixture resolves consistently in Cline and MCode', () => {
   assert.equal(resolved.providerDriver.fingerprint, clineDriver.fingerprint);
   assert.equal(resolved.rate.input, 0.4);
   assert.equal(resolved.rate.cacheWrite, 0.5);
+
+  const customRegistry = createMCodeProviderRegistry(table, {
+    profiles: [{
+      id: 'custom-commandcode',
+      driverId: 'commandcode',
+      match: { providerIds: ['custom-provider'], runtimes: ['mcode'] },
+      currency: 'USD',
+    }],
+    models: [{ runtime: 'mcode', provider: 'custom-provider', runtimeModel: 'Vendor/Long Model', rateModel: 'qwen-3.7-plus' }],
+  });
+  const custom = resolveWithProviderDriver(customRegistry, {
+    provider: 'custom-provider',
+    model: 'Vendor/Long Model',
+    at: '2026-09-26T00:00:00.000Z',
+    contextTokens: 1_000,
+  });
+  assert.equal(custom.providerDriver.id, 'custom-commandcode');
+  assert.equal(custom.resolvedModel, 'qwen-3.7-plus');
+  assert.equal(custom.rate.input, 0.4);
 });
 
 test('provider detection rejects ambiguity and model aliases remain deterministic', () => {

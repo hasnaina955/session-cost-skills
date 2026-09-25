@@ -21,7 +21,8 @@ import {
 } from './lib/session-cost-core.mjs';
 import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from './lib/session-graph.mjs';
 import { REPORT_CONTRACT_VERSION, withNormalizedContract } from './lib/report-contract.mjs';
-import { detectBuiltinProvider } from './lib/provider-driver.mjs';
+import { detectConfiguredProvider } from './lib/provider-driver.mjs';
+import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, readConfigFile } from './lib/config.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA_DIR = path.resolve(SCRIPT_DIR, '..', '..', '..');
@@ -43,7 +44,12 @@ const opts = {
   accountDays: 45,
   dashboard: false,
   out: null,
+  sessionConfigPath: null,
+  configAction: null,
+  configImportPath: null,
 };
+
+let effectiveConfiguration = null;
 
 const CONTRACT_RUNTIME = Object.freeze({
   id: 'cline',
@@ -76,6 +82,11 @@ for (let i = 2; i < process.argv.length; i++) {
   else if (arg === '--provider') opts.provider = process.argv[++i];
   else if (arg === '--model') opts.model = process.argv[++i];
   else if (arg === '--config') opts.configPath = process.argv[++i];
+  else if (arg === '--session-config') opts.sessionConfigPath = process.argv[++i];
+  else if (arg === '--init-config') opts.configAction = 'init';
+  else if (arg === '--validate-config') opts.configAction = 'validate';
+  else if (arg === '--export-config') opts.configAction = 'export';
+  else if (arg === '--import-config') { opts.configAction = 'import'; opts.configImportPath = process.argv[++i]; }
   else if (arg === '--list') opts.list = Number(process.argv[++i] ?? 10);
   else if (arg === '--include-children') { opts.includeChildren = true; opts.includeChildrenExplicit = true; }
   else if (arg === '--json') opts.json = true;
@@ -101,11 +112,38 @@ function help() {
   --provider <name>    filter sessions by provider
   --model <name>       filter sessions by model substring
   --config <path>      load standing-summary settings
+  --session-config <path> load provider/session configuration
+  --init-config        create a safe project config template
+  --validate-config    validate and print effective configuration
+  --export-config      print the effective configuration
+  --import-config <path> validate and import a config file
   --include-children  include all descendant subagent sessions
   --list [n]           list the n most recent sessions (default 10)
   --json              emit schema-versioned JSON
   --data-dir <path>    Cline data directory (default: %USERPROFILE%\\.cline)`);
 }
+function handleConfigAction(configuration) {
+  if (!opts.configAction) return false;
+  const target = path.resolve(opts.sessionConfigPath ?? configuration.paths.project);
+  let actionResult = null;
+  if (opts.configAction === 'init') actionResult = initConfig(target);
+  else if (opts.configAction === 'import') {
+    if (!opts.configImportPath) die('--import-config requires a path');
+    actionResult = importConfig(path.resolve(opts.configImportPath), target);
+  } else if (opts.configAction === 'validate') {
+    const loaded = readConfigFile(target);
+    if (!loaded) die(`config not found: ${target}`);
+    actionResult = { path: target, config: loaded.config };
+  } else if (opts.configAction === 'export') actionResult = { path: target, config: configuration.config };
+  console.log(JSON.stringify({
+    schemaVersion: 1,
+    action: opts.configAction,
+    result: actionResult,
+    configuration: { ...publicConfigResult(configuration), config: actionResult?.config ?? configuration.config },
+  }, null, 2));
+  return true;
+}
+
 function die(message) { console.error(`session-cost: ${message}`); process.exit(2); }
 function integer(value) { return Math.round(num(value)).toLocaleString('en-US'); }
 function usd(value) { return `$${num(value).toFixed(6)}`; }
@@ -223,7 +261,8 @@ function reportFor(row, all, graph, includeChildren, selection = null) {
       startedAt: row.started_at,
       endedAt: row.ended_at,
     },
-    providerDriver: detectBuiltinProvider(row.provider, 'cline'),
+    providerDriver: detectConfiguredProvider(row.provider, effectiveConfiguration?.config, 'cline'),
+    configuration: effectiveConfiguration,
     selection: null,
     usage: usageSummary(total),
     billing: classifyBilling(total),
@@ -352,6 +391,7 @@ function aggregateReports(reports, label, duplicateSuppressedSessionIds = []) {
     snapshot: { capturedAt: new Date().toISOString(), active: reports.some((report) => report.snapshot.active), state: 'aggregate' },
     session: { id: null, title: label, status: 'aggregate', startedAt: reports.at(-1)?.session.startedAt ?? null, endedAt: reports[0]?.session.endedAt ?? null },
     providerDrivers,
+    configuration: effectiveConfiguration,
     selection: { method: label, requestedId: null, ambiguousCandidates: [], warning: null },
     usage: usageSummary(total),
     billing: classifyBilling(total),
@@ -454,6 +494,7 @@ async function runAccount(dataDir) {
     live: true,
     credentialSource: credential.source,
     credentialExpiresAt: credential.expiresAt ?? null,
+    configuration: publicConfigResult(effectiveConfiguration),
   };
   if (opts.dashboard) {
     const outputPath = writeDashboard(output, {
@@ -467,6 +508,22 @@ async function runAccount(dataDir) {
 }
 
 const dataDir = path.resolve(opts.dataDir ?? DEFAULT_DATA_DIR);
+try {
+  effectiveConfiguration = loadEffectiveConfig({
+    configPath: opts.sessionConfigPath,
+    cli: {
+      provider: opts.provider,
+      model: opts.model,
+      includeChildren: opts.includeChildrenExplicit ? opts.includeChildren : undefined,
+    },
+  });
+  if (handleConfigAction(effectiveConfiguration)) process.exit(0);
+  if (!opts.provider && effectiveConfiguration.config.runtimeDefaults.provider) opts.provider = effectiveConfiguration.config.runtimeDefaults.provider;
+  if (!opts.model && effectiveConfiguration.config.runtimeDefaults.model) opts.model = effectiveConfiguration.config.runtimeDefaults.model;
+  if (!opts.includeChildrenExplicit && effectiveConfiguration.config.runtimeDefaults.includeChildren === true) opts.includeChildren = true;
+} catch (error) {
+  die(error.message);
+}
 if (opts.account) {
   try {
     await runAccount(dataDir);

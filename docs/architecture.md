@@ -34,6 +34,8 @@ MCode pricing uses `contracts/rate-record-v1.schema.json`. Each input, output, c
 
 Provider behavior is isolated behind `contracts/provider-driver-v1.schema.json`. Runtime adapters normalize usage and preserve driver identity/provenance; provider drivers own detection, model discovery, aliases, rate retrieval, and rate selection. Ambiguous provider matches and unsupported capabilities fail explicitly rather than falling back to runtime-specific pricing branches.
 
+Layered configuration is defined by `contracts/session-config-v1.schema.json`. The effective precedence is CLI flags, project config, user config, detected runtime defaults, then built-in defaults. Provider profiles and model mappings retain their winning source in normalized reports; endpoint and credential values remain environment references.
+
 ## Shared layer
 
 - Normalized report schema and runtime validator

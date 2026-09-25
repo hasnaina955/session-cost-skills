@@ -37,13 +37,17 @@ Unknown cost is `null`, never zero. A known zero-cost session with no calls may 
 
 MCode selects the four component records that apply to each call timestamp, context size, and time band. Refreshes retain previous records and close open intervals at the next effective snapshot. Calls before the earliest trustworthy effective date remain unpriced.
 
+## Session configuration
+
+`session-config-v1.schema.json` defines provider profiles, model mappings, and runtime defaults. The loader merges built-in defaults, detected runtime defaults, the user config, the project config, and CLI flags in that order. It reports the winning source for runtime defaults and profiles. Provider profiles may contain endpoint and credential environment-variable names, never secret values.
+
 ## Provider drivers
 
 `provider-driver-v1.schema.json` defines the versioned manifest for built-in and user-installed provider drivers. A manifest declares deterministic provider matching, supported operations and capabilities, token semantics, model aliases, credential environment-variable references, source metadata, and a SHA-256 fingerprint. Driver implementations may contain functions, but reports serialize only the safe manifest and never credential values.
 
 ## Validation
 
-The canonical runtime validator is `shared/report-contract.mjs`. It is generated into each independently installable adapter and is also checked against the JSON Schema by `tests/normalized-contract.test.mjs`. Rate records are validated across the complete bundled catalog by `tests/rate-record-contract.test.mjs`, and provider manifests plus built-in/user-loaded drivers are covered by `tests/provider-driver-contract.test.mjs`.
+The canonical runtime validator is `shared/report-contract.mjs`. It is generated into each independently installable adapter and is also checked against the JSON Schema by `tests/normalized-contract.test.mjs`. Rate records are validated across the complete bundled catalog by `tests/rate-record-contract.test.mjs`, provider manifests plus built-in/user-loaded drivers by `tests/provider-driver-contract.test.mjs`, and layered configuration by `tests/config-contract.test.mjs`.
 
 Run:
 

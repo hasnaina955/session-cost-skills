@@ -33,12 +33,25 @@ node $SessionCost
 | `--refresh-rates` | Re-fetch mirrored provider rates |
 | `--json` | Shared normalized contract JSON |
 | `--config <path>` | Standing-summary config |
+| `--session-config <path>` | Provider/session config |
+| `--init-config` | Create safe config template |
+| `--validate-config` | Validate and show effective config |
+| `--export-config` | Print effective config |
+| `--import-config <path>` | Import validated config |
 | `--data-dir <path>` | Override MCode data directory |
 | `--help` / `-h` | CLI help |
 
 ## Session modes
 
 `--json` reports use normalized contract version `1.2.0`. MCode labels its value as a provider-rate estimate, keeps `recordedCostUsd` null, and exposes token semantics, coverage, provenance, warnings, and session-graph state.
+
+## Provider configuration
+
+Project config is `.session-cost.json`; user config uses the platform config directory. Precedence is
+CLI flags, project config, user config, detected runtime defaults, then built-in defaults. Provider
+profiles map custom provider names and model aliases to a supported driver. Use `--validate-config` or
+`--export-config` to inspect effective values and winning sources. Profiles store environment-variable
+names such as `OPENROUTER_API_KEY`, never credential values.
 
 ```powershell
 node $SessionCost

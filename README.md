@@ -25,6 +25,7 @@ This repository keeps runtime-specific accounting adapters separate while sharin
 - CommandCode and StepFun provider-rate accounting
 - Effective-dated, context-aware MCode rates with immutable refresh history and fingerprints
 - Versioned built-in and user-installed provider driver manifests
+- Layered project/user configuration with safe provider profiles and model aliases
 - Cache-read and cache-write semantics preserved per runtime
 - Self-contained HTML dashboards with no external assets
 - Shared normalized JSON report contract with runtime extensions
@@ -82,6 +83,8 @@ Or run individual checks:
 ```powershell
 npm test
 npm run check:report-contract
+npm run check:provider-driver
+npm run check:config
 npm run check:contracts
 npm run check:cline
 npm run check:mcode
