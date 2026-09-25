@@ -11,6 +11,7 @@ All notable changes to this project are documented here.
 - Added layered project/user configuration, provider profiles, safe secret references, and config lifecycle commands.
 - Added secret-safe doctor/provider/model discovery and deterministic match explanations with suggestion-only aliases.
 - Added OpenAI/Anthropic-compatible protocol drivers, custom endpoint profiles, and manual or imported effective rate cards.
+- Made explicit, runtime-provided, active-root, ambiguous, and zero-call session selection explicit across both adapters.
 
 ### Security
 

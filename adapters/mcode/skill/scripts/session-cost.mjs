@@ -240,12 +240,6 @@ async function openLedger(dataDir) {
   return new DatabaseSync(dbPath, { readOnly: true });
 }
 
-function latestSessionId(db) {
-  const row = db.prepare('SELECT session_id FROM local_runtime_token_usage ORDER BY ts DESC LIMIT 1').get();
-  if (!row) fail('the token-usage ledger is empty — no session has made an LLM call yet');
-  return row.session_id;
-}
-
 function sessionMeta(db, sessionId) {
   return db.prepare('SELECT session_id, agent_name, title, parent_session_id, history_relative_dir FROM local_runtime_sessions WHERE session_id = ?').get(sessionId) ?? null;
 }
@@ -560,7 +554,7 @@ const fmtRate = (v) => {
   return s;
 };
 
-function renderText(rep) {
+function renderText(rep, selection = null) {
   const L = [];
   const billedChildren = rep.childSessionsBilled.length;
   const unbilledChildren = rep.childSessions.length - billedChildren;
@@ -581,6 +575,9 @@ function renderText(rep) {
   if (rep.title) L.push(`Task: ${rep.title}`);
   L.push(`Window: ${stamp(rep.firstTs)} → ${stamp(rep.lastTs)} · ${rep.calls} LLM call(s)`);
   L.push(`Snapshot: ${stamp(rep.snapshotAt)}${rep.sessionActive ? ' — session is still active, these totals will grow' : ' (session idle)'}`);
+  if (selection?.method) L.push(`Selection: ${selection.method}${selection.requestedId ? ` (${selection.requestedId})` : ''}`);
+  if (selection?.warning) L.push(`Selection warning: ${selection.warning}`);
+  if (selection?.candidateIds?.length) L.push(`Selection candidates: ${selection.candidateIds.join(', ')}`);
   L.push('');
   // Never print $0.000000 as a headline: with no rate for any model that reads as "this session
   // was free" when the truth is "the cost is unknown".
@@ -720,6 +717,59 @@ function loadConfig(dataDir) {
 function sessionRows(db) {
   return db.prepare('SELECT session_id, MIN(ts) AS first_ts, MAX(ts) AS last_ts, COUNT(*) AS calls FROM local_runtime_token_usage GROUP BY session_id ORDER BY last_ts DESC').all();
 }
+function resolveMCodeSession(db, rows, graph, { explicitId, environment = process.env } = {}) {
+  const runtimeId = environment.MCODE_SESSION_ID
+    || environment.MINIMAX_SESSION_ID
+    || environment.MCODE_THREAD_ID
+    || null;
+  const requestedId = explicitId ?? runtimeId;
+  if (requestedId) {
+    if (!graph.byId.has(requestedId)) {
+      return {
+        row: null,
+        method: explicitId ? 'explicit' : 'environment',
+        requestedId,
+        candidateIds: [],
+        error: `unknown MCode session id: ${requestedId}`,
+      };
+    }
+    return {
+      row: sessionMeta(db, requestedId),
+      method: explicitId ? 'explicit' : 'environment',
+      requestedId,
+      candidateIds: [requestedId],
+    };
+  }
+
+  const roots = rows
+    .filter((row) => !graph.byId.get(row.session_id)?.parentId)
+    .sort((left, right) => Number(right.last_ts) - Number(left.last_ts));
+  const active = roots.filter((row) => Date.now() - Number(row.last_ts) < LIVE_WINDOW_MS);
+  if (active.length === 1) {
+    return { row: active[0], method: 'unique-active-root', requestedId: null, candidateIds: [active[0].session_id] };
+  }
+  if (active.length > 1) {
+    return {
+      row: null,
+      method: 'ambiguous-active-root',
+      requestedId: null,
+      candidateIds: active.map((row) => row.session_id),
+      error: `multiple active MCode root sessions exist (${active.map((row) => row.session_id).join(', ')}); pass --session to select one`,
+    };
+  }
+  const knownSessions = [...graph.byId.keys()];
+  const fallbackId = roots[0]?.session_id ?? knownSessions.at(-1) ?? null;
+  return {
+    row: fallbackId ? sessionMeta(db, fallbackId) : null,
+    method: roots.length ? 'latest-root-fallback' : fallbackId ? 'latest-known-zero-call' : 'empty-ledger',
+    requestedId: null,
+    candidateIds: (roots.length ? roots.slice(0, 2).map((row) => row.session_id) : knownSessions.slice(-2)),
+    warning: roots.length
+      ? 'no active root session was discoverable; selected the latest root session'
+      : fallbackId ? 'no token-usage rows were available; selected the latest known zero-call session' : null,
+  };
+}
+
 function matchesFilters(db, dataDir, row) {
   const from = opts.from ? parseDate(opts.from) : null;
   const to = opts.to ? parseDate(opts.to, true) : null;
@@ -1128,16 +1178,24 @@ async function main() {
       return reports.every((report) => report.rateKnown) ? 0 : 2;
     }
 
-    const sessionId = opts.session ?? candidates[0]?.session_id ?? latestSessionId(db);
+    const resolved = resolveMCodeSession(db, allRows, graph, { explicitId: opts.session });
+    if (resolved.error) fail(resolved.error);
+    if (!resolved.row) fail('MCode ledger contains no known sessions');
+    const sessionId = resolved.row.session_id;
     const report = costForSession(db, dataDir, table, providerRegistry, graph, sessionId);
-    const selection = { method: opts.session ? 'explicit' : 'latest-ledger-activity', requestedId: opts.session ?? null, candidates: candidates.slice(0, 5).map((row) => row.session_id) };
+    const selection = {
+      method: resolved.method,
+      requestedId: resolved.requestedId,
+      candidateIds: resolved.candidateIds,
+      warning: resolved.warning,
+    };
 
     if (opts.dashboard) {
       const outputPath = writeDashboard(enhanceReport(report, selection), { outPath: opts.out ?? path.join(dataDir, 'reports', 'session-cost', 'session-dashboard.html'), title: 'MCode Session Cost Dashboard' });
       if (opts.json) console.log(JSON.stringify({ schemaVersion: 1, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'mcode', kind: 'dashboard', generatedAt: new Date().toISOString(), dashboardPath: outputPath, report: enhanceReport(report, selection) }, null, 2));
       else console.log(`Dashboard written: ${outputPath}`);
     } else if (opts.json) console.log(JSON.stringify(enhanceReport(report, selection), null, 2));
-    else console.log(renderText(report));
+    else console.log(renderText(report, selection));
 
     return report.rateKnown ? 0 : 2;
   } finally {

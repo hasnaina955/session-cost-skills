@@ -65,7 +65,9 @@ node $SessionCost config explain --provider commandcode --model minimax-m3
 
 Unknown or ambiguous provider/model matches return a non-zero status and are never guessed.
 OpenAI- and Anthropic-compatible profiles supply provider identity and model diagnostics; Cline cost
-remains the amount recorded by the runtime and is never replaced by a protocol estimate.
+remains the amount recorded by the runtime and is never replaced by a protocol estimate. Unknown explicit
+IDs fail before a report is built; multiple active root sessions require `--session`, and a no-active
+fallback prints its candidate IDs and warning.
 
 ## Session modes
 

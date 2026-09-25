@@ -119,27 +119,53 @@ export function classifyBilling(metrics) {
   return { classification: 'cost-unavailable', label: 'Cost unavailable', evidence: 'Billing classification is incomplete.', currency: 'USD', recordedCostUsd: null, coverage: 'unavailable' };
 }
 
+const ACTIVE_CLINE_STATES = new Set(['idle', 'running', 'pending']);
+
 export function resolveSession(rows, { explicitId, environment = {}, ancestorPids = [], logSessionId = null } = {}) {
   const byId = new Map(rows.map((row) => [row.session_id, row]));
   const explicit = explicitId ?? environment.CLINE_SESSION_ID ?? environment.CLINE_SESSION_ULID ?? environment.CLINE_ULID ?? null;
   if (explicit) {
-    if (!byId.has(explicit)) return { row: null, method: 'explicit', requestedId: explicit, ambiguousCandidates: [], error: `unknown session id: ${explicit}` };
+    if (!byId.has(explicit)) {
+      return { row: null, method: 'explicit', requestedId: explicit, ambiguousCandidates: [], error: `unknown session id: ${explicit}` };
+    }
     return { row: byId.get(explicit), method: explicitId ? 'explicit' : 'environment', requestedId: explicit, ambiguousCandidates: [] };
   }
 
+  if (logSessionId && byId.has(logSessionId)) {
+    return { row: byId.get(logSessionId), method: 'runtime-context', requestedId: logSessionId, ambiguousCandidates: [] };
+  }
+
+  const roots = rows.filter((row) => !row.parent_session_id);
+  const activeRoots = roots
+    .filter((row) => ACTIVE_CLINE_STATES.has(String(row.status ?? '').toLowerCase()))
+    .sort((left, right) => Date.parse(right.started_at) - Date.parse(left.started_at));
+  if (activeRoots.length === 1) {
+    return { row: activeRoots[0], method: 'unique-active-root', requestedId: null, ambiguousCandidates: [] };
+  }
   const pids = new Set(ancestorPids.map(Number).filter((pid) => Number.isInteger(pid) && pid > 0));
-  const pidMatches = rows.filter((row) => pids.has(Number(row.pid)));
-  if (pidMatches.length === 1) return { row: pidMatches[0], method: 'process-ancestry', requestedId: null, ambiguousCandidates: [] };
-  if (pidMatches.length > 1) return { row: null, method: 'process-ancestry', requestedId: null, ambiguousCandidates: pidMatches.map((row) => row.session_id), error: 'multiple session rows match the Cline process ancestry' };
+  const pidMatches = activeRoots.filter((row) => pids.has(Number(row.pid)));
+  if (pidMatches.length === 1) {
+    return { row: pidMatches[0], method: 'process-ancestry', requestedId: null, ambiguousCandidates: [] };
+  }
+  if (activeRoots.length > 1) {
+    return {
+      row: null,
+      method: 'ambiguous-active-root',
+      requestedId: null,
+      ambiguousCandidates: activeRoots.map((row) => row.session_id),
+      error: `multiple active Cline root sessions exist (${activeRoots.map((row) => `${row.session_id}:${row.status}`).join(', ')}); pass --session to select one`,
+    };
+  }
 
-  if (logSessionId && byId.has(logSessionId)) return { row: byId.get(logSessionId), method: 'log-context', requestedId: logSessionId, ambiguousCandidates: [] };
-
-  const running = rows.filter((row) => row.status === 'running').sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at));
-  if (running.length === 1) return { row: running[0], method: 'latest-running', requestedId: null, ambiguousCandidates: [] };
-  const recent = [...rows].sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at));
+  const recent = [...roots].sort((left, right) => Date.parse(right.started_at) - Date.parse(left.started_at));
   const latest = recent[0] ?? null;
-  const plausible = running.length > 1 ? running : recent.slice(0, 2);
-  return { row: latest, method: running.length > 1 ? 'ambiguous-running' : 'latest-started', requestedId: null, ambiguousCandidates: plausible.map((row) => row.session_id), warning: running.length > 1 ? 'multiple running sessions exist; pass --session to select one' : null };
+  return {
+    row: latest,
+    method: 'latest-root-fallback',
+    requestedId: null,
+    ambiguousCandidates: recent.slice(0, 2).map((row) => row.session_id),
+    warning: 'no active root session was discoverable; selected the latest root session',
+  };
 }
 
 export function coverage(metrics) {
