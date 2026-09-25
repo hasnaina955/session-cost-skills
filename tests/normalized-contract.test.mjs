@@ -90,7 +90,8 @@ test('Cline CLI satisfies the shared contract across all report modes', (t) => {
   const current = runJson(fixture.script, fixture.dataDir, []);
   assert.equal(current.result.status, 0, current.result.stderr);
   assertContract(current.output, 'cline');
-  assert.equal(current.output.selection.method, 'latest-started');
+  assert.equal(current.output.selection.method, 'latest-root-fallback');
+  assert.match(current.output.selection.warning, /latest root/);
 
   const last = runJson(fixture.script, fixture.dataDir, ['--last']);
   assert.equal(last.result.status, 0, last.result.stderr);
@@ -167,10 +168,14 @@ test('MCode CLI satisfies the shared contract across all report modes', (t) => {
   assertContract(excluded.output, 'mcode');
   assert.deepEqual(excluded.output.sessionGraph.excludedSessionIds, ['mcode-child', 'mcode-grandchild']);
 
-  const current = runJson(fixture.script, fixture.dataDir, [], fixture.environment);
+  const current = runJson(fixture.script, fixture.dataDir, [], {
+    ...fixture.environment,
+    MCODE_SESSION_ID: fixture.runtimeSession,
+  });
   assertContract(current.output, 'mcode');
   assert.equal(current.result.status, current.output.rateKnown ? 0 : 2, current.result.stderr);
-  assert.equal(current.output.selection.method, 'latest-ledger-activity');
+  assert.equal(current.output.selection.method, 'environment');
+  assert.equal(current.output.sessionId, fixture.runtimeSession);
 
   const last = runJson(fixture.script, fixture.dataDir, ['--last'], fixture.environment);
   assertContract(last.output, 'mcode');

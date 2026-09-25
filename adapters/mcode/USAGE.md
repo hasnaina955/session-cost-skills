@@ -98,6 +98,8 @@ node $SessionCost config explain --provider commandcode --model qwen-3.7-plus
 ```
 
 Unknown models return a non-zero status with suggestion-only aliases; they are never applied automatically.
+Unknown `--session` IDs also fail before a zero-cost report is built. MCode prefers `MCODE_SESSION_ID`,
+then a unique active root, then a warned latest-root fallback; parallel active roots require `--session`.
 
 ```powershell
 node $SessionCost

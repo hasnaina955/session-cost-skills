@@ -318,10 +318,11 @@ function reportFor(row, all, graph, includeChildren, selection = null) {
   }, selection);
 }
 function reportStatus(row) {
+  const active = ['idle', 'running', 'pending'].includes(String(row.status ?? '').toLowerCase());
   return {
     capturedAt: new Date().toISOString(),
-    active: row.status === 'running',
-    state: row.status === 'running' ? 'snapshot' : 'final',
+    active,
+    state: active ? 'snapshot' : 'final',
     lastLedgerActivityAt: row.updated_at ?? row.ended_at ?? row.started_at ?? null,
   };
 }
@@ -342,6 +343,9 @@ function render(report) {
     `Title: ${clip(report.session.title || '(untitled)', 80)}`,
     `Status: ${report.session.status} (${freshness(report)})`,
     ...(report.providerDriver ? [`Provider driver: ${report.providerDriver.id}@${report.providerDriver.version} (${report.providerDriver.fingerprint})`] : []),
+    ...(report.selection?.method ? [`Selection: ${report.selection.method}${report.selection.requestedId ? ` (${report.selection.requestedId})` : ''}`] : []),
+    ...(report.selection?.warning ? [`Selection warning: ${report.selection.warning}`] : []),
+    ...(report.selection?.candidateIds?.length ? [`Selection candidates: ${report.selection.candidateIds.join(', ')}`] : []),
     `Calls: ${integer(t.calls)} across ${t.models.size} model(s)`,
     `Billing: ${billing.label} — ${billing.evidence}`,
     '',

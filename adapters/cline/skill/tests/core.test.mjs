@@ -69,13 +69,36 @@ test('session resolver prioritizes explicit and environment IDs', () => {
   assert.equal(resolveSession(rows, { environment: { CLINE_SESSION_ID: 'a' } }).method, 'environment');
 });
 
-test('session resolver does not guess among multiple running sessions', () => {
+test('session resolver refuses to guess among multiple active root sessions', () => {
   const rows = [
-    { session_id: 'a', pid: 1, status: 'running', started_at: '2026-01-02T00:00:00Z' },
-    { session_id: 'b', pid: 2, status: 'running', started_at: '2026-01-01T00:00:00Z' },
+    { session_id: 'a', pid: 1, status: 'running', parent_session_id: null, started_at: '2026-01-02T00:00:00Z' },
+    { session_id: 'b', pid: 2, status: 'idle', parent_session_id: null, started_at: '2026-01-01T00:00:00Z' },
   ];
   const result = resolveSession(rows);
-  assert.equal(result.method, 'ambiguous-running');
+  assert.equal(result.method, 'ambiguous-active-root');
+  assert.equal(result.row, null);
   assert.deepEqual(result.ambiguousCandidates, ['a', 'b']);
-  assert.match(result.warning, /multiple running/);
+  assert.match(result.error, /multiple active Cline root sessions/);
+});
+
+test('session resolver recognizes active states, runtime context, root-only PIDs, and warned fallback', () => {
+  const rows = [
+    { session_id: 'root', pid: 10, status: 'pending', parent_session_id: null, started_at: '2026-01-03T00:00:00Z' },
+    { session_id: 'child', pid: 11, status: 'running', parent_session_id: 'root', started_at: '2026-01-04T00:00:00Z' },
+    { session_id: 'old', pid: 12, status: 'completed', parent_session_id: null, started_at: '2026-01-01T00:00:00Z' },
+  ];
+  assert.equal(resolveSession(rows).row.session_id, 'root');
+  assert.equal(resolveSession(rows, { logSessionId: 'child' }).method, 'runtime-context');
+  const fallback = resolveSession([
+    { session_id: 'old', pid: 12, status: 'completed', parent_session_id: null, started_at: '2026-01-01T00:00:00Z' },
+  ], { ancestorPids: [12] });
+  assert.equal(fallback.method, 'latest-root-fallback');
+  assert.equal(fallback.row.session_id, 'old');
+  assert.match(fallback.warning, /latest root/);
+  const byPid = resolveSession([
+    { session_id: 'a', pid: 1, status: 'idle', parent_session_id: null, started_at: '2026-01-02T00:00:00Z' },
+    { session_id: 'b', pid: 2, status: 'pending', parent_session_id: null, started_at: '2026-01-01T00:00:00Z' },
+  ], { ancestorPids: [2] });
+  assert.equal(byPid.method, 'process-ancestry');
+  assert.equal(byPid.row.session_id, 'b');
 });
