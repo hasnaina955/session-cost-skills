@@ -1,36 +1,33 @@
-name: Verify session-cost skills
+# CI matrix reference — not a workflow, and not a template.
+#
+# The executable CI matrix lives in .github/workflows/ci.yml. That file is the
+# single source of truth: if the two ever disagree, the workflow is correct and
+# this file is stale. Edit the workflow, then update the summary below.
+#
+# This file deliberately contains no `jobs:` definitions. It used to carry a
+# copy of the workflow that drifted out of date and pinned action revisions
+# that do not exist on GitHub, so nobody should copy it into .github/workflows/.
+#
+# See CONTRIBUTING.md for how to run the same checks locally.
+source_of_truth: .github/workflows/ci.yml
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+# What CI actually exercises on every push and pull request.
+supported:
+  # verify job: full cartesian product, fail-fast disabled so one broken
+  # OS/Node pair still reports the others.
+  os: [ubuntu-latest, windows-latest, macos-latest]
+  # '22.15' is the floor in package.json "engines"; 24 is the current release.
+  node: ['22.15', '24']
+  # bun job: smoke subset only, on ubuntu-latest.
+  # release job: rehearsal runs on Ubuntu and Windows, because extraction is done
+  # in-process and there is no external `unzip` dependency.
+  jobs: [verify, bun, release]
 
-permissions:
-  contents: read
+# Every action is pinned to a full 40-character commit SHA rather than a
+# mutable tag like @v4. Tags are branches that the action owner can re-point at
+# new code at any time, so a tag reference means the code CI executes can change
+# without a commit to this repository, and a compromised or typo'd tag fails the
+# whole pipeline. A full SHA is immutable and auditable; the human-readable
+# version stays in a trailing comment on each `uses:` line.
+pinning: full commit SHAs
 
-jobs:
-  verify:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        node: [22.15, 24]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: actions/setup-node@1e60f620b9541dca151540f0bdec7c55d6b766c0
-        with:
-          node-version: ${{ matrix.node }}
-      - name: Verify
-        run: npm run verify
-
-  bun:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: oven-sh/setup-bun@735343b65c2c7c9a92e630ae25a3e4dc8daf2dd
-      - name: Bun smoke tests
-        run: bun run scripts/check-docs.mjs && bun run scripts/check-artifacts.mjs && bun run scripts/run-tests.mjs

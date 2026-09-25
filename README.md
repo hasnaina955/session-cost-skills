@@ -42,6 +42,20 @@ The source is split into two installable skills:
 
 Keep installed copies separate. They share the public skill name but use different runtime ledgers and token semantics.
 
+Each installed skill reports its own version:
+
+```powershell
+node "$env:USERPROFILE\.cline\skills\session-cost\scripts\session-cost.mjs" --version
+```
+
+```text
+session-cost 0.3.0 (cline adapter)
+report contract: 1.2.0
+node: 24.21.0 (requires >= 22.15.0)
+```
+
+Releases publish one archive per adapter plus a combined bundle, each with a SHA-256 checksum. See [docs/release.md](docs/release.md) for the version contract, archive contents, and the release process.
+
 ## Quick usage
 
 Cline:
@@ -113,6 +127,7 @@ A Gumroad product may be offered for voluntary support, compatibility assistance
 - [Normalized report contract](contracts/README.md)
 - [MCode porting plan](docs/porting-plan.md)
 - [Optional support and troubleshooting](SUPPORT.md)
+- [Release, version, and package contract](docs/release.md)
 - [Internal optional-support launch checklist](docs/gumroad-selling-guide.html)
 - [Cross-platform CI matrix template](docs/ci-matrix.yml)
 - [Changelog](CHANGELOG.md)

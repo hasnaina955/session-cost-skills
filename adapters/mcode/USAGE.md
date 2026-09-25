@@ -43,6 +43,7 @@ node $SessionCost
 | `models discover` | List rate models and aliases |
 | `config explain` | Explain provider/model matching |
 | `--data-dir <path>` | Override MCode data directory |
+| `--version` / `-v` | Installed skill, report-contract, and Node versions |
 | `--help` / `-h` | CLI help |
 
 ## Session modes

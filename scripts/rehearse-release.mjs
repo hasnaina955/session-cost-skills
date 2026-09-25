@@ -9,22 +9,32 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { forbiddenPackageReason, repositoryRoot } from './lib/release-pkg.mjs';
+import { forbiddenPackageReason, readDeterministicZip, repositoryRoot } from './lib/release-pkg.mjs';
 import { createClineFixture, createMCodeFixture, runCli } from '../tests/helpers/contract-fixtures.mjs';
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8'));
 const version = packageJson.version;
 const outputDir = path.join(repositoryRoot, 'dist');
 
-function extract(archive, destination) {
-  fs.mkdirSync(destination, { recursive: true });
-  execFileSync('unzip', ['-q', archive, '-d', destination], { stdio: 'pipe' });
-  return destination;
+function readArchive(archive) {
+  return readDeterministicZip(fs.readFileSync(archive));
 }
 
-function readZipEntryNames(archive) {
-  const listing = execFileSync('unzip', ['-Z1', archive], { encoding: 'utf8' });
-  return listing.split(/\r?\n/).filter(Boolean);
+function install(entries, runtime, destination) {
+  const prefix = `${runtime}/`;
+  let installed = 0;
+  for (const entry of entries) {
+    if (!entry.path.startsWith(prefix)) continue;
+    const target = path.join(destination, entry.path.slice(prefix.length));
+    assert.ok(
+      path.resolve(target).startsWith(path.resolve(destination)),
+      `archive entry escaped the install directory: ${entry.path}`,
+    );
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, entry.data);
+    installed += 1;
+  }
+  return installed;
 }
 
 execFileSync(process.execPath, [path.join(repositoryRoot, 'scripts', 'build-release.mjs'), '--out', outputDir], {
@@ -38,16 +48,17 @@ for (const runtime of ['cline', 'mcode']) {
   const archive = path.join(outputDir, `session-cost-${runtime}-v${version}.zip`);
   assert.ok(fs.existsSync(archive), `missing release archive ${path.basename(archive)}`);
 
-  for (const entry of readZipEntryNames(archive)) {
-    const reason = forbiddenPackageReason(entry);
-    assert.equal(reason, null, `archive ${path.basename(archive)} contains ${entry}: matched ${reason}`);
+  const entries = readArchive(archive);
+  for (const entry of entries) {
+    const reason = forbiddenPackageReason(entry.path);
+    assert.equal(reason, null, `archive ${path.basename(archive)} contains ${entry.path}: matched ${reason}`);
   }
 
   // Install exactly the way SUPPORT.md documents: copy the skill folder contents.
   const installRoot = path.join(workspace, `${runtime}-install`, 'skills', 'session-cost');
-  const extracted = extract(archive, path.join(workspace, `${runtime}-extract`));
   fs.mkdirSync(installRoot, { recursive: true });
-  fs.cpSync(path.join(extracted, runtime), installRoot, { recursive: true });
+  const installed = install(entries, runtime, installRoot);
+  assert.ok(installed > 0, `${runtime}: the archive contained no ${runtime} entries`);
 
   assert.ok(fs.existsSync(path.join(installRoot, 'SKILL.md')), `${runtime}: SKILL.md is missing from the installed skill`);
   assert.ok(fs.existsSync(path.join(installRoot, 'VERSION')), `${runtime}: VERSION is missing from the installed skill`);
@@ -56,6 +67,12 @@ for (const runtime of ['cline', 'mcode']) {
     version,
     `${runtime}: the installed skill reports a different version than the release`,
   );
+  assert.equal(
+    fs.existsSync(path.join(installRoot, 'tests')),
+    false,
+    `${runtime}: repository regression tests must not ship inside an installed skill`,
+  );
+  checks.push(`${runtime}: installed ${installed} files from the archive`);
 
   const script = path.join(installRoot, 'scripts', 'session-cost.mjs');
   const versionResult = runCli(script, path.join(workspace, 'unused'), ['--version']);
@@ -85,11 +102,14 @@ for (const runtime of ['cline', 'mcode']) {
 }
 
 const bundle = path.join(outputDir, `session-cost-bundle-v${version}.zip`);
-const bundleNames = readZipEntryNames(bundle);
+const bundleNames = readArchive(bundle).map((entry) => entry.path);
 for (const required of ['LICENSE', 'README.md', 'CHANGELOG.md', 'cline/VERSION', 'mcode/VERSION']) {
   assert.ok(bundleNames.includes(required), `bundle archive is missing ${required}`);
 }
 assert.ok(bundleNames.includes('cline/SKILL.md') && bundleNames.includes('mcode/SKILL.md'), 'bundle archive is missing a skill');
+for (const entry of readArchive(bundle)) {
+  assert.equal(forbiddenPackageReason(entry.path), null, `bundle archive contains ${entry.path}`);
+}
 checks.push(`bundle: ${bundleNames.length} entries including both skills, the MIT notice, and both VERSION files`);
 
 fs.rmSync(workspace, { recursive: true, force: true });

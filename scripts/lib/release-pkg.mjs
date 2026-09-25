@@ -149,6 +149,37 @@ export function sha256(buffer) {
   return `sha256:${createHash('sha256').update(buffer).digest('hex')}`;
 }
 
+/**
+ * Read a ZIP produced by buildDeterministicZip. Only STORE entries are supported,
+ * which is all the builder ever emits. Returns entries sorted by path.
+ */
+export function readDeterministicZip(buffer) {
+  const endIndex = buffer.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  if (endIndex < 0) throw new Error('not a ZIP archive: end-of-central-directory record is missing');
+  const count = buffer.readUInt16LE(endIndex + 10);
+  let cursor = buffer.readUInt32LE(endIndex + 16);
+  const entries = [];
+  for (let index = 0; index < count; index += 1) {
+    if (buffer.readUInt32LE(cursor) !== 0x02014b50) throw new Error('corrupt ZIP central directory');
+    if (buffer.readUInt16LE(cursor + 10) !== METHOD_STORE) throw new Error('unsupported ZIP compression method');
+    const compressedSize = buffer.readUInt32LE(cursor + 20);
+    const nameLength = buffer.readUInt16LE(cursor + 28);
+    const extraLength = buffer.readUInt16LE(cursor + 30);
+    const commentLength = buffer.readUInt16LE(cursor + 32);
+    const localOffset = buffer.readUInt32LE(cursor + 42);
+    const name = buffer.toString('utf8', cursor + 46, cursor + 46 + nameLength);
+
+    if (buffer.readUInt32LE(localOffset) !== 0x04034b50) throw new Error(`corrupt ZIP local header for ${name}`);
+    const dataStart = localOffset + 30 + buffer.readUInt16LE(localOffset + 26) + buffer.readUInt16LE(localOffset + 28);
+    const data = buffer.subarray(dataStart, dataStart + compressedSize);
+    if (crc32(data) !== buffer.readUInt32LE(localOffset + 14)) throw new Error(`ZIP entry failed its CRC check: ${name}`);
+    entries.push({ path: name, data: Buffer.from(data) });
+
+    cursor += 46 + nameLength + extraLength + commentLength;
+  }
+  return entries.sort((left, right) => (left.path < right.path ? -1 : 1));
+}
+
 export function collectFiles(directory, { exclude = () => false } = {}) {
   const files = [];
   const walk = (current, prefix) => {
