@@ -6,6 +6,24 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- A corrupt or unreadable session database no longer prints a raw Node stack trace quoting
+  the full local install path. Both adapters now report one readable line, for example
+  `Cline session database could not be read (sessions.db): the file is not a readable database`.
+  `node:sqlite` opens lazily, so the schema is now probed inside the guard.
+- A database whose schema lacks the expected table now fails instead of reading as an empty
+  ledger. An empty successful report was indistinguishable from a genuine "no sessions" result.
+- Rate refreshes now have a request deadline, a response-size cap, and a content-type check.
+  A hung socket previously left the refresh running indefinitely and a hostile endpoint could
+  stream until the process died.
+- Rate fetch failures no longer echo the offending URL or a local path back to the user.
+- Dashboard writes are now atomic: a temp file plus rename, so an interrupted write can no
+  longer leave a half-written HTML file that is indistinguishable from a good one. A failed
+  write removes its temp file and names the target by basename only.
+- MCode no longer prints a stack trace for an unexpected failure. Set `SESSION_COST_DEBUG=1`
+  to opt back in to the full trace when diagnosing a defect.
+
+### Fixed (accounting)
+
 - Corrected peak/off-peak pricing for OpenAI- and Anthropic-compatible provider profiles.
   `bandForTimestamp` did `new Date(Number(timestamp))`, and `Number()` of an ISO-8601 string is
   `NaN`, so every ISO timestamp resolved to off-peak and **silently under-reported cost** during

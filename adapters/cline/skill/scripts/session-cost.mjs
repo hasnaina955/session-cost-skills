@@ -23,6 +23,7 @@ import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from 
 import { REPORT_CONTRACT_VERSION, withNormalizedContract } from './lib/report-contract.mjs';
 import { formatVersionBanner, versionBanner } from './lib/skill-version.mjs';
 import { CliUsageError, parseCliArgs } from './lib/cli-args.mjs';
+import { describeStorageError } from './lib/error-boundaries.mjs';
 import { detectConfiguredProvider } from './lib/provider-driver.mjs';
 import { discoverModels, doctorReport, explainModelMatch, renderDiagnostics } from './lib/provider-diagnostics.mjs';
 import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, readConfigFile } from './lib/config.mjs';
@@ -616,8 +617,22 @@ if (opts.account) {
 } else {
 const dbPath = path.join(dataDir, 'data', 'db', 'sessions.db');
 if (!fs.existsSync(dbPath)) die(`Cline session database not found: ${dbPath}`);
-const db = new DatabaseSync(dbPath, { readOnly: true });
+// A truncated, locked, or non-SQLite file throws from the driver. Report it as a
+// readable condition naming the file, not as an uncaught stack trace quoting the
+// full local path, and never as an empty successful report.
+let db;
 try {
+  db = new DatabaseSync(dbPath, { readOnly: true });
+  // node:sqlite opens lazily, so a truncated or non-SQLite file only fails on the
+  // first statement. Probe the schema here, inside the guard, so the user gets one
+  // readable line instead of an uncaught driver stack trace quoting the install path.
+  db.prepare('SELECT session_id FROM sessions LIMIT 1').all();
+} catch (error) {
+  die(`Cline session database could not be read (${path.basename(dbPath)}): ${describeStorageError(error)}`);
+}
+try {
+  // A database that parses but has no `sessions` table must fail rather than read as
+  // an empty ledger, which would be indistinguishable from a real "no sessions" result.
   const all = db.prepare('SELECT * FROM sessions').all();
   if (!all.length) die('Cline session database contains no sessions');
   const config = loadConfig(dataDir);

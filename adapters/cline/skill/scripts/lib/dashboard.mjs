@@ -3,6 +3,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 function esc(value) {
   return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -567,7 +568,18 @@ ${modelTable ? `<h2>Models</h2>${modelTable}` : ''}
 
 export function writeDashboard(data, { outPath, title } = {}) {
   const output = path.resolve(outPath ?? 'session-cost-dashboard.html');
+  const html = renderDashboard(data, { title });
   fs.mkdirSync(path.dirname(output), { recursive: true });
-  fs.writeFileSync(output, renderDashboard(data, { title }), 'utf8');
+  // Write to a sibling temp file and rename. A direct write leaves a half-written
+  // dashboard on disk if the process dies mid-write, and an interrupted HTML file is
+  // both unreadable and a stale artifact the user cannot tell apart from a good one.
+  const temporary = path.join(path.dirname(output), `.${path.basename(output)}.${process.pid}.${randomUUID()}.tmp`);
+  try {
+    fs.writeFileSync(temporary, html, 'utf8');
+    fs.renameSync(temporary, output);
+  } catch (error) {
+    try { fs.rmSync(temporary, { force: true }); } catch { /* The temp file may not exist. */ }
+    throw new Error(`could not write the dashboard to ${path.basename(output)}: ${error?.code ?? 'write failed'}`);
+  }
   return output;
 }

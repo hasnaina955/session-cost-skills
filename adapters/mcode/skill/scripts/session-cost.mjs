@@ -30,6 +30,7 @@ import { collectSessionIds, createSessionGraph, selectTopLevelCandidates } from 
 import { REPORT_CONTRACT_VERSION, withNormalizedContract } from './lib/report-contract.mjs';
 import { formatVersionBanner, versionBanner } from './lib/skill-version.mjs';
 import { CliUsageError, parseCliArgs } from './lib/cli-args.mjs';
+import { describeStorageError } from './lib/error-boundaries.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RATES_PATH = process.env.SESSION_COST_RATES_PATH
@@ -235,7 +236,16 @@ async function openLedger(dataDir) {
   } catch {
     fail(`this script needs the built-in node:sqlite module (Node 22.15+); running ${process.version}`);
   }
-  return new DatabaseSync(dbPath, { readOnly: true });
+  // A truncated, locked, or non-SQLite file throws from the driver. node:sqlite opens
+  // lazily, so probe the schema inside the guard: surface a readable condition naming
+  // the ledger, never a raw driver stack trace quoting the install path.
+  try {
+    const handle = new DatabaseSync(dbPath, { readOnly: true });
+    handle.prepare('SELECT session_id FROM local_runtime_token_usage LIMIT 1').all();
+    return handle;
+  } catch (error) {
+    fail(`MCode ledger could not be read (${path.basename(dbPath)}): ${describeStorageError(error)}`);
+  }
 }
 
 function sessionMeta(db, sessionId) {
@@ -713,7 +723,13 @@ function loadConfig(dataDir) {
   return { path: configPath, values };
 }
 function sessionRows(db) {
-  return db.prepare('SELECT session_id, MIN(ts) AS first_ts, MAX(ts) AS last_ts, COUNT(*) AS calls FROM local_runtime_token_usage GROUP BY session_id ORDER BY last_ts DESC').all();
+  // A schema that parses but lacks the expected tables must fail, not read as zero
+  // sessions: an empty successful report would be indistinguishable from real data.
+  try {
+    return db.prepare('SELECT session_id, MIN(ts) AS first_ts, MAX(ts) AS last_ts, COUNT(*) AS calls FROM local_runtime_token_usage GROUP BY session_id ORDER BY last_ts DESC').all();
+  } catch (error) {
+    fail(`MCode ledger schema is unreadable: ${describeStorageError(error)}`);
+  }
 }
 function resolveMCodeSession(db, rows, graph, { explicitId, environment = process.env } = {}) {
   const runtimeId = environment.MCODE_SESSION_ID
@@ -1208,7 +1224,10 @@ try {
     console.error(`session-cost: ${err.message}`);
     process.exitCode = 2;
   } else {
-    console.error(`session-cost: unexpected failure: ${err.stack ?? err.message}`);
+    // A stack trace names local source paths and can quote a payload fragment. Report
+    // what went wrong and keep the detail available behind an explicit opt-in.
+    console.error(`session-cost: unexpected failure: ${err?.message ?? String(err)}`);
+    if (process.env.SESSION_COST_DEBUG) console.error(err?.stack ?? '');
     process.exitCode = 1;
   }
 }
