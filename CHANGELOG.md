@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+Nothing yet. The next batch of changes lands here before it is cut into a release.
+
+## 0.4.0
+
 ### Added
 
 - CI now runs the full matrix: `npm run verify` on ubuntu, windows, and macos against Node 22.15
