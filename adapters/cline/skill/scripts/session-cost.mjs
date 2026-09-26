@@ -847,6 +847,15 @@ if (opts.watch) {
   const surface = createLiveSurface(process.stdout);
   quiet = true;
   let previous = null;
+  // Motion state, identical in intent to the MCode adapter's. Both loops derive it from the
+  // report they already produce, so the animation cannot invent or interpolate a figure.
+  let frameIndex = 0;
+  const history = [];
+  const motion = {
+    color: surface.interactive,
+    width: process.stdout.columns,
+    budgetUsd: typeof opts.budget === 'number' ? opts.budget : null,
+  };
   const stop = () => { surface.leave(); process.exit(0); };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
@@ -858,11 +867,23 @@ if (opts.watch) {
       staleReason = error instanceof Error ? error.message : String(error);
     }
     if (lastReport) {
-      surface.draw(renderLiveFrame(lastReport, { previous, stale: false }));
-      previous = lastReport.billing?.amountUsd ?? null;
+      const current = lastReport.billing?.amountUsd ?? null;
+      if (typeof current === 'number') {
+        history.push(current);
+        if (history.length > 24) history.shift();
+      }
+      surface.draw(renderLiveFrame(lastReport, {
+        previous,
+        stale: false,
+        history: [...history],
+        frameIndex,
+        ...motion,
+      }));
+      previous = current;
     } else {
-      surface.draw(renderLiveFrame(null, { previous, stale: true, staleReason: staleReason ?? 'no report yet' }));
+      surface.draw(renderLiveFrame(null, { previous, stale: true, staleReason: staleReason ?? 'no report yet', frameIndex, ...motion }));
     }
+    frameIndex += 1;
     await new Promise((resolve) => setTimeout(
       resolve,
       nextInterval(lastReport, { activeMs: 500, idleMs: opts.watchInterval ?? 3000 }),
