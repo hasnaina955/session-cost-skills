@@ -63,7 +63,7 @@ export function buildProviderProfile(answers = {}) {
 
   const runtimes = answers.runtimes ?? ['cline', 'mcode'];
   if (!Array.isArray(runtimes) || !runtimes.length) problems.push('at least one runtime must be selected');
-  else if (runtimes.some((runtime) => !['cline', 'mcode'].includes(runtime))) problems.push('runtimes must be cline or mcode');
+  else if (runtimes.some((runtime) => !['cline', 'mcode', 'opencode'].includes(runtime))) problems.push('runtimes must be cline, mcode, or opencode');
 
   const cards = validateRateCards(answers.rateCards);
   problems.push(...cards.problems);

@@ -9,6 +9,7 @@ import { RATE_PARSER_VERSION, RATES_SOURCE, SOURCE_PARSER_VERSION, prepareProvid
 export const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const clineScript = path.join(repositoryRoot, 'adapters', 'cline', 'skill', 'scripts', 'session-cost.mjs');
 export const mcodeScript = path.join(repositoryRoot, 'adapters', 'mcode', 'skill', 'scripts', 'session-cost.mjs');
+export const opencodeScript = path.join(repositoryRoot, 'adapters', 'opencode', 'skill', 'scripts', 'session-cost.mjs');
 
 export function runCli(script, dataDir, args = [], environment = {}) {
   return spawnSync(process.execPath, [script, '--data-dir', dataDir, ...args], {
@@ -299,3 +300,202 @@ export function createMCodeFixture() {
     sessionIds: ['mcode-root', 'mcode-child', 'mcode-grandchild', 'mcode-other', 'mcode-partial', 'mcode-truncated', 'mcode-unpriced'],
   };
 }
+
+// --- OpenCode -----------------------------------------------------------------
+//
+// A synthetic OpenCode ledger shaped like the real one, covering every case the CLI has to
+// distinguish. Each session exists for one reason:
+//
+//   ses_root        1.x and 2.x per-call rows that DISAGREE, so the reader's precedence rule
+//                   is observable from the CLI, plus a child and a grandchild to test
+//                   --include-children and contract rule 4 (charge a descendant at most once)
+//   ses_today       the only session started today, so --today pins an exact set
+//   ses_free        a model whose rate card is all zeros: a genuinely free model
+//   ses_unpriced    a model with no rate card at all: the cost must be unavailable, not zero
+//   ses_aggregate   tokens on the session row and no per-call row anywhere, so the
+//                   session-aggregate fallback fires and `source` has to be propagated
+//   ses_empty       a session with no usage at all
+//
+// Every model sits at `fixture-provider`, a provider id no built-in driver matches, so the
+// only rate source is the configured profile below. A profile whose providerIds overlapped a
+// built-in would make `registry.resolve` report an ambiguous match, which is correct but would
+// mean no test could reach the pricing path at all.
+
+const OPENCODE_EFFECTIVE_FROM = '2020-01-01T00:00:00.000Z';
+
+export function opencodeFixtureConfig() {
+  return {
+    schemaVersion: 1,
+    providers: [{
+      id: 'fixture-provider',
+      driverId: 'openai-compatible',
+      match: { providerIds: ['fixture-provider'], runtimes: ['opencode'] },
+      currency: 'USD',
+      rateCards: [
+        {
+          model: 'fixture-priced',
+          effectiveFrom: OPENCODE_EFFECTIVE_FROM,
+          input: 1,
+          output: 2,
+          cacheRead: 0.1,
+          cacheWrite: 1.25,
+        },
+        {
+          model: 'fixture-free',
+          effectiveFrom: OPENCODE_EFFECTIVE_FROM,
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+        },
+      ],
+    }],
+    models: [],
+  };
+}
+
+/** 1.x shape: modelID/providerID at the top level, `tokens.total` always present. */
+function opencodeV1Message({ sessionId, created, model, provider, tokens, cost = 0 }) {
+  return [
+    `msg_${sessionId}_${created}`,
+    sessionId,
+    created,
+    created + 100,
+    JSON.stringify({
+      role: 'assistant',
+      modelID: model,
+      providerID: provider,
+      cost,
+      finish: 'stop',
+      time: { created, completed: created + 100 },
+      tokens: {
+        total: tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write,
+        input: tokens.input,
+        output: tokens.output,
+        reasoning: tokens.reasoning,
+        cache: { read: tokens.cache.read, write: tokens.cache.write },
+      },
+    }),
+  ];
+}
+
+/** 2.x shape: model nested with its variant and NO `tokens.total`, exactly as the real rows. */
+function opencodeV2Message({ sessionId, created, model, provider, tokens, cost = 0 }) {
+  return [
+    `sm_${sessionId}_${created}`,
+    sessionId,
+    'assistant',
+    created,
+    created,
+    created + 100,
+    JSON.stringify({
+      model: { id: model, providerID: provider, variant: 'high' },
+      agent: 'build',
+      finish: 'stop',
+      providerState: { completed: true },
+      cost,
+      time: { created, streamed: created + 50, completed: created + 100 },
+      tokens: {
+        input: tokens.input,
+        output: tokens.output,
+        reasoning: tokens.reasoning,
+        cache: { read: tokens.cache.read, write: tokens.cache.write },
+      },
+    }),
+  ];
+}
+
+export function createOpenCodeFixture() {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-cost-opencode-contract-'));
+  const ledgerDir = path.join(dataDir, '.local', 'share', 'opencode');
+  fs.mkdirSync(ledgerDir, { recursive: true });
+  const database = new DatabaseSync(path.join(ledgerDir, 'opencode.db'));
+  database.exec(`
+    CREATE TABLE session (
+      id TEXT PRIMARY KEY, parent_id TEXT, title TEXT, agent TEXT, version TEXT, directory TEXT,
+      cost REAL, tokens_input INTEGER, tokens_output INTEGER, tokens_reasoning INTEGER,
+      tokens_cache_read INTEGER, tokens_cache_write INTEGER, time_created INTEGER, time_updated INTEGER,
+      model TEXT
+    );
+    CREATE TABLE session_v2 (
+      id TEXT PRIMARY KEY, parent_id TEXT, title TEXT, agent TEXT, version TEXT, directory TEXT,
+      cost REAL, tokens_input INTEGER, tokens_output INTEGER, tokens_reasoning INTEGER,
+      tokens_cache_read INTEGER, tokens_cache_write INTEGER, time_created INTEGER, time_updated INTEGER,
+      model TEXT
+    );
+    CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, time_updated INTEGER, data TEXT);
+    CREATE TABLE session_message (id TEXT PRIMARY KEY, session_id TEXT, type TEXT, seq INTEGER, time_created INTEGER, time_updated INTEGER, data TEXT);
+  `);
+  const insV1 = database.prepare('INSERT INTO session VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+  const insV2 = database.prepare('INSERT INTO session_v2 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+  const insMsg = database.prepare('INSERT INTO message VALUES (?,?,?,?,?)');
+  const insSM = database.prepare('INSERT INTO session_message VALUES (?,?,?,?,?,?,?)');
+  const tk = (input, output, reasoning, cacheRead, cacheWrite) => ({ input, output, reasoning, cache: { read: cacheRead, write: cacheWrite } });
+  const PROVIDER = 'fixture-provider';
+
+  const rootTs = Date.parse(isoOffset({ days: -2 }));
+  const todayTs = Date.now();
+  const freeTs = Date.parse(isoOffset({ days: -4 }));
+  const unpricedTs = Date.parse(isoOffset({ days: -3 }));
+  const aggregateTs = Date.parse(isoOffset({ days: -5 }));
+
+  // ses_root exists in both stores and they disagree: 1.x kept three calls that the 2.x
+  // projection reduced to one. A CLI that ignored the reader's precedence rule would report
+  // one call and a third of the tokens.
+  insV1.run('ses_root', null, 'Root contract fixture', 'build', '1.18.30', '/w', 0, 300, 30, 0, 600, 0, rootTs, rootTs + 9_000, null);
+  insV2.run('ses_root', null, 'Root contract fixture', 'build', '1.18.30', '/w', 0, 100, 10, 0, 200, 0, rootTs, rootTs + 9_000, null);
+  for (const [offset, n] of [[0, 100], [3_000, 100], [6_000, 100]]) {
+    insMsg.run(...opencodeV1Message({ sessionId: 'ses_root', created: rootTs + offset, model: 'fixture-priced', provider: PROVIDER, tokens: tk(n, 10, 0, n * 2, 0) }));
+  }
+  insSM.run(...opencodeV2Message({ sessionId: 'ses_root', created: rootTs, model: 'fixture-priced', provider: PROVIDER, tokens: tk(100, 10, 0, 200, 0) }));
+
+  insV2.run('ses_child', 'ses_root', 'Child contract fixture', 'build', '2.0.16', '/w', 0, 50, 5, 0, 100, 0, rootTs + 10_000, rootTs + 11_000, null);
+  insSM.run(...opencodeV2Message({ sessionId: 'ses_child', created: rootTs + 10_000, model: 'fixture-priced', provider: PROVIDER, tokens: tk(50, 5, 0, 100, 0) }));
+
+  insV2.run('ses_grandchild', 'ses_child', 'Grandchild contract fixture', 'build', '2.0.16', '/w', 0, 20, 2, 0, 40, 0, rootTs + 12_000, rootTs + 13_000, null);
+  insSM.run(...opencodeV2Message({ sessionId: 'ses_grandchild', created: rootTs + 12_000, model: 'fixture-priced', provider: PROVIDER, tokens: tk(20, 2, 0, 40, 0) }));
+
+  insV2.run('ses_today', null, 'Today contract fixture', 'build', '2.0.16', '/w', 0, 200, 20, 0, 400, 0, todayTs, todayTs + 1_000, null);
+  insSM.run(...opencodeV2Message({ sessionId: 'ses_today', created: todayTs, model: 'fixture-priced', provider: PROVIDER, tokens: tk(200, 20, 0, 400, 0) }));
+
+  insV2.run('ses_free', null, 'Free contract fixture', 'build', '2.0.16', '/w', 0, 500, 50, 0, 900, 0, freeTs, freeTs + 1_000,
+    JSON.stringify({ id: 'fixture-free', providerID: PROVIDER }));
+  insSM.run(...opencodeV2Message({ sessionId: 'ses_free', created: freeTs, model: 'fixture-free', provider: PROVIDER, tokens: tk(500, 50, 0, 900, 0) }));
+
+  insV2.run('ses_unpriced', null, 'Unpriced contract fixture', 'build', '2.0.16', '/w', 0, 400, 40, 0, 900, 0, unpricedTs, unpricedTs + 1_000,
+    JSON.stringify({ id: 'unknown-model', providerID: PROVIDER }));
+  insSM.run(...opencodeV2Message({ sessionId: 'ses_unpriced', created: unpricedTs, model: 'unknown-model', provider: PROVIDER, tokens: tk(400, 40, 0, 900, 0) }));
+
+  // No per-call row in either store: this is the fallback the reader exists for.
+  insV2.run('ses_aggregate', null, 'Aggregate contract fixture', 'plan', '2.0.16', '/w', 0, 700, 70, 0, 300, 0, aggregateTs, aggregateTs + 1_000,
+    JSON.stringify({ id: 'fixture-priced', providerID: PROVIDER }));
+
+  insV2.run('ses_empty', null, 'Empty contract fixture', 'plan', '2.0.16', '/w', 0, 0, 0, 0, 0, 0, aggregateTs, aggregateTs, null);
+
+  database.close();
+
+  const configPath = path.join(dataDir, 'session-cost.json');
+  fs.writeFileSync(configPath, `${JSON.stringify(opencodeFixtureConfig(), null, 2)}\n`, 'utf8');
+  // An empty directory that exists but holds no ledger, for the empty-ledger case.
+  const emptyDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-cost-opencode-empty-'));
+  fs.mkdirSync(path.join(emptyDataDir, '.local', 'share', 'opencode'), { recursive: true });
+
+  return {
+    dataDir,
+    emptyDataDir,
+    script: opencodeScript,
+    configPath,
+    provider: PROVIDER,
+    today: new Date(todayTs).toISOString().slice(0, 10),
+    rootDate: new Date(rootTs).toISOString().slice(0, 10),
+    // A config-layer home so a developer's real user config can never reach a test run.
+    environment: {
+      HOME: dataDir,
+      USERPROFILE: dataDir,
+      APPDATA: path.join(dataDir, 'AppData', 'Roaming'),
+      XDG_CONFIG_HOME: path.join(dataDir, '.config'),
+    },
+    sessionIds: ['ses_root', 'ses_child', 'ses_grandchild', 'ses_today', 'ses_free', 'ses_unpriced', 'ses_aggregate', 'ses_empty'],
+  };
+}
+

@@ -71,7 +71,7 @@
       "type": "object",
       "required": ["id", "costBasis", "storageSource"],
       "properties": {
-        "id": { "enum": ["cline", "mcode"] },
+        "id": { "enum": ["cline", "mcode", "opencode"] },
         "costBasis": { "enum": ["runtime-recorded", "provider-rate-estimate"] },
         "storageSource": { "type": "string", "minLength": 1 }
       },

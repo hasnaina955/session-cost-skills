@@ -7,6 +7,7 @@ const sourcePath = path.join(root, 'shared', 'config.mjs');
 const targets = [
   path.join(root, 'adapters', 'cline', 'skill', 'scripts', 'lib', 'config.mjs'),
   path.join(root, 'adapters', 'mcode', 'skill', 'scripts', 'lib', 'config.mjs'),
+  path.join(root, 'adapters', 'opencode', 'skill', 'scripts', 'lib', 'config.mjs'),
 ];
 const checkOnly = process.argv.includes('--check');
 const source = fs.readFileSync(sourcePath, 'utf8');

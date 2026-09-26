@@ -510,11 +510,24 @@ test('a duration is only reported when the report can support one', () => {
 
   // MCode carries no start/end pair, so an inverted anchor pair must yield null rather
   // than a zero that would claim the spend took no time at all.
+  //
+  // The inversion is applied explicitly here. It used to depend on the shared MCode fixture
+  // stamping a ledger row 2s into the future, which only held while the CLI finished inside
+  // that 2s window. Adding any concurrent test load made this fail intermittently, so the
+  // property under test is now set deterministically on a real report instead of raced for.
   const mcodeSession = mcodeReport(['--session', 'mcode-partial']);
-  const activity = Date.parse(mcodeSession.snapshot.lastLedgerActivityAt);
-  const captured = Date.parse(mcodeSession.snapshot.capturedAt);
-  assert.ok(activity > captured, 'the fixture must present an unusable anchor order');
-  assert.equal(elapsedMsFromReport(mcodeSession), null);
+  const inverted = {
+    ...mcodeSession,
+    snapshot: {
+      ...mcodeSession.snapshot,
+      lastLedgerActivityAt: '2099-01-01T00:00:00.000Z',
+      capturedAt: '2026-01-01T00:00:00.000Z',
+    },
+  };
+  const activity = Date.parse(inverted.snapshot.lastLedgerActivityAt);
+  const captured = Date.parse(inverted.snapshot.capturedAt);
+  assert.ok(activity > captured, 'the report under test must present an unusable anchor order');
+  assert.equal(elapsedMsFromReport(inverted), null);
   assert.equal(elapsedMsFromReport(null), null);
   assert.equal(elapsedMsFromReport({}), null);
 });

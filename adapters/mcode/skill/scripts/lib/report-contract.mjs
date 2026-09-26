@@ -172,7 +172,7 @@ export function assertNormalizedReport(report) {
   if (report?.schemaVersion !== 1) fail('schemaVersion must be 1');
   if (report?.contractVersion !== REPORT_CONTRACT_VERSION) fail(`contractVersion must be ${REPORT_CONTRACT_VERSION}`);
   if (!Number.isFinite(Date.parse(report?.generatedAt))) fail('generatedAt must be an ISO timestamp');
-  if (!['cline', 'mcode'].includes(report?.runtime?.id)) fail('runtime.id is unsupported');
+  if (!['cline', 'mcode', 'opencode'].includes(report?.runtime?.id)) fail('runtime.id is unsupported');
   if (!['runtime-recorded', 'provider-rate-estimate'].includes(report?.runtime?.costBasis)) fail('runtime.costBasis is unsupported');
   if (!report.runtime.storageSource) fail('runtime.storageSource is required');
   if (!Number.isFinite(Date.parse(report?.snapshot?.capturedAt))) fail('snapshot.capturedAt must be an ISO timestamp');

@@ -127,6 +127,11 @@ const COMMON_FLAGS = Object.freeze({
   insights: { key: 'insights', value: true },
 });
 
+// Flags from COMMON_FLAGS the OpenCode adapter does not implement yet. It has no bundled
+// rate table to refresh, no insight baseline to compare against, and no rollup or
+// counterfactual to offer, so those flags are absent rather than parsed and ignored.
+const OPENCODE_UNSUPPORTED_FLAGS = new Set(['rollup', 'top', 'counterfactual', 'setup', 'insights']);
+
 export const RUNTIME_FLAGS = Object.freeze({
   cline: Object.freeze({
     ...COMMON_FLAGS,
@@ -139,6 +144,11 @@ export const RUNTIME_FLAGS = Object.freeze({
     rates: { key: 'rates', value: true },
     refreshRates: { key: 'refreshRates', value: true },
   }),
+  // The OpenCode CLI declares a smaller set on purpose, built from COMMON_FLAGS so a flag
+  // added there is opted out explicitly rather than by omission.
+  opencode: Object.freeze(Object.fromEntries(
+    Object.entries(COMMON_FLAGS).filter(([flag]) => !OPENCODE_UNSUPPORTED_FLAGS.has(flag)),
+  )),
 });
 
 // Groups where picking more than one is a user error rather than a silent override.

@@ -135,7 +135,7 @@ export const BUILTIN_PROVIDER_MANIFESTS = Object.freeze([
     contractVersion: PROVIDER_DRIVER_CONTRACT_VERSION,
     id: 'commandcode',
     version: '3.0.0',
-    match: { providerIds: ['commandcode', 'custom_provider:commandcode'], runtimes: ['cline', 'mcode'] },
+    match: { providerIds: ['commandcode', 'custom_provider:commandcode'], runtimes: ['cline', 'mcode', 'opencode'] },
     capabilities: {
       pricing: 'mirrored-rate',
       modelDiscovery: true,
@@ -162,7 +162,7 @@ export const BUILTIN_PROVIDER_MANIFESTS = Object.freeze([
     contractVersion: PROVIDER_DRIVER_CONTRACT_VERSION,
     id: 'stepfun',
     version: '2.0.0',
-    match: { providerIds: ['stepfun', 'custom_provider:stepfun'], runtimes: ['cline', 'mcode'] },
+    match: { providerIds: ['stepfun', 'custom_provider:stepfun'], runtimes: ['cline', 'mcode', 'opencode'] },
     capabilities: {
       pricing: 'mirrored-rate',
       modelDiscovery: true,
@@ -189,7 +189,7 @@ export const BUILTIN_PROVIDER_MANIFESTS = Object.freeze([
     contractVersion: PROVIDER_DRIVER_CONTRACT_VERSION,
     id: 'openai-compatible',
     version: '1.0.0',
-    match: { providerIds: ['openai-compatible', 'custom_provider:openai-compatible'], runtimes: ['cline', 'mcode'] },
+    match: { providerIds: ['openai-compatible', 'custom_provider:openai-compatible'], runtimes: ['cline', 'mcode', 'opencode'] },
     capabilities: {
       pricing: 'mirrored-rate',
       modelDiscovery: false,
@@ -216,7 +216,7 @@ export const BUILTIN_PROVIDER_MANIFESTS = Object.freeze([
     contractVersion: PROVIDER_DRIVER_CONTRACT_VERSION,
     id: 'anthropic-compatible',
     version: '1.0.0',
-    match: { providerIds: ['anthropic-compatible', 'custom_provider:anthropic-compatible'], runtimes: ['cline', 'mcode'] },
+    match: { providerIds: ['anthropic-compatible', 'custom_provider:anthropic-compatible'], runtimes: ['cline', 'mcode', 'opencode'] },
     capabilities: {
       pricing: 'mirrored-rate',
       modelDiscovery: false,

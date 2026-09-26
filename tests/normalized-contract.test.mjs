@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { REPORT_CONTRACT_VERSION, assertNormalizedReport } from '../adapters/cline/skill/scripts/lib/report-contract.mjs';
 import { validateJsonSchema } from '../scripts/validate-json-schema.mjs';
-import { createClineFixture, createMCodeFixture, runCli, runJson } from './helpers/contract-fixtures.mjs';
+import { createClineFixture, createMCodeFixture, createOpenCodeFixture, runCli, runJson } from './helpers/contract-fixtures.mjs';
 
 const schema = JSON.parse(fs.readFileSync(new URL('../contracts/normalized-report-v1.schema.json', import.meta.url), 'utf8'));
 const contractSource = fs.readFileSync(new URL('../shared/report-contract.mjs', import.meta.url), 'utf8');
@@ -35,10 +35,13 @@ function assertBatch(output, expectedRuntime, expectedCount) {
 
 function dashboardOutput(fixture) {
   const out = path.join(fixture.dataDir, 'dashboard.html');
+  // An adapter that prices from configuration (OpenCode) needs its config passed here too, or
+  // the dashboard it writes would describe a session whose cost it could not compute.
   const { result, output } = runJson(fixture.script, fixture.dataDir, [
     '--session',
     fixture.runtimeSession,
     '--include-children',
+    ...(fixture.dashboardArgs ?? []),
     '--dashboard',
     '--out',
     out,
@@ -54,13 +57,20 @@ function dashboardOutput(fixture) {
   return output.report;
 }
 
-test('both adapters contain the canonical contract implementation and schema', () => {
-  for (const adapter of ['cline', 'mcode']) {
+test('every adapter contains the canonical contract implementation and schema', () => {
+  for (const adapter of ['cline', 'mcode', 'opencode']) {
     const source = fs.readFileSync(new URL(`../adapters/${adapter}/skill/scripts/lib/report-contract.mjs`, import.meta.url), 'utf8');
     assert.equal(source, contractSource);
   }
   assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema');
   assert.ok(schema.required.includes('contractVersion'));
+  // A runtime that the schema rejects would make its reports unvalidatable, and a runtime the
+  // shared contract rejects would make them unassertable. The two lists must agree.
+  const schemaRuntimes = schema.properties.runtime.$ref === '#/$defs/runtime'
+    ? schema.$defs.runtime.properties.id.enum
+    : null;
+  assert.deepEqual([...schemaRuntimes].sort(), ['cline', 'mcode', 'opencode']);
+  assert.match(contractSource, /\['cline', 'mcode', 'opencode'\]\.includes\(report\?\.runtime\?\.id\)/);
 });
 
 test('Cline CLI satisfies the shared contract across all report modes', (t) => {
@@ -240,6 +250,131 @@ test('MCode CLI satisfies the shared contract across all report modes', (t) => {
   assert.match(invalidDate.result.stderr, /calendar date/);
   assert.match(invalidDate.result.stderr, /2026-13-99/);
   assert.doesNotMatch(invalidDate.result.stderr, /ledger|sqlite|sessions\.db/i, 'a bad date must not reach storage');
+
+  dashboardOutput(fixture);
+});
+
+test('OpenCode CLI satisfies the shared contract across all report modes', (t) => {
+  const fixture = { ...createOpenCodeFixture(), runtimeId: 'opencode', runtimeSession: 'ses_root' };
+  const config = ['--session-config', fixture.configPath];
+  fixture.dashboardArgs = config;
+  t.after(() => {
+    fs.rmSync(fixture.dataDir, { recursive: true, force: true });
+    fs.rmSync(fixture.emptyDataDir, { recursive: true, force: true });
+  });
+
+  const root = runJson(fixture.script, fixture.dataDir, ['--session', fixture.runtimeSession, '--include-children', ...config], fixture.environment);
+  assert.equal(root.result.status, 0, root.result.stderr);
+  assertContract(root.output, 'opencode');
+  assert.equal(root.output.runtime.costBasis, 'provider-rate-estimate');
+  assert.equal(root.output.usage.semantics.inputTokenMeaning, 'excludes-cache');
+  assert.equal(root.output.billing.recordedCostUsd, null);
+  assert.ok(Number.isFinite(root.output.billing.estimatedCostUsd));
+  assert.deepEqual(root.output.sessionGraph.rootSessionIds, ['ses_root']);
+  assert.deepEqual(root.output.sessionGraph.includedSessionIds, ['ses_root', 'ses_child', 'ses_grandchild']);
+  assert.equal(root.output.sessionGraph.excludedSessionIds.length, 0);
+  assert.equal(root.output.configuration.config.schemaVersion, 1);
+  assert.equal(root.output.configuration.sources.cli.merged, true);
+  // The reader's 1.x-over-2.x precedence is observable from the CLI: the root session exists in
+  // both stores with three 1.x calls against one 2.x call, and the report must show the 1.x one.
+  assert.equal(root.output.usageSources['v1-per-call'], 3);
+  assert.equal(root.output.usageSources['v2-per-call'], 2);
+  assert.ok(root.output.models.length >= 1);
+  assert.ok(root.output.providerDrivers.every((driver) => /^sha256:/.test(driver.fingerprint)));
+  // Contract rule 4: a descendant is billed at most once.
+  const billed = Object.entries(root.output.perSession);
+  assert.equal(billed.length, 3);
+  assert.ok(Math.abs(billed.reduce((total, [, entry]) => total + entry.totalCost, 0) - root.output.billing.amountUsd) < 1e-12);
+
+  const excluded = runJson(fixture.script, fixture.dataDir, ['--session', fixture.runtimeSession, ...config], fixture.environment);
+  assert.equal(excluded.result.status, 0, excluded.result.stderr);
+  assertContract(excluded.output, 'opencode');
+  assert.deepEqual(excluded.output.sessionGraph.excludedSessionIds, ['ses_child', 'ses_grandchild']);
+
+  const current = runJson(fixture.script, fixture.dataDir, config, {
+    ...fixture.environment,
+    OPENCODE_SESSION_ID: fixture.runtimeSession,
+  });
+  assert.equal(current.result.status, 0, current.result.stderr);
+  assertContract(current.output, 'opencode');
+  assert.equal(current.output.selection.method, 'environment');
+  assert.equal(current.output.sessionId, fixture.runtimeSession);
+
+  const last = runJson(fixture.script, fixture.dataDir, ['--last', ...config], fixture.environment);
+  assertContract(last.output, 'opencode');
+  assert.equal(last.output.selection.method, 'last');
+
+  const today = runJson(fixture.script, fixture.dataDir, ['--today', ...config], fixture.environment);
+  assert.equal(today.result.status, 0, today.result.stderr);
+  assertContract(today.output, 'opencode');
+  assert.deepEqual([...today.output.rootSessionIds].sort(), ['ses_today']);
+
+  const compare = runJson(fixture.script, fixture.dataDir, ['--compare', ...config], fixture.environment);
+  assert.equal(compare.result.status, 0, compare.result.stderr);
+  assertBatch(compare.output, 'opencode', 2);
+  assert.ok(compare.output.duplicateSuppressedSessionIds.includes('ses_child'));
+
+  const list = runJson(fixture.script, fixture.dataDir, ['--list', '10', ...config], fixture.environment);
+  assert.equal(list.result.status, 0, list.result.stderr);
+  const listRoots = ['ses_root', 'ses_today', 'ses_free', 'ses_unpriced', 'ses_aggregate', 'ses_empty'];
+  assertBatch(list.output, 'opencode', listRoots.length);
+  assert.deepEqual(
+    list.output.sessions.map((entry) => entry.sessionId).sort(),
+    [...listRoots].sort(),
+  );
+  assert.ok(list.output.duplicateSuppressedSessionIds.includes('ses_grandchild'));
+
+  const range = runJson(fixture.script, fixture.dataDir, [
+    '--from', fixture.rootDate,
+    '--to', fixture.today,
+    '--include-children',
+    ...config,
+  ], fixture.environment);
+  assert.equal(range.result.status, 0, range.result.stderr);
+  assertContract(range.output, 'opencode');
+
+  // An unmirrored model: tokens intact, cost unavailable, and never a zero.
+  const filtered = runJson(fixture.script, fixture.dataDir, ['--model', 'unknown-model', ...config], fixture.environment);
+  assert.equal(filtered.result.status, 2, 'an unknown cost is a non-zero exit');
+  assertContract(filtered.output, 'opencode');
+  assert.equal(filtered.output.sessionId, 'ses_unpriced');
+  assert.equal(filtered.output.billing.estimatedCostUsd, null);
+  assert.equal(filtered.output.billing.recordedCostUsd, null);
+  assert.equal(filtered.output.coverage.status, 'unavailable');
+  assert.ok(filtered.output.coverage.unknownReasons.length > 0);
+  assert.equal(filtered.output.usage.totalTokens, 1340, 'measured tokens survive an unknown price');
+
+  // A session whose only source is the session aggregate reports that, rather than claiming
+  // a per-model split it cannot have.
+  const aggregateOnly = runJson(fixture.script, fixture.dataDir, ['--session', 'ses_aggregate', ...config], fixture.environment);
+  assert.equal(aggregateOnly.result.status, 0, aggregateOnly.result.stderr);
+  assertContract(aggregateOnly.output, 'opencode');
+  assert.equal(aggregateOnly.output.usageFromSessionAggregate, true);
+  assert.ok(aggregateOnly.output.warnings.some((warning) => warning.includes('session-aggregate')));
+
+  const noCalls = runJson(fixture.script, fixture.dataDir, ['--session', 'ses_empty', ...config], fixture.environment);
+  assert.equal(noCalls.result.status, 0, noCalls.result.stderr);
+  assertContract(noCalls.output, 'opencode');
+  assert.equal(noCalls.output.coverage.status, 'no-calls');
+  assert.equal(noCalls.output.billing.amountUsd, 0);
+
+  // Selection is explicit: an unknown id and an empty ledger both fail, and neither prints a report.
+  const unknown = runJson(fixture.script, fixture.dataDir, ['--session', 'ses_not_in_this_ledger', ...config], fixture.environment);
+  assert.equal(unknown.result.status, 2);
+  assert.equal(unknown.output, null);
+  assert.match(unknown.result.stderr, /unknown OpenCode session id/);
+
+  const emptyLedger = runCli(fixture.script, fixture.emptyDataDir, config, fixture.environment);
+  assert.equal(emptyLedger.status, 2);
+  assert.equal(emptyLedger.stdout, '');
+  assert.match(emptyLedger.stderr, /OpenCode ledger not found/);
+
+  const invalidDate = runJson(fixture.script, fixture.dataDir, ['--from', '2026-13-99', ...config], fixture.environment);
+  assert.equal(invalidDate.result.status, 2);
+  assert.equal(invalidDate.output, null);
+  assert.match(invalidDate.result.stderr, /calendar date/);
+  assert.match(invalidDate.result.stderr, /2026-13-99/);
+  assert.doesNotMatch(invalidDate.result.stderr, /sqlite|opencode\.db/i, 'a bad date must not reach storage');
 
   dashboardOutput(fixture);
 });

@@ -41,7 +41,7 @@
             "required": ["providerIds", "runtimes"],
             "properties": {
               "providerIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
-              "runtimes": { "type": "array", "items": { "enum": ["cline", "mcode"] }, "minItems": 1, "uniqueItems": true }
+              "runtimes": { "type": "array", "items": { "enum": ["cline", "mcode", "opencode"] }, "minItems": 1, "uniqueItems": true }
             },
             "additionalProperties": false
           },

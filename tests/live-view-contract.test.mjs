@@ -16,9 +16,9 @@ const realReports = () => {
   };
 };
 
-test('both adapters ship the same live-view implementation', () => {
+test('every adapter ships the same live-view implementation', () => {
   const canonical = fs.readFileSync(new URL('../shared/live-view.mjs', import.meta.url), 'utf8');
-  for (const runtime of ['cline', 'mcode']) {
+  for (const runtime of ['cline', 'mcode', 'opencode']) {
     assert.equal(fs.readFileSync(new URL(`../adapters/${runtime}/skill/scripts/lib/live-view.mjs`, import.meta.url), 'utf8'), canonical);
   }
 });
