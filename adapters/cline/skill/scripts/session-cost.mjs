@@ -75,6 +75,10 @@ function parseArgs(argv) {
 }
 
 const opts = parseArgs(process.argv.slice(2));
+// Capture points for --watch: in quiet mode the CLI suppresses printing and records the
+// report so the live loop can render it, instead of spawning the CLI once per tick.
+let lastReport = null;
+let quiet = false;
 
 let effectiveConfiguration = null;
 
@@ -603,6 +607,9 @@ async function runAccount(dataDir) {
   else console.log(renderAccount(summary));
 }
 
+// Wrapped, not re-indented, so the diff stays small. Kept re-callable so --watch can
+// re-query the same ledger in-process on each poll rather than spawning the CLI per tick.
+async function runOnce() {
 const dataDir = path.resolve(opts.dataDir ?? DEFAULT_DATA_DIR);
 try {
   effectiveConfiguration = loadEffectiveConfig({
@@ -748,10 +755,11 @@ try {
       });
       if (opts.json) console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'cline', kind: 'dashboard', generatedAt: new Date().toISOString(), dashboardPath: outputPath, report }, replacer, 2));
       else console.log(`Dashboard written: ${outputPath}`);
-    } else if (opts.csv) console.log(renderCsv(report));
-    else if (opts.json) console.log(JSON.stringify(report, replacer, 2));
-    else if (opts.explain) console.log(renderExplanation(report));
-    else console.log(render(report));
+    } else if (opts.csv) { if (!quiet) console.log(renderCsv(report)); }
+    else if (opts.json) { if (!quiet) console.log(JSON.stringify(report, replacer, 2)); }
+    else if (opts.explain) { if (!quiet) console.log(renderExplanation(report)); }
+    else if (!quiet) console.log(render(report));
+    lastReport = report;
     // A budget gates the exit code, never the report itself.
     if (opts.budget != null) {
       const verdict = evaluateBudget({
@@ -769,5 +777,37 @@ try {
   db.close();
 }
 }
+}
 
-
+// The live view. Foreground only: no daemon, no background process, no orphan to clean up.
+// Both ledgers are WAL, verified on a real Windows install, so a poll never needs a
+// busy-timeout fallback. A transient read failure keeps the last good frame marked
+// STALE rather than ending the watch.
+if (opts.watch) {
+  const surface = createLiveSurface(process.stdout);
+  quiet = true;
+  let previous = null;
+  const stop = () => { surface.leave(); process.exit(0); };
+  process.on('SIGINT', stop);
+  process.on('SIGTERM', stop);
+  for (;;) {
+    let staleReason = null;
+    try {
+      await runOnce();
+    } catch (error) {
+      staleReason = error instanceof Error ? error.message : String(error);
+    }
+    if (lastReport) {
+      surface.draw(renderLiveFrame(lastReport, { previous, stale: false }));
+      previous = lastReport.billing?.amountUsd ?? null;
+    } else {
+      surface.draw(renderLiveFrame(null, { previous, stale: true, staleReason: staleReason ?? 'no report yet' }));
+    }
+    await new Promise((resolve) => setTimeout(
+      resolve,
+      nextInterval(lastReport, { activeMs: 500, idleMs: opts.watchInterval ?? 3000 }),
+    ));
+  }
+} else {
+  await runOnce();
+}
