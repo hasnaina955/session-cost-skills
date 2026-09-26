@@ -6,6 +6,19 @@
   "required": ["schemaVersion", "runtimeDefaults", "providers", "models"],
   "properties": {
     "schemaVersion": { "const": 1 },
+    "costCentres": {
+      "description": "Named cost centres. A tag names a group of sessions so spend can be attributed to a project rather than only totalled.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "sessionIds"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._/-]{0,63}$" },
+          "sessionIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true }
+        },
+        "additionalProperties": false
+      }
+    },
     "runtimeDefaults": {
       "type": "object",
       "properties": {
