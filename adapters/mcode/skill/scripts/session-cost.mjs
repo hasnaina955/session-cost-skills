@@ -37,6 +37,7 @@ import { renderCsv } from './lib/csv.mjs';
 import { evaluateBudget } from './lib/budget.mjs';
 import { counterfactualCost, renderCounterfactualText } from './lib/counterfactual.mjs';
 import { createLiveSurface, nextInterval, renderLiveFrame } from './lib/live-view.mjs';
+import { buildProviderProfile, renderSetupText } from './lib/setup.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RATES_PATH = process.env.SESSION_COST_RATES_PATH
@@ -122,6 +123,8 @@ function printHelp() {
   --csv                   emit CSV, one row per session
   --budget <amount>       warn and exit non-zero when a session passes this amount
   --counterfactual <m>     estimate what this session would cost on model <m>
+  --setup                  guided custom-provider setup; prints a paste-ready config
+  --insights               compare this session to your own history; no forecasting
   --watch                  repaint a live view until Ctrl-C (foreground only)
   --watch-interval <ms>    idle poll interval (default 3000; active is 500)
   --json                  emit JSON instead of the markdown summary
@@ -1000,6 +1003,31 @@ function handleConfigAction(configuration) {
   return true;
 }
 
+// Guided setup, matching the Cline adapter. READ-ONLY by design: it prints a paste-ready
+// config rather than writing one, so no value can reach a file through this path.
+function runSetup(configuration) {
+  const target = path.resolve(opts.sessionConfigPath ?? configuration.paths.project);
+  const existing = configuration.config.providers ?? [];
+  const result = buildProviderProfile({
+    id: opts.provider ?? existing[0]?.id ?? '',
+    driverId: existing[0]?.driverId ?? 'openai-compatible',
+    baseUrlEnv: existing[0]?.baseUrlEnv ?? '',
+    endpointEnv: existing[0]?.endpointEnv ?? '',
+    credentialEnv: existing[0]?.credentialEnv ?? '',
+    region: existing[0]?.region ?? '',
+    currency: existing[0]?.currency ?? 'USD',
+    runtimes: existing[0]?.match?.runtimes ?? ['mcode'],
+    rateCards: existing[0]?.rateCards ?? [],
+  });
+  console.log(renderSetupText({ result, configPath: target, runtimeId: 'mcode' }));
+  if (result.ok) {
+    console.log('');
+    console.log('  Paste this into the providers array of ' + path.basename(target) + ':');
+    console.log(JSON.stringify({ providers: [result.profile] }, null, 2).split('\n').map((line) => '  ' + line).join('\n'));
+  }
+  return result.ok ? 0 : 2;
+}
+
 function runDiagnostic(configuration) {
   const table = loadRates();
   const knownModels = Object.fromEntries(Object.entries(table.providers ?? {}).map(([id, provider]) => [id, Object.keys(provider.models ?? {})]));
@@ -1043,6 +1071,7 @@ async function main() {
     },
   });
   if (handleConfigAction(effectiveConfiguration)) return 0;
+  if (opts.setup) return runSetup(effectiveConfiguration);
   if (opts.diagnostic) return runDiagnostic(effectiveConfiguration);
   if (!opts.provider && effectiveConfiguration.config.runtimeDefaults.provider) opts.provider = effectiveConfiguration.config.runtimeDefaults.provider;
   if (!opts.model && effectiveConfiguration.config.runtimeDefaults.model) opts.model = effectiveConfiguration.config.runtimeDefaults.model;

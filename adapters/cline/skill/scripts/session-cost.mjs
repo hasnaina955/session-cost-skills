@@ -30,6 +30,7 @@ import { renderCsv } from './lib/csv.mjs';
 import { evaluateBudget } from './lib/budget.mjs';
 import { counterfactualCost, renderCounterfactualText } from './lib/counterfactual.mjs';
 import { createLiveSurface, nextInterval, renderLiveFrame } from './lib/live-view.mjs';
+import { buildProviderProfile, renderSetupText } from './lib/setup.mjs';
 import { detectConfiguredProvider } from './lib/provider-driver.mjs';
 import { discoverModels, doctorReport, explainModelMatch, renderDiagnostics } from './lib/provider-diagnostics.mjs';
 import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, readConfigFile } from './lib/config.mjs';
@@ -128,6 +129,8 @@ function help() {
   --csv                emit CSV, one row per session
   --budget <amount>    warn and exit non-zero when a session passes this amount
   --counterfactual <m> estimate what this session would cost on model <m>
+  --setup              guided custom-provider setup; prints a paste-ready config
+  --insights           compare this session to your own history; no forecasting
   --watch              repaint a live view until Ctrl-C (foreground only)
   --watch-interval <ms> idle poll interval (default 3000; active is 500)
   --json              emit schema-versioned JSON
@@ -158,6 +161,32 @@ function handleConfigAction(configuration) {
     configuration: { ...publicConfigResult(configuration), config: actionResult?.config ?? configuration.config },
   }, null, 2));
   return true;
+}
+
+// Guided setup. Reads what it can from the existing configuration so a user with a partial
+// profile sees what is still missing. It is deliberately READ-ONLY: it prints a paste-ready
+// config rather than writing one, so there is no path by which a value could reach a file.
+function runSetup(configuration) {
+  const target = path.resolve(opts.sessionConfigPath ?? configuration.paths.project);
+  const existing = configuration.config.providers ?? [];
+  const result = buildProviderProfile({
+    id: opts.provider ?? existing[0]?.id ?? '',
+    driverId: existing[0]?.driverId ?? 'openai-compatible',
+    baseUrlEnv: existing[0]?.baseUrlEnv ?? '',
+    endpointEnv: existing[0]?.endpointEnv ?? '',
+    credentialEnv: existing[0]?.credentialEnv ?? '',
+    region: existing[0]?.region ?? '',
+    currency: existing[0]?.currency ?? 'USD',
+    runtimes: existing[0]?.match?.runtimes ?? ['cline'],
+    rateCards: existing[0]?.rateCards ?? [],
+  });
+  console.log(renderSetupText({ result, configPath: target, runtimeId: 'cline' }));
+  if (result.ok) {
+    console.log('');
+    console.log('  Paste this into the providers array of ' + path.basename(target) + ':');
+    console.log(JSON.stringify({ providers: [result.profile] }, null, 2).split('\n').map((line) => '  ' + line).join('\n'));
+  }
+  return result.ok ? 0 : 2;
 }
 
 function runDiagnostic(configuration) {
@@ -621,6 +650,7 @@ try {
     },
   });
   if (handleConfigAction(effectiveConfiguration)) process.exit(0);
+  if (opts.setup) process.exit(runSetup(effectiveConfiguration));
   if (opts.diagnostic) process.exit(runDiagnostic(effectiveConfiguration));
   if (!opts.provider && effectiveConfiguration.config.runtimeDefaults.provider) opts.provider = effectiveConfiguration.config.runtimeDefaults.provider;
   if (!opts.model && effectiveConfiguration.config.runtimeDefaults.model) opts.model = effectiveConfiguration.config.runtimeDefaults.model;

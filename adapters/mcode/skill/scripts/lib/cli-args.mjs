@@ -121,6 +121,10 @@ const COMMON_FLAGS = Object.freeze({
   // registration and a lifecycle, and would leave orphan processes with no clear stop.
   watch: { key: 'watch', value: true },
   watchInterval: { key: 'watchInterval', value: (argv, i) => requireInteger(argv, i, '--watch-interval', { min: 100, max: 60_000 }) },
+  // Tier 3. --setup diagnoses what is missing for a custom provider and emits a validated
+  // starter config; it never writes a secret, only an environment-variable name.
+  setup: { key: 'setup', value: true },
+  insights: { key: 'insights', value: true },
 });
 
 export const RUNTIME_FLAGS = Object.freeze({
