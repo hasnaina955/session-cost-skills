@@ -454,6 +454,64 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
     perSession[id] = { role: 'child', billed: false, calls: null, totalTokens: null, cacheRate: null, totalCost: null };
   }
 
+  // Parent links and titles, read once, for the session array below.
+  const parentById = new Map();
+  const titles = new Map();
+  try {
+    for (const record of db.prepare('SELECT session_id, parent_session_id, title FROM local_runtime_sessions').all()) {
+      parentById.set(record.session_id, record.parent_session_id ?? null);
+      titles.set(record.session_id, record.title ?? null);
+    }
+  } catch {
+    // A ledger without these columns still reports; the rows just carry null parents.
+  }
+
+  // The same per-session array Cline emits, so the shared rollup, cost-centre, and
+  // insights modules work on both adapters. Without it they correctly reported
+  // "unknown" here, which was honest but left three shipped features half-available.
+  // Cost stays null when any call in the session was unpriced, matching the rule that
+  // unknown cost is never folded into a total as zero.
+  const sessions = ids.map((id) => {
+    const sub = emptyAggregate();
+    let unpricedCalls = 0;
+    let firstTs = null;
+    let lastTs = null;
+    for (const row of rows.filter((r) => r.session_id === id)) {
+      const priced = priceRow(pricers.get(id), row);
+      accumulate(sub, row, priced.rate ?? UNPRICED_ZERO_RATE);
+      unpricedCalls += priced.missing?.length ? 1 : 0;
+      const ts = Number(row.ts);
+      if (Number.isFinite(ts)) {
+        if (firstTs === null || ts < firstTs) firstTs = ts;
+        if (lastTs === null || ts > lastTs) lastTs = ts;
+      }
+    }
+    const fin = finalize(sub);
+    return {
+      row: {
+        sessionId: id,
+        parentSessionId: parentById.get(id) ?? null,
+        status: 'completed',
+        startedAt: firstTs === null ? null : new Date(firstTs).toISOString(),
+        endedAt: lastTs === null ? null : new Date(lastTs).toISOString(),
+      },
+      metrics: {
+        inputTokens: fin.inputTokens,
+        outputTokens: fin.outputTokens,
+        cacheReadTokens: fin.cacheReadTokens,
+        cacheWriteTokens: fin.cacheWriteTokens,
+        totalTokens: fin.totalTokens,
+        calls: fin.calls,
+        pricedCalls: fin.calls - unpricedCalls,
+        unpricedCalls,
+        cost: unpricedCalls > 0 ? null : fin.totalCost,
+        title: titles.get(id) ?? null,
+        source: 'runtime-ledger',
+        lastTs,
+      },
+    };
+  });
+
   const models = [...perModel.values()].map((model) => {
     const rateRecords = [...model.rateRecords.values()];
     const missingRateComponents = [...model.missingRateComponents].sort();
@@ -526,6 +584,7 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
     childSessions: childIds,
     childSessionsBilled: includeChildren ? childIds : [],
     perSession,
+    sessions,
     models,
     multiModel: models.length > 1,
     multiProvider: providersUsed.filter((p) => p.mirrored).length > 1,

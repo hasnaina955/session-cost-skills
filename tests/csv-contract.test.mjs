@@ -667,18 +667,23 @@ test('a real MCode rate estimate states the basis and prices only what the rate 
   const rows = rowsOf(priced.output);
   assert.deepEqual(rows.map((row) => row.sessionId), priced.output.sessionGraph.includedSessionIds);
   assert.deepEqual(rows.map((row) => row.role), ['root', 'child', 'child']);
-  assert.deepEqual(rows.map((row) => row.parentSessionId), ['', 'mcode-root', 'mcode-root']);
+  // MCode now emits per-session rows, so a child of a child is reachable and its real
+  // parent is reported. It used to emit none, which is why this expected a blank row.
+  assert.deepEqual(rows.map((row) => row.parentSessionId), ['', 'mcode-root', 'mcode-child']);
   for (const row of rows) {
     assert.equal(row.costBasis, 'provider-rate-estimate', 'an estimate must never be presented as a recorded charge');
     assert.equal(row.coverage, 'complete');
   }
   assert.equal(rows[0].costUsd, '0.0004355');
   assert.equal(rows[0].title, 'Root contract fixture', 'the selected session keeps its title');
-  assert.equal(rows[1].title, '', 'a session the report never described has no title, not a guess');
   assert.equal(rows[0].totalTokens, '470');
-  assert.equal(rows[0].inputTokens, '', 'MCode reports no per-session token split, so the split stays empty');
-  assert.equal(rows[0].outputTokens, '');
-  assert.equal(rows[0].pricedCalls, '', 'MCode reports no per-session call-level pricing');
+  // MCode now reports a per-session token split, which it could not before: it emitted no
+  // session rows at all. The split is real data, not a derived guess.
+  assert.equal(rows[0].inputTokens, '300');
+  assert.equal(rows[0].outputTokens, '30');
+  // MCode now reports per-session call-level pricing too, since it emits session rows.
+  assert.equal(rows[0].pricedCalls, '2');
+  assert.equal(rows[0].unpricedCalls, '0');
   assert.equal(sumOfColumn(rows, 'costUsd').toFixed(12), Number(priced.output.billing.amountUsd).toFixed(12));
 
   const partial = runJson(fixture.script, fixture.dataDir, ['--session', 'mcode-partial'], fixture.environment);

@@ -107,16 +107,19 @@ test('a zero-call session is reported, not dropped', () => {
   assert.equal(bucket.coverage, 'no-calls');
 });
 
-test('MCode reports carry no session rows, so a MCode rollup is unknown', () => {
-  // The two adapters produce structurally different reports. A rollup that silently
-  // returned 0 for MCode would be the worst possible outcome, so it reports unknown.
+test('a MCode rollup now prices from real per-session rows', () => {
+  // MCode emits report.sessions now, so a rollup here is a real total rather than the
+  // "unknown" it correctly reported while the rows were missing. The unavailable path is
+  // still covered above, by a report that genuinely has no rows.
   const fixture = createMCodeFixture();
-  const report = runJson(mcodeScript, fixture.dataDir, ['--session', 'mcode-root', '--json'], fixture.environment).output;
-  assert.equal(hasSessionRows(report), false, 'MCode does not populate report.sessions yet');
+  const report = runJson(mcodeScript, fixture.dataDir, ['--session', 'mcode-root', '--include-children', '--json'], fixture.environment).output;
+  assert.equal(hasSessionRows(report), true, 'MCode now populates report.sessions');
   const totals = rollupTotals(report);
-  assert.equal(totals.costUsd, null);
-  assert.equal(totals.coverage, 'unknown');
-  assert.ok(report.billing.amountUsd != null, 'the report itself does carry a cost for the session');
+  // Per-session costs are summed, so the last floating-point bits differ from the
+  // report's own accumulation order. Compare within a rounding of the smallest figure.
+  assert.ok(Math.abs(totals.costUsd - report.billing.amountUsd) < 1e-9, 'the rollup must equal the report it came from');
+  assert.equal(totals.coverage, 'complete');
+  assert.ok(totals.sessionCount > 1, 'the subagent tree must be included');
 });
 
 test('periods are validated rather than silently defaulting', () => {

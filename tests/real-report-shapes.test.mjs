@@ -75,12 +75,9 @@ const CONSUMERS = [
     name: 'rollup',
     async call(report) {
       const { renderRollupText, rankSessions } = await import('../shared/rollup.mjs');
-      const rows = report.sessions ?? [];
-      if (!rows.length) return { skipped: 'this report carries no per-session rows' };
       return { text: renderRollupText([report], 'daily'), ranked: rankSessions(report) };
     },
     assert(result, report, runtime) {
-      if (result.skipped) return; // an adapter that cannot serve it must say so
       assert.match(result.text, /period|period start|spend/i, `${runtime}: rollup text rendered empty`);
       assert.ok(result.ranked.length > 0, `${runtime}: ranking produced no rows`);
       for (const row of result.ranked) {
@@ -134,12 +131,10 @@ const CONSUMERS = [
     name: 'insights',
     async call(report) {
       const { compareToBaseline, renderInsightsText } = await import('../shared/insights.mjs');
-      const rows = report.sessions ?? [];
-      if (!rows.length) return { skipped: 'this report carries no per-session rows' };
+      const rows = report.sessions;
       return { text: renderInsightsText(compareToBaseline(rows[0], rows)), result: compareToBaseline(rows[0], rows) };
     },
     assert(result, report, runtime) {
-      if (result.skipped) return;
       assert.match(result.text, /Insights/i, `${runtime}: insights rendered nothing`);
       // Too little history must be stated, never papered over with a fabricated baseline.
       if (result.result.status === 'insufficient-data') {
@@ -178,13 +173,10 @@ const CONSUMERS = [
     name: 'cost-centres',
     async call(report) {
       const { attributeCostCentres, renderCostCentresText } = await import('../shared/cost-centres.mjs');
-      const rows = report.sessions ?? [];
-      if (!rows.length) return { skipped: 'this report carries no per-session rows' };
-      const result = attributeCostCentres(report, [{ name: 'centre', sessionIds: [rows[0].row.sessionId] }]);
+      const result = attributeCostCentres(report, [{ name: 'centre', sessionIds: [report.sessions[0].row.sessionId] }]);
       return { text: renderCostCentresText(result), result };
     },
     assert(result, report, runtime) {
-      if (result.skipped) return;
       assert.match(result.text, /cost centre|untagged/i, `${runtime}: cost-centre output rendered nothing`);
       // Untagged spend must be visible, never absorbed into a named centre.
       assert.ok(result.result.centres.length > 0 || result.result.untagged, `${runtime}: no sessions were attributed at all`);
@@ -201,3 +193,57 @@ for (const consumer of CONSUMERS) {
     });
   }
 }
+
+test('both adapters emit the same per-session row shape', () => {
+  // MCode had no `sessions` field, so rollups, cost centres, and insights all reported
+  // "unknown" there. That was honest but left three shipped features half-available, and
+  // it happened because the contract test I wrote skipped rather than failed.
+  for (const [runtime, report] of Object.entries(realReports())) {
+    const rows = report.sessions;
+    assert.ok(Array.isArray(rows) && rows.length > 0, `${runtime}: a report must carry per-session rows`);
+    for (const entry of rows) {
+      for (const key of ['sessionId', 'parentSessionId', 'status', 'startedAt', 'endedAt']) {
+        assert.ok(Object.hasOwn(entry.row ?? {}, key), `${runtime}: session row is missing ${key}`);
+      }
+      // totalTokens is optional: Cline's per-session rows omit it and consumers derive it,
+      // while MCode states it. Asserted in the shape-parity test rather than required here.
+      for (const key of ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'calls', 'unpricedCalls', 'cost']) {
+        assert.ok(Object.hasOwn(entry.metrics ?? {}, key), `${runtime}: session metrics are missing ${key}`);
+      }
+      const tokens = entry.metrics.totalTokens ?? (entry.metrics.inputTokens + entry.metrics.outputTokens);
+      assert.equal(typeof tokens, 'number', `${runtime}: a session row must yield a token count`);
+      assert.ok(tokens >= 0);
+    }
+    // The tree must be walkable, which is what cost-centre expansion relies on.
+    const ids = new Set(rows.map((entry) => entry.row.sessionId));
+    for (const entry of rows) {
+      const parent = entry.row.parentSessionId;
+      if (parent !== null) assert.ok(ids.has(parent), `${runtime}: parent ${parent} is not among the reported sessions`);
+    }
+  }
+});
+
+test('the sessions on both adapters add up to the report total', () => {
+  // A per-session array that does not reconcile to the headline is worse than none:
+  // a rollup would then disagree with the report it came from.
+  for (const [runtime, report] of Object.entries(realReports())) {
+    const cost = report.sessions.reduce((sum, entry) => sum + (Number(entry.metrics.cost) || 0), 0);
+    const tokens = report.sessions.reduce((sum, entry) => sum
+      + (entry.metrics.totalTokens ?? ((entry.metrics.inputTokens || 0) + (entry.metrics.outputTokens || 0))), 0);
+    const expectedCost = report.billing.amountUsd;
+    const expectedTokens = report.usage.totalTokens;
+    assert.ok(Math.abs(cost - expectedCost) < 1e-9,
+      `${runtime}: session costs sum to ${cost} but the report says ${expectedCost}`);
+    assert.equal(tokens, expectedTokens, `${runtime}: session tokens must sum to the report total`);
+  }
+});
+
+test('an unpriced session reports a null cost rather than a smaller total', () => {
+  for (const [runtime, report] of Object.entries(realReports())) {
+    for (const entry of report.sessions) {
+      if ((entry.metrics.unpricedCalls ?? 0) > 0) {
+        assert.equal(entry.metrics.cost, null, `${runtime}/${entry.row.sessionId}: unpriced work must report null, not a partial figure`);
+      }
+    }
+  }
+});

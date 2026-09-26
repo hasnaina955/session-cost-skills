@@ -182,9 +182,10 @@ test('day keys bucket by UTC, not by wherever the report happened to run', () =>
 });
 
 test('a report with no per-session rows contributes no session rows at all', () => {
-  // The MCode report is a real report object with a real cost and no `sessions[]`. Treating it
-  // as a session row would invent a session that never happened.
-  const report = mcodeReport();
+  // A real report that genuinely carries no `sessions[]`. Treating it as a session row
+  // would invent a session that never happened. MCode emits rows now, so this uses a
+  // stripped report rather than a real adapter output.
+  const report = { ...mcodeReport(), sessions: undefined };
   assert.ok(!Array.isArray(report.sessions), 'this fixture is the point: the report has no sessions');
   assert.ok(Number.isFinite(report.billing.amountUsd), 'and it does carry a real cost of its own');
   assert.deepEqual(historyEntries(report), []);
@@ -229,8 +230,8 @@ test('a real report with three sessions says it cannot compare, and invents noth
   assert.doesNotMatch(text, /\d+\.\d+x/, 'no multiple may be printed without a baseline behind it');
 });
 
-test('a MCode report, which carries no session rows, is reported as no history at all', () => {
-  const report = mcodeReport();
+test('a report with no session rows is reported as no history at all', () => {
+  const report = { ...mcodeReport(), sessions: undefined };
   const comparison = compareToBaseline(null, report);
   assert.equal(comparison.status, INSIGHTS_STATUS.INSUFFICIENT);
   assert.equal(comparison.insufficientReason.code, 'no-history');
