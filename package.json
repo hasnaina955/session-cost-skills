@@ -55,7 +55,9 @@
     "sync:setup": "node scripts/sync-setup.mjs",
     "check:setup": "node scripts/sync-setup.mjs --check",
     "sync:rollup-cache": "node scripts/sync-rollup-cache.mjs",
-    "check:rollup-cache": "node scripts/sync-rollup-cache.mjs --check"
+    "check:rollup-cache": "node scripts/sync-rollup-cache.mjs --check",
+    "sync:insights": "node scripts/sync-insights.mjs",
+    "check:insights": "node scripts/sync-insights.mjs --check"
   },
   "engines": {
     "node": ">=22.15"
