@@ -35,6 +35,8 @@ import { renderExplanation } from './lib/explain.mjs';
 import { renderRankingText as renderRanking, renderRollupText as renderRollup } from './lib/rollup.mjs';
 import { renderCsv } from './lib/csv.mjs';
 import { evaluateBudget } from './lib/budget.mjs';
+import { counterfactualCost, renderCounterfactualText } from './lib/counterfactual.mjs';
+import { createLiveSurface, nextInterval, renderLiveFrame } from './lib/live-view.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RATES_PATH = process.env.SESSION_COST_RATES_PATH
@@ -119,6 +121,9 @@ function printHelp() {
   --explain               show the arithmetic behind the reported cost
   --csv                   emit CSV, one row per session
   --budget <amount>       warn and exit non-zero when a session passes this amount
+  --counterfactual <m>     estimate what this session would cost on model <m>
+  --watch                  repaint a live view until Ctrl-C (foreground only)
+  --watch-interval <ms>    idle poll interval (default 3000; active is 500)
   --json                  emit JSON instead of the markdown summary
   --config <path>         load standing-summary settings
   --session-config <path> load provider/session configuration
@@ -1025,6 +1030,9 @@ function runDiagnostic(configuration) {
   return status;
 }
 
+let lastReport = null;
+let quiet = false;
+
 async function main() {
   effectiveConfiguration = loadEffectiveConfig({
     configPath: opts.sessionConfigPath,
@@ -1224,10 +1232,13 @@ async function main() {
       const outputPath = writeDashboard(enhanceReport(report, selection), { outPath: opts.out ?? path.join(dataDir, 'reports', 'session-cost', 'session-dashboard.html'), title: 'MCode Session Cost Dashboard' });
       if (opts.json) console.log(JSON.stringify({ schemaVersion: 1, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'mcode', kind: 'dashboard', generatedAt: new Date().toISOString(), dashboardPath: outputPath, report: enhanceReport(report, selection) }, null, 2));
       else console.log(`Dashboard written: ${outputPath}`);
-    } else if (opts.csv) console.log(renderCsv(enhanceReport(report, selection)));
-    else if (opts.json) console.log(JSON.stringify(enhanceReport(report, selection), null, 2));
-    else if (opts.explain) console.log(renderExplanation(enhanceReport(report, selection)));
-    else console.log(renderText(report, selection));
+    } else if (opts.csv) {
+      if (!quiet) console.log(renderCsv(enhanceReport(report, selection)));
+    }
+    else if (opts.json) { if (!quiet) console.log(JSON.stringify(enhanceReport(report, selection), null, 2)); }
+    else if (opts.explain) { if (!quiet) console.log(renderExplanation(enhanceReport(report, selection))); }
+    else if (!quiet) console.log(renderText(report, selection));
+    lastReport = enhanceReport(report, selection);
 
     if (opts.budget != null) {
       const verdict = evaluateBudget({
@@ -1250,7 +1261,39 @@ async function main() {
 }
 
 try {
-  process.exitCode = await main();
+  process.exitCode = opts.watch ? await watchSession() : await main();
+
+// The live view. Foreground only: no daemon, no background process, no orphan to clean up.
+// Each poll re-queries the same ledger in-process. A transient read failure keeps the last
+// good frame and marks it stale rather than ending the watch, because a ledger being written
+// mid-poll is normal and is not a reason to stop watching.
+async function watchSession() {
+  const surface = createLiveSurface(process.stdout);
+  quiet = true;
+  let previous = null;
+  try {
+    for (;;) {
+      let staleReason = null;
+      try {
+        await main();
+      } catch (error) {
+        staleReason = error instanceof Error ? error.message : String(error);
+      }
+      if (lastReport) {
+        surface.draw(renderLiveFrame(lastReport, { previous, stale: false }));
+        previous = lastReport.billing?.amountUsd ?? null;
+      } else {
+        surface.draw(renderLiveFrame(null, { previous, stale: true, staleReason: staleReason ?? 'no report yet' }));
+      }
+      await new Promise((resolve) => setTimeout(
+        resolve,
+        nextInterval(lastReport, { activeMs: 500, idleMs: opts.watchInterval ?? 3000 }),
+      ));
+    }
+  } finally {
+    surface.leave();
+  }
+}
 } catch (err) {
   if (err instanceof CostError) {
     console.error(`session-cost: ${err.message}`);

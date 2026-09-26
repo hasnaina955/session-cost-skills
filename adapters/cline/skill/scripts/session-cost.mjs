@@ -28,6 +28,8 @@ import { renderExplanation } from './lib/explain.mjs';
 import { renderRankingText as renderRanking, renderRollupText as renderRollup } from './lib/rollup.mjs';
 import { renderCsv } from './lib/csv.mjs';
 import { evaluateBudget } from './lib/budget.mjs';
+import { counterfactualCost, renderCounterfactualText } from './lib/counterfactual.mjs';
+import { createLiveSurface, nextInterval, renderLiveFrame } from './lib/live-view.mjs';
 import { detectConfiguredProvider } from './lib/provider-driver.mjs';
 import { discoverModels, doctorReport, explainModelMatch, renderDiagnostics } from './lib/provider-diagnostics.mjs';
 import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, readConfigFile } from './lib/config.mjs';
@@ -121,6 +123,9 @@ function help() {
   --explain            show the arithmetic behind the reported cost
   --csv                emit CSV, one row per session
   --budget <amount>    warn and exit non-zero when a session passes this amount
+  --counterfactual <m> estimate what this session would cost on model <m>
+  --watch              repaint a live view until Ctrl-C (foreground only)
+  --watch-interval <ms> idle poll interval (default 3000; active is 500)
   --json              emit schema-versioned JSON
   --data-dir <path>    Cline data directory (default: %USERPROFILE%\\.cline)
   --version           print the installed skill, report-contract, and Node versions

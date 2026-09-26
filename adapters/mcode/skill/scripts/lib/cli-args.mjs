@@ -114,6 +114,13 @@ const COMMON_FLAGS = Object.freeze({
   },
   top: { key: 'top', value: (argv, i) => requireInteger(argv, i, '--top', { min: 1, max: 1000 }) },
   budget: { key: 'budget', value: (argv, i) => requireNonNegativeNumber(argv, i, '--budget') },
+  // Opt-in and inert unless a model is named: a counterfactual must never appear in a
+  // default report, and it must never be inferred.
+  counterfactual: { key: 'counterfactual', value: (argv, i) => requireValue(argv, i, '--counterfactual') },
+  // Foreground only. There is deliberately no background daemon: it would need service
+  // registration and a lifecycle, and would leave orphan processes with no clear stop.
+  watch: { key: 'watch', value: true },
+  watchInterval: { key: 'watchInterval', value: (argv, i) => requireInteger(argv, i, '--watch-interval', { min: 100, max: 60_000 }) },
 });
 
 export const RUNTIME_FLAGS = Object.freeze({

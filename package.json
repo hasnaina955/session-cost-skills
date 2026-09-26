@@ -49,7 +49,9 @@
     "sync:budget": "node scripts/sync-budget.mjs",
     "check:budget": "node scripts/sync-budget.mjs --check",
     "sync:csv": "node scripts/sync-csv.mjs",
-    "check:csv": "node scripts/sync-csv.mjs --check"
+    "check:csv": "node scripts/sync-csv.mjs --check",
+    "sync:live-view": "node scripts/sync-live-view.mjs",
+    "check:live-view": "node scripts/sync-live-view.mjs --check"
   },
   "engines": {
     "node": ">=22.15"

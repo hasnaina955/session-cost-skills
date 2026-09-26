@@ -70,6 +70,10 @@ for (const [rule, pattern] of Object.entries(contentRules)) {
     const secondColon = rest.indexOf(':');
     const filePath = rest.slice(0, secondColon);
     const text = rest.slice(secondColon + 1);
+    // This scanner necessarily contains the very patterns it searches for, and its own
+    // allowlist of documented sentinels would otherwise be reported as a live credential.
+    // Excluding the scanner by path is the only way to keep that list maintainable.
+    if (filePath === 'scripts/audit-history.mjs') continue;
     if (FIXTURE_ALLOWLIST_FILES.test(filePath)) {
       const literal = matchedLiteral(text);
       if (literal !== null && FIXTURE_ALLOWLIST_VALUES.has(literal.trim())) continue;
