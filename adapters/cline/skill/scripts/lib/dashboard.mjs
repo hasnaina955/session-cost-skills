@@ -101,16 +101,32 @@ function renderTable(headers, rows) {
   return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
+// The two adapters use different vocabularies for the same numbers: Cline reports
+// `total.cost` and splits tokens into input/output, while MCode reports `total.totalCost`
+// and `total.totalTokens`. The browser runtime reads one shape, so normalize here rather
+// than branching in the client. Doing it before the payload is hashed also keeps the
+// CSP script hash derived from a stable string.
 function normalizeSession(session) {
+  // A session entry can arrive as a bare metrics object, as the `{row, metrics}` shape a
+  // single-session report carries, or as a whole nested report (which is what `--list`
+  // produces). Walk all three so the table is populated in every case.
   const metrics = session.metrics ?? session;
-  const input = Number(metrics.inputTokens ?? 0);
-  const output = Number(metrics.outputTokens ?? 0);
+  const usage = session.usage ?? {};
+  const input = Number(metrics.inputTokens ?? usage.inputTokens ?? 0);
+  const output = Number(metrics.outputTokens ?? usage.outputTokens ?? 0);
+  const total = metrics.total ?? session.total ?? {};
+  const tokens = Number(metrics.totalTokens ?? usage.totalTokens ?? total.totalTokens) || input + output;
+  const cost = metrics.totalCost ?? metrics.cost ?? total.totalCost ?? total.cost;
   return {
     ...session,
+    id: session.id ?? session.sessionId ?? session.row?.sessionId ?? session.session?.id ?? null,
+    title: session.title ?? session.session?.title ?? metrics.title ?? null,
     metrics: {
       ...metrics,
-      totalTokens: Number(metrics.totalTokens) || input + output,
-      totalCost: Number(metrics.totalCost ?? metrics.cost ?? 0),
+      totalTokens: tokens,
+      calls: Number(metrics.calls ?? total.calls) || 0,
+      // An unknown cost stays null so the table cannot present it as $0.00.
+      totalCost: cost == null || !Number.isFinite(Number(cost)) ? null : Number(cost),
     },
   };
 }
