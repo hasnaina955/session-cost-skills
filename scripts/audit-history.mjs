@@ -49,7 +49,19 @@ const FIXTURE_ALLOWLIST_VALUES = new Set([
   'expired-token',
   'runtime-only',
   'sk-ant-SECRETKEYVALUE',
+  'sk-ant-REALSECRETKEY',
 ]);
+
+// A documented sentinel can appear under any key, not only next to an apiKey field, so a
+// line quoting an allowlisted value is exempt outright. Without this, a sentinel used as,
+// say, a credentialEnv value is reported by the generic key-shape rule and cannot be
+// allowlisted at all.
+function quotedAllowlistedValue(text) {
+  for (const quoted of text.matchAll(/["']([^"']{6,})["']/g)) {
+    if (FIXTURE_ALLOWLIST_VALUES.has(quoted[1].trim())) return quoted[1].trim();
+  }
+  return null;
+}
 
 function matchedLiteral(text) {
   const match = text.match(/(?:access[_-]?token|api[_-]?key)["']?\s*[:=]\s*["']([^"']+)["']/i);
@@ -77,6 +89,7 @@ for (const [rule, pattern] of Object.entries(contentRules)) {
     if (FIXTURE_ALLOWLIST_FILES.test(filePath)) {
       const literal = matchedLiteral(text);
       if (literal !== null && FIXTURE_ALLOWLIST_VALUES.has(literal.trim())) continue;
+      if (quotedAllowlistedValue(text)) continue;
     }
     contentFindings.push({ rule, path: filePath });
   }
