@@ -988,7 +988,27 @@ export function parseStepFunRates(markdown) {
 // page and still bounded.
 export const MAX_RATE_RESPONSE_BYTES = 8 * 1024 * 1024;
 export const RATE_FETCH_TIMEOUT_MS = 15_000;
-const ALLOWED_CONTENT_TYPES = ['text/html', 'text/plain', 'application/json', 'application/xhtml+xml'];
+// `text/markdown` is required, not cosmetic. RATES_SOURCE.stepfun is a raw `.md` pricing
+// document, and it correctly answers with `content-type: text/markdown`. Without it in this
+// list `fetchText` rejected the skill's own configured URL, so `--refresh-rates` failed on
+// stepfun every single time and — because the refresh is transactional — the successful
+// CommandCode fetch was discarded with it. The allowlist and RATES_SOURCE are two independent
+// declarations of the same fact, so they drift; `rates-refresh-source.test.mjs` asserts they
+// agree, which is what would have caught this.
+const ALLOWED_CONTENT_TYPES = [
+  'text/html',
+  'text/plain',
+  'text/markdown',
+  'application/json',
+  'application/xhtml+xml',
+];
+
+// Exported so the test can assert the invariant above without reaching into module internals.
+export function isAllowedRateContentType(contentType) {
+  if (!contentType) return true;
+  const normalized = String(contentType).toLowerCase();
+  return ALLOWED_CONTENT_TYPES.some((allowed) => normalized.includes(allowed));
+}
 
 export async function fetchText(url, { timeoutMs = RATE_FETCH_TIMEOUT_MS, maxBytes = MAX_RATE_RESPONSE_BYTES, fetcher = fetch } = {}) {
   let response;
@@ -1008,7 +1028,7 @@ export async function fetchText(url, { timeoutMs = RATE_FETCH_TIMEOUT_MS, maxByt
   if (!response.ok) throw new Error(`rate source returned HTTP ${response.status}`);
 
   const contentType = response.headers?.get?.('content-type') ?? null;
-  if (contentType && !ALLOWED_CONTENT_TYPES.some((allowed) => contentType.toLowerCase().includes(allowed))) {
+  if (!isAllowedRateContentType(contentType)) {
     throw new Error(`rate source returned an unexpected content type (${contentType.split(';')[0]})`);
   }
 

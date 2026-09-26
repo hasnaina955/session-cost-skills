@@ -232,6 +232,12 @@ export function createMCodeFixture() {
       message(partialTs + 2_000, 'unknown-model', 'commandcode'),
     ]),
     truncated: writeMCodeSession(dataDir, 'mcode-truncated', 'commandcode', 'fixture-command-model', [], true),
+    // A session whose only model is absent from the mirrored rate tables, so the whole
+    // session is unpriceable. Dated outside "today" so it cannot disturb the --today
+    // selection assertions, which pin the exact set of sessions started that day.
+    unpriced: writeMCodeSession(dataDir, 'mcode-unpriced', 'commandcode', 'unknown-model', [
+      message(Date.parse(isoOffset({ days: -3 })) + 1_000, 'unknown-model', 'commandcode'),
+    ]),
   };
 
 
@@ -265,6 +271,7 @@ export function createMCodeFixture() {
     ['mcode-other', 'other', 'Other contract fixture', null, history.other],
     ['mcode-partial', 'partial', 'Partial contract fixture', null, history.partial],
     ['mcode-truncated', 'truncated', 'Truncated contract fixture', null, history.truncated],
+    ['mcode-unpriced', 'unpriced', 'Unpriced contract fixture', null, history.unpriced],
   ].forEach((row) => insertSession.run(...row));
   const insertUsage = database.prepare('INSERT INTO local_runtime_token_usage VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
   [
@@ -276,6 +283,7 @@ export function createMCodeFixture() {
     [6, 'mcode-partial', 'partial', 'partial-1', partialTs + 1_000, 50, 5, 0, 0, 0],
     [7, 'mcode-partial', 'partial', 'partial-2', partialTs + 2_000, 50, 5, 0, 0, 0],
     [8, 'mcode-truncated', 'truncated', 'truncated-1', Date.parse(isoOffset({ days: -4 })), 10, 1, 0, 0, 0],
+    [9, 'mcode-unpriced', 'unpriced', 'unpriced-1', Date.parse(isoOffset({ days: -3 })), 400, 40, 0, 900, 0],
   ].forEach((row) => insertUsage.run(...row));
   database.close();
 
@@ -288,6 +296,6 @@ export function createMCodeFixture() {
     environment: { SESSION_COST_RATES_PATH: ratesPath },
     today: new Date(partialTs).toISOString().slice(0, 10),
     rootDate: new Date(rootTs).toISOString().slice(0, 10),
-    sessionIds: ['mcode-root', 'mcode-child', 'mcode-grandchild', 'mcode-other', 'mcode-partial', 'mcode-truncated'],
+    sessionIds: ['mcode-root', 'mcode-child', 'mcode-grandchild', 'mcode-other', 'mcode-partial', 'mcode-truncated', 'mcode-unpriced'],
   };
 }

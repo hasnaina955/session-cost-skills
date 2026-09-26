@@ -194,7 +194,15 @@ test('MCode CLI satisfies the shared contract across all report modes', (t) => {
 
   const list = runJson(fixture.script, fixture.dataDir, ['--list', '10'], fixture.environment);
   assert.equal(list.result.status, 0, list.result.stderr);
-  assertBatch(list.output, 'mcode', 4);
+  // Asserted as membership, not a bare count. A count only says "some number of roots came
+  // back"; listing them says which, so a subagent leaking into the list, or a root going
+  // missing, fails here instead of quietly changing the total.
+  const listRoots = ['mcode-root', 'mcode-other', 'mcode-partial', 'mcode-truncated', 'mcode-unpriced'];
+  assertBatch(list.output, 'mcode', listRoots.length);
+  assert.deepEqual(
+    list.output.sessions.map((entry) => entry.sessionId).sort(),
+    [...listRoots].sort(),
+  );
   assert.ok(list.output.duplicateSuppressedSessionIds.includes('mcode-grandchild'));
 
   const range = runJson(fixture.script, fixture.dataDir, [

@@ -129,6 +129,36 @@ test('a ledger-supplied string cannot inject terminal control sequences', () => 
   assert.match(frame, /evilEND/, 'the readable part of the title is still shown');
 });
 
+test('an unpriceable session reads "unavailable", never $0.0000', () => {
+  // Non-negotiable accounting rule 1: unknown cost is `null`, never `0`. Both adapters keep a
+  // legacy `totalCost` aggregate that is 0 — not null — when nothing could be priced, so
+  // falling back to it printed "$0.0000" for a session whose cost is genuinely unknown. A
+  // reader takes that as "the session was free", which is the one conclusion the tool must
+  // never let them draw. Found by pointing --watch at a live MCode session on a model that
+  // has no mirrored rate, where the text report correctly said COST UNAVAILABLE.
+  const fixture = createMCodeFixture();
+  const report = runJson(mcodeScript, fixture.dataDir, ['--session', 'mcode-unpriced', '--json'], fixture.environment).output;
+
+  // Guard the premise: this fixture really is the unpriceable shape, not a priced one.
+  assert.equal(report.totalCost, 0, 'the legacy aggregate really is 0 here, which is the trap');
+  assert.equal(report.billing.amountUsd, null, 'the authoritative cost really is unknown');
+  assert.equal(report.billing.rateKnown, false);
+
+  const frame = renderLiveFrame(report, {});
+  const headline = frame.split('\n').find((line) => line.includes('TOTAL COST'));
+  assert.match(headline, /unavailable/, 'an unknown cost must read as unavailable');
+  assert.doesNotMatch(frame, /\$0\.0000/, 'no field may present an unknown cost as $0.0000');
+});
+
+test('a priced session still shows its real cost', () => {
+  // The null-cost fix must not swallow a genuine figure.
+  const { cline } = realReports();
+  const frame = renderLiveFrame(cline, {});
+  const cost = cline.billing?.amountUsd;
+  assert.equal(typeof cost, 'number');
+  assert.ok(frame.includes(`$${cost.toFixed(4)}`), 'a priced report keeps its real cost');
+});
+
 // A session title is the user's own text and is displayed as-is, exactly as the HTML
 // dashboard displays it. Scrubbing credential-shaped strings out of a title would mangle
 // legitimate content and is not a property the tool can honestly promise. What it must

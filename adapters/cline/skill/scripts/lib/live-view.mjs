@@ -67,6 +67,40 @@ function burnRate(view) {
   return { usdPerMinute: cost / ((end - start) / 60_000), spanMinutes: (end - start) / 60_000 };
 }
 
+// Non-negotiable accounting rule 1: unknown cost is `null`, never `0`. Both adapters keep a
+// legacy `totalCost` aggregate that is `0` — not `null` — when no call could be priced, so a
+// naive `typeof totalCost === 'number'` fallback silently turns "we do not know what this cost"
+// into "$0.0000", which a reader takes as "this session was free". The report's own declared
+// verdict wins; the legacy aggregate is only consulted when nothing contradicts it.
+function reportDeclaresCostUnknown(report, billing) {
+  return report?.rateKnown === false
+    || billing?.rateKnown === false
+    || billing?.coverage === 'unavailable'
+    || billing?.classification === 'cost-unavailable'
+    || report?.coverage?.status === 'unavailable';
+}
+
+function reportedCost(report) {
+  const billing = report?.billing;
+  const declared = billing?.amountUsd;
+  if (typeof declared === 'number' && Number.isFinite(declared)) return declared;
+  // A present `billing` block is authoritative even when it carries no number: it has already
+  // adjudicated the cost, so there is nothing for the legacy aggregate to add.
+  if (billing && typeof billing === 'object') return null;
+  if (reportDeclaresCostUnknown(report, billing)) return null;
+  const legacy = report?.totalCost;
+  return typeof legacy === 'number' && Number.isFinite(legacy) ? legacy : null;
+}
+
+// The same rule one level down: an unpriced model row also carries `totalCost: 0`.
+function modelCost(model) {
+  if (model?.rateKnown === false || model?.rateCoverage === 'unavailable') return null;
+  const declared = model?.cost;
+  if (typeof declared === 'number' && Number.isFinite(declared)) return declared;
+  const legacy = model?.totalCost;
+  return typeof legacy === 'number' && Number.isFinite(legacy) ? legacy : null;
+}
+
 // The two adapters serialize the same facts differently: Cline nests a `session` object
 // and an aggregate `total.models` map, MCode is flat with a `models` array. Normalize once
 // here rather than branching throughout the frame, so the view cannot show a blank field
@@ -92,7 +126,7 @@ function normalizeForView(report) {
       outputTokens: report.outputTokens,
       cacheHitRate: report.cacheRate ?? 0,
     },
-    cost: report.billing?.amountUsd ?? (typeof report.totalCost === 'number' ? report.totalCost : null),
+    cost: reportedCost(report),
     isEstimate: report.billing?.basis === 'provider-rate-estimate' || report.billing === undefined,
     models,
     tree: report.sessionGraph?.includedSessionIds ?? report.includedSessionIds ?? [],
@@ -143,11 +177,15 @@ export function renderLiveFrame(rawReport, { previous = null, stale = false, sta
   out.push(`├${'─'.repeat(WIDTH)}┤`);
 
   out.push(line('MODELS'));
-  const models = [...(view?.models ?? [])].sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0)).slice(0, 4);
-  const modelTotal = models.reduce((sum, model) => sum + (model.cost ?? 0), 0) || 1;
-  for (const model of models) {
+  const models = [...(view?.models ?? [])]
+    .map((model) => ({ model, cost: modelCost(model) }))
+    .sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0))
+    .slice(0, 4);
+  // An unpriced model contributes no proportion, so it never draws a full bar it did not earn.
+  const modelTotal = models.reduce((sum, entry) => sum + (entry.cost ?? 0), 0) || 1;
+  for (const { model, cost } of models) {
     const name = safe(model.rateKey ?? model.modelId ?? model.model, 22);
-    out.push(row(`${safe(model.providerKey ?? model.provider, 14) || '?'}/${name || '?'}`, `${money(model.cost ?? model.totalCost).padStart(10)} ${bar((model.cost ?? model.totalCost ?? 0) / modelTotal, 12)}`));
+    out.push(row(`${safe(model.providerKey ?? model.provider, 14) || '?'}/${name || '?'}`, `${money(cost).padStart(10)} ${bar((cost ?? 0) / modelTotal, 12)}`));
   }
 
   const included = view?.tree ?? [];
