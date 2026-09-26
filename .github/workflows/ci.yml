@@ -11,12 +11,64 @@ permissions:
 
 jobs:
   verify:
-    runs-on: windows-latest
-    timeout-minutes: 10
+    name: verify (${{ matrix.os }}, node ${{ matrix.node }})
+    strategy:
+      # One broken OS/Node pair must still report the others.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        # '22.15' is the floor declared in package.json "engines" and printed by
+        # `--version`; 24 is the current release.
+        node: ['22.15', '24']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 24
+          node-version: ${{ matrix.node }}
       - name: Verify
         run: npm run verify
+
+  bun:
+    name: bun smoke
+    # Ubuntu only. Bun on Windows fails 11 tests with
+    # `EBUSY: resource busy or locked, rm '<tmpdir>'`: the fixtures delete a temp
+    # directory whose SQLite handle is still open, which Windows refuses and
+    # POSIX permits. Verify with `bun run scripts/run-tests.mjs` on Windows and
+    # the same 11 fail; they pass under Node on the same machine.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: Bun smoke tests
+        run: bun run scripts/check-docs.mjs && bun run scripts/check-artifacts.mjs && bun run scripts/run-tests.mjs
+
+  release:
+    name: release rehearsal (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Extraction is in-process, so the rehearsal runs on Windows too.
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.15'
+      # Not part of `npm run verify`: `check:release` needs a populated dist/.
+      - name: Build release archives
+        run: npm run build:release
+      - name: Rehearse install from the archives
+        run: npm run rehearse:release
+      - name: Verify release checksums are reproducible
+        run: npm run check:release
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          name: release-archives
+          path: dist/*
+          if-no-files-found: error

@@ -1,0 +1,55 @@
+name: Release session-cost skills
+
+# Cutting a release was manual before this workflow existed. A tag push now
+# verifies the tree, rehearses the install, and publishes the archives.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+# Least privilege would be `contents: read`, but publishing a release writes to
+# the repository. Nothing else here needs a scope.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.15'
+
+      - name: Verify the tree
+        run: npm run verify
+
+      - name: Rehearse the release from a clean checkout
+        run: npm run rehearse:release
+
+      - name: Build reproducible archives
+        run: npm run build:release
+
+      - name: Confirm the published checksums match this commit
+        run: npm run check:release
+
+      - name: Confirm the tag matches the release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "tag v$tag does not match package.json version $version"
+            exit 1
+          fi
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          files: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+          fail_on_unmatched_files: true
+          generate_release_notes: true

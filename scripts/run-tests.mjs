@@ -36,5 +36,14 @@ for (const relative of requiredRoots) {
 
 console.log(`[test-discovery] Running ${testFiles.length} test file(s)`);
 for (const file of testFiles) console.log(`  ${path.relative(root, file)}`);
-const result = spawnSync(process.execPath, ['--test', ...testFiles], { cwd: root, stdio: 'inherit' });
+// Two runner differences make the suite behave differently under Bun:
+//   - Node's runner is `node --test <files>`. Bun's is the `test` subcommand and
+//     `bun --test` is not it: the files run as plain scripts instead, so every
+//     suite throws "Cannot use test outside of the test runner" and the run exits 1.
+//   - node:test applies no default per-test timeout, but Bun's default is 5000ms,
+//     which is shorter than the slowest CLI end-to-end test needs. Without raising
+//     it, a passing test fails under Bun purely for being slower than that default.
+const bun = typeof process.versions?.bun === 'string';
+const runnerArgs = bun ? ['test', '--timeout', '120000', ...testFiles] : ['--test', ...testFiles];
+const result = spawnSync(process.execPath, runnerArgs, { cwd: root, stdio: 'inherit' });
 process.exitCode = result.status ?? 1;

@@ -13,25 +13,23 @@ source_of_truth: .github/workflows/ci.yml
 
 # What CI exercises on every push and pull request.
 supported:
-  # verify job: a single runner today. The wider os matrix below is intended,
-  # not enabled - see `not_yet_exercised`.
-  os: [windows-latest]
-  node: ['24']
-  jobs: [verify]
-
-# Declared or intended coverage that CI does not exercise yet. Listed so the
-# gap is visible rather than implied by the `supported` block above.
-not_yet_exercised:
-  # '22.15' is the floor declared in package.json "engines" and printed by
-  # `--version`; no job runs on it.
-  node: ['22.15']
-  os: [ubuntu-latest, macos-latest]
-  # A fail-fast-disabled cartesian product of the above, so one broken OS/Node
+  # verify job: full cartesian product, fail-fast disabled so one broken OS/Node
   # pair still reports the others.
-  matrix: disabled
-  # A Bun smoke job and a release-rehearsal job. scripts/rehearse-release.mjs
-  # exists and runs locally; nothing invokes it from CI.
-  jobs: [bun, release]
+  os: [ubuntu-latest, windows-latest, macos-latest]
+  # '22.15' is the floor declared in package.json "engines" and printed by
+  # `--version`; 24 is the current release.
+  node: ['22.15', '24']
+  # bun job: the full suite under Bun, ubuntu-latest only. Bun on Windows fails
+  # 11 tests on temp-directory cleanup (EBUSY while a SQLite handle is open),
+  # which POSIX permits and Windows refuses; see the comment in ci.yml.
+  # release job: rehearsal on Ubuntu and Windows, because extraction is done
+  # in-process and there is no external `unzip` dependency. Archives are
+  # uploaded from Ubuntu.
+  jobs: [verify, bun, release]
+
+# Workflows that exist. release.yml is tag-triggered and publishes the archives
+# with SHA256SUMS.txt, so a release is no longer cut by hand.
+workflows: [ci.yml, release.yml]
 
 # Every action is pinned to a full 40-character commit SHA rather than a
 # mutable tag like @v4. Tags are branches that the action owner can re-point at
