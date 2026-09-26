@@ -27,7 +27,7 @@ const isUsable = (value) => typeof value === 'number' && Number.isFinite(value);
 export function counterfactualCost(report, { model, rateRecords = [], contextTokens = null, at = null } = {}) {
   const records = (rateRecords ?? []).filter((record) => record.model === model);
   if (!model || !records.length) {
-    return unavailable(`no effective rate record exists for "${model ?? 'the requested model'}"`);
+    return unavailable(`no effective rate record exists for "${model ?? 'the requested model'}"`, report);
   }
 
   // Only records effective at the call time, and matching the context tier, may be used.
@@ -45,7 +45,7 @@ export function counterfactualCost(report, { model, rateRecords = [], contextTok
     return true;
   });
   if (!applicable.length) {
-    return unavailable(`no rate record for "${model}" is effective at that time and context`);
+    return unavailable(`no rate record for "${model}" is effective at that time and context`, report);
   }
 
   const lines = [];
@@ -68,7 +68,7 @@ export function counterfactualCost(report, { model, rateRecords = [], contextTok
 
   if (missing.length) {
     return {
-      ...unavailable(`no rate for ${missing.join(', ')} on "${model}", so it cannot be re-priced`),
+      ...unavailable(`no rate for ${missing.join(', ')} on "${model}", so it cannot be re-priced`, report),
       model,
       missingComponents: missing,
     };
@@ -91,7 +91,8 @@ export function counterfactualCost(report, { model, rateRecords = [], contextTok
   };
 }
 
-function unavailable(reason) {
+function unavailable(reason, report = null) {
+  const actual = report?.billing?.amountUsd ?? null;
   return {
     status: 'unavailable',
     model: null,
@@ -101,7 +102,7 @@ function unavailable(reason) {
     coverage: 'unknown',
     lines: [],
     missingComponents: COMPONENTS.slice(),
-    actualCostUsd: null,
+    actualCostUsd: isUsable(actual) ? actual : null,
     deltaUsd: null,
     reason,
   };
