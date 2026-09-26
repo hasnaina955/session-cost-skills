@@ -270,3 +270,23 @@ test('the CSV total respects each report\'s declared token semantics', async () 
     assert.equal(total, perSession, `${runtime}: rows must total per the ${meaning} rule`);
   }
 });
+
+test('every flag the schema accepts is actually acted on by both CLIs', async () => {
+  // Three features in this cycle were documented, parsed, and did nothing: the #49 wiring
+  // was lost to a stash, --watch had help text but no loop in Cline, and --counterfactual
+  // lost its call to a `git checkout` while its import survived. A flag that parses and is
+  // then ignored is worse than a flag that does not exist, and the schema-to-help test
+  // cannot see it: the schema listed it and the help documented it.
+  //
+  // This asserts the cheap, decisive thing: each declared option is referenced by the
+  // adapter that claims to support it.
+  const { RUNTIME_FLAGS } = await import('../shared/cli-args.mjs');
+  for (const runtime of ['cline', 'mcode']) {
+    const source = fs.readFileSync(path.join(root, 'adapters', runtime, 'skill', 'scripts', 'session-cost.mjs'), 'utf8');
+    for (const [flag, spec] of Object.entries(RUNTIME_FLAGS[runtime])) {
+      if (['help', 'version', 'dataDir', 'out'].includes(flag)) continue; // handled before or outside the option flow
+      assert.ok(source.includes(`opts.${spec.key}`),
+        `${runtime}: --${flag} is in the schema but the CLI never reads opts.${spec.key}`);
+    }
+  }
+});

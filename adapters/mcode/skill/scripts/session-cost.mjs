@@ -38,6 +38,7 @@ import { evaluateBudget } from './lib/budget.mjs';
 import { counterfactualCost, renderCounterfactualText } from './lib/counterfactual.mjs';
 import { createLiveSurface, nextInterval, renderLiveFrame } from './lib/live-view.mjs';
 import { buildProviderProfile, renderSetupText } from './lib/setup.mjs';
+import { compareToBaseline, renderInsightsText } from './lib/insights.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RATES_PATH = process.env.SESSION_COST_RATES_PATH
@@ -1320,6 +1321,34 @@ async function main() {
       const outputPath = writeDashboard(enhanceReport(report, selection), { outPath: opts.out ?? path.join(dataDir, 'reports', 'session-cost', 'session-dashboard.html'), title: 'MCode Session Cost Dashboard' });
       if (opts.json) console.log(JSON.stringify({ schemaVersion: 1, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'mcode', kind: 'dashboard', generatedAt: new Date().toISOString(), dashboardPath: outputPath, report: enhanceReport(report, selection) }, null, 2));
       else console.log(`Dashboard written: ${outputPath}`);
+    } else if (opts.insights) {
+      // Measured history only. Insights never forecasts and never replaces the report.
+      const rows = (report.sessions ?? []).map((entry) => ({
+        row: { sessionId: entry.row?.sessionId, startedAt: entry.row?.startedAt },
+        metrics: entry.metrics,
+      }));
+      console.log(renderText(report, selection));
+      if (rows.length) {
+        console.log('');
+        console.log(renderInsightsText(compareToBaseline(rows[0], rows)));
+      } else {
+        console.log('');
+        console.log('Insights need per-session history, which this report does not carry.');
+      }
+    } else if (opts.counterfactual) {
+      // Opt-in only, and strictly after the normal report. The reported cost is untouched.
+      const enhanced = enhanceReport(report, selection);
+      const table = readValidatedRateTable(RATES_PATH);
+      const records = Object.values(table.providers ?? {}).flatMap((provider) => provider.rateRecords ?? [])
+        .filter((record) => record.model === opts.counterfactual);
+      console.log(renderText(report, selection));
+      console.log('');
+      console.log(renderCounterfactualText(enhanced, counterfactualCost(enhanced, {
+        model: opts.counterfactual,
+        rateRecords: records,
+        contextTokens: report.totalTokens ?? null,
+        at: report.lastTs ?? null,
+      })));
     } else if (opts.csv) {
       if (!quiet) console.log(renderCsv(enhanceReport(report, selection)));
     }

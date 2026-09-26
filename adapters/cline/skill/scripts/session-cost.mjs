@@ -31,6 +31,7 @@ import { evaluateBudget } from './lib/budget.mjs';
 import { counterfactualCost, renderCounterfactualText } from './lib/counterfactual.mjs';
 import { createLiveSurface, nextInterval, renderLiveFrame } from './lib/live-view.mjs';
 import { buildProviderProfile, renderSetupText } from './lib/setup.mjs';
+import { compareToBaseline, renderInsightsText } from './lib/insights.mjs';
 import { detectConfiguredProvider } from './lib/provider-driver.mjs';
 import { discoverModels, doctorReport, explainModelMatch, renderDiagnostics } from './lib/provider-diagnostics.mjs';
 import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, readConfigFile } from './lib/config.mjs';
@@ -128,7 +129,8 @@ function help() {
   --explain            show the arithmetic behind the reported cost
   --csv                emit CSV, one row per session
   --budget <amount>    warn and exit non-zero when a session passes this amount
-  --counterfactual <m> estimate what this session would cost on model <m>
+  --counterfactual <m> estimate the same tokens priced on model <m>; needs that
+                      model's rate records, which Cline's recorded cost does not carry
   --setup              guided custom-provider setup; prints a paste-ready config
   --insights           compare this session to your own history; no forecasting
   --watch              repaint a live view until Ctrl-C (foreground only)
@@ -785,6 +787,34 @@ try {
       });
       if (opts.json) console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'cline', kind: 'dashboard', generatedAt: new Date().toISOString(), dashboardPath: outputPath, report }, replacer, 2));
       else console.log(`Dashboard written: ${outputPath}`);
+    } else if (opts.insights) {
+      // Measured history only. Insights never forecasts and never replaces the report.
+      const rows = (report.sessions ?? []).map((entry) => ({ row: entry.row, metrics: entry.metrics }));
+      if (!quiet) {
+        console.log(render(report));
+        if (rows.length) {
+          console.log('');
+          console.log(renderInsightsText(compareToBaseline(rows[0], rows)));
+        } else {
+          console.log('');
+          console.log('Insights need per-session history, which this report does not carry.');
+        }
+      }
+    } else if (opts.counterfactual) {
+      // Cline's own cost is runtime-recorded, so a counterfactual re-prices the same
+      // tokens against another model's real rate records. The reported cost is untouched.
+      const records = (report.models ?? []).flatMap((model) => model.rateRecords ?? [])
+        .filter((record) => record.model === opts.counterfactual);
+      if (!quiet) {
+        console.log(render(report));
+        console.log('');
+        console.log(renderCounterfactualText(report, counterfactualCost(report, {
+          model: opts.counterfactual,
+          rateRecords: records,
+          contextTokens: report.usage?.totalTokens ?? null,
+          at: report.snapshot?.lastLedgerActivityAt ?? null,
+        })));
+      }
     } else if (opts.csv) { if (!quiet) console.log(renderCsv(report)); }
     else if (opts.json) { if (!quiet) console.log(JSON.stringify(report, replacer, 2)); }
     else if (opts.explain) { if (!quiet) console.log(renderExplanation(report)); }
