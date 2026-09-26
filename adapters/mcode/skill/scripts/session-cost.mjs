@@ -1089,6 +1089,15 @@ function runSetup(configuration) {
 }
 
 function runDiagnostic(configuration) {
+  // The diagnostics module reads the *config* (providers/models) alongside the layer sources,
+  // not the loaded-configuration wrapper, so a configured profile is visible to it. Passing
+  // the wrapper would make `doctor` list only the built-in drivers and report a configured
+  // provider as unknown.
+  const diagnosticConfiguration = {
+    ...configuration.config,
+    sources: configuration.sources,
+    profileSources: configuration.profileSources,
+  };
   const table = loadRates();
   const knownModels = Object.fromEntries(Object.entries(table.providers ?? {}).map(([id, provider]) => [id, Object.keys(provider.models ?? {})]));
   const configuredRecords = (configuration.config.providers ?? []).flatMap(profileRateRecords);
@@ -1104,14 +1113,14 @@ function runDiagnostic(configuration) {
   let report;
   let status = 0;
   if (opts.diagnostic === 'providers') {
-    report = { action: 'providers', providers: doctorReport({ configuration, runtimeId: 'mcode' }).providers };
+    report = { action: 'providers', providers: doctorReport({ configuration: diagnosticConfiguration, runtimeId: 'mcode' }).providers };
   } else if (opts.diagnostic === 'models') {
-    report = { action: 'models', models: discoverModels({ configuration, runtimeId: 'mcode', providerId: opts.provider, knownModels }) };
+    report = { action: 'models', models: discoverModels({ configuration: diagnosticConfiguration, runtimeId: 'mcode', providerId: opts.provider, knownModels }) };
   } else {
     const explanation = opts.provider || opts.model
-      ? explainModelMatch({ runtimeId: 'mcode', providerId: opts.provider, modelId: opts.model, configuration, knownModelIds: diagnosticModels, rateRecords: allRecords })
+      ? explainModelMatch({ runtimeId: 'mcode', providerId: opts.provider, modelId: opts.model, configuration: diagnosticConfiguration, knownModelIds: diagnosticModels, rateRecords: allRecords })
       : null;
-    report = { action: opts.diagnostic, ...doctorReport({ configuration, runtimeId: 'mcode', providerId: opts.provider, modelId: opts.model, knownModelIds: diagnosticModels, rateRecords: allRecords }), explanation };
+    report = { action: opts.diagnostic, ...doctorReport({ configuration: diagnosticConfiguration, runtimeId: 'mcode', providerId: opts.provider, modelId: opts.model, knownModelIds: diagnosticModels, rateRecords: allRecords }), explanation };
     if (explanation?.status === 'unknown' || explanation?.status === 'ambiguous') status = 2;
   }
   console.log(opts.json ? JSON.stringify(report, null, 2) : renderDiagnostics(report));

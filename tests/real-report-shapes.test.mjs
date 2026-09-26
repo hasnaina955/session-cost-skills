@@ -286,28 +286,19 @@ test('every flag the schema accepts is actually acted on by every CLI', async ()
   // This asserts the cheap, decisive thing: each declared option is referenced by the
   // adapter that claims to support it.
   //
-  // KNOWN GAP, opencode only: `--config` is in the shared flag schema, so the OpenCode CLI
-  // parses it instead of rejecting it, but it never reads `opts.configPath`. Cline and MCode
-  // both read it as the standing-summary file that can set `includeChildren`; the OpenCode CLI
-  // has no such reader, so the flag is accepted and discarded. That is exactly the "parses and
-  // is then ignored" failure this test exists to catch, and it is a defect in the adapter, not
-  // an intentional exclusion. It is listed here rather than hidden so the exclusion is visible
-  // and disappears when the CLI is fixed. The other 30 OpenCode flags are asserted normally.
-  const UNWIRED_FLAGS = { opencode: new Set(['config']) };
+  // This asserts the cheap, decisive thing: each declared option is referenced by the
+  // adapter that claims to support it. There is no exemption list: a flag that parses and is
+  // then ignored must fail here rather than be carried along as a documented omission.
   const { RUNTIME_FLAGS } = await import('../shared/cli-args.mjs');
   for (const runtime of SCHEMA_RUNTIMES) {
     const source = fs.readFileSync(path.join(root, 'adapters', runtime, 'skill', 'scripts', 'session-cost.mjs'), 'utf8');
-    const unwired = new Set();
+    const unwired = [];
     for (const [flag, spec] of Object.entries(RUNTIME_FLAGS[runtime])) {
       if (['help', 'version', 'dataDir', 'out'].includes(flag)) continue; // handled before or outside the option flow
       if (source.includes(`opts.${spec.key}`)) continue;
-      unwired.add(flag);
-      assert.ok(UNWIRED_FLAGS[runtime]?.has(flag),
-        `${runtime}: --${flag} is in the schema but the CLI never reads opts.${spec.key}`);
+      unwired.push(flag);
     }
-    // The exclusion list is the defect, not a licence: if the CLI starts reading the flag this
-    // fails, so the entry has to be removed deliberately rather than outliving its fix.
-    assert.deepEqual([...unwired].sort(), [...(UNWIRED_FLAGS[runtime] ?? [])].sort(),
-      `${runtime}: the known-unwired flag list is stale; update it when the CLI is fixed`);
+    assert.deepEqual(unwired, [],
+      `${runtime}: flags in the schema that the CLI never reads: ${unwired.map((flag) => `--${flag}`).join(', ')}`);
   }
 });

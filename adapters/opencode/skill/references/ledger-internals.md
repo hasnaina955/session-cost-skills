@@ -109,19 +109,35 @@ without projecting, and a report that silently dropped those sessions would unde
 When it does apply, the report says so. An aggregate-priced session has no per-model split —
 there is no per-call record to derive one from — so it must not be presented as if it did.
 
-## Where rates come from
+## Where the cost comes from
 
-Unlike the MCode adapter, this adapter **ships no rate table** and has no `--rates` or
-`--refresh-rates`. OpenCode runs against whatever provider the user configured, including local
-and self-hosted endpoints, so there is no single catalog that could be bundled and be correct.
+There are two bases, and they are not peers: the runtime's own figure wins whenever it exists.
 
-The rate source is the user's own provider profile: its `rateCards` and `importedRateRecords`,
-validated by the shared config module and already carrying effective dates, context tiers, and
-currency. Everything that decides *which* driver a call belongs to — the built-in manifests,
-deterministic provider matching, alias resolution, and the duplicate/ambiguity failures — is the
-shared machinery, unchanged.
+**1. `runtime-recorded` (primary).** Every OpenCode message row carries a `cost` field, and
+for a paid model it holds what the provider actually billed. When any call in scope carries a
+positive recorded cost, the report headlines the **sum of the recorded costs** and performs no
+rate arithmetic at all: `runtime.costBasis` is `runtime-recorded`, `billing.recordedCostUsd`
+is that sum, `billing.estimatedCostUsd` is `null`, and `provenance.kind` names the ledger.
+This is the case a fresh install gets for free — no provider profile is needed for a session
+the runtime already priced.
 
-The rule that shapes the whole pricing path:
+**2. `provider-rate-estimate` (fallback).** Only where the ledger recorded nothing does the
+report fall back to pricing from a rate card. Unlike the MCode adapter this adapter **ships
+no rate table** and has no `--rates` or `--refresh-rates`. OpenCode runs against whatever
+provider the user configured, including local and self-hosted endpoints, so there is no single
+catalog that could be bundled and be correct. The rate source is the user's own provider
+profile: its `rateCards` and `importedRateRecords`, validated by the shared config module and
+already carrying effective dates, context tiers, and currency. Everything that decides *which*
+driver a call belongs to — the built-in manifests, deterministic provider matching, alias
+resolution, and the duplicate/ambiguity failures — is the shared machinery, unchanged.
+
+A recorded total is a *total*, not a sample of one: a call inside such a session that records
+`cost: 0` contributes `0` to the sum and is not a reason to fall back. Measured on a real
+ledger, `step-5-preview` has 3 zero-cost calls among 258 and 4 among 293, and those zeros are
+part of the sessions' recorded spend. Every token-bearing message row also carries a `cost`
+key, so the sum covers every call in scope rather than only the priced ones.
+
+The rule that shapes the fallback path:
 
 > A call is priced only when **every one** of input / output / cacheRead / cacheWrite has an
 > applicable rate record. A partial card yields no number at all. Zero is a legitimate answer
@@ -129,26 +145,43 @@ The rule that shapes the whole pricing path:
 > never as `0`.
 
 That distinction is the difference between "we priced this and it was free" and "we cannot price
-this", and the two must never be collapsed. The three zero-shaped outcomes, as they appear in
+this", and the two must never be collapsed. The zero-shaped outcomes, as they appear in
 `--json`:
 
-| Situation | `billing.amountUsd` | `billing.rateKnown` | `coverage.status` | Text headline |
-| --- | --- | --- | --- | --- |
-| No calls at all | `0` | `true` | `no-calls` | `COST UNAVAILABLE` (see note) |
-| Calls, no applicable rate | `null` | `false` | `unavailable` | `COST UNAVAILABLE` |
-| Genuinely free model | `0` | `true` | `complete` | `TOTAL COST $0.000000 (free model)` |
+| Situation | `billing.amountUsd` | `runtime.costBasis` | Text headline |
+| --- | --- | --- | --- |
+| Recorded cost in the ledger | the recorded sum | `runtime-recorded` | `TOTAL COST $x (recorded by OpenCode)` |
+| No calls at all | `0` | `provider-rate-estimate` | `COST UNAVAILABLE` (see note) |
+| Calls, no applicable rate | `null` | `provider-rate-estimate` | `COST UNAVAILABLE` |
+| Rate card whose four components are all `0` | `0` | `provider-rate-estimate` | `TOTAL COST $0.000000 (free model)` |
 
-Note on the first row: a session with no calls is a **known zero** — nothing was spent because
+Note on the third row: a session with no calls is a **known zero** — nothing was spent because
 nothing ran — and the contract says so (`rateKnown: true`, `coverage: "no-calls"`,
 `amountUsd: 0`). The text renderer prints the same `COST UNAVAILABLE` headline for it as for an
 unpriceable session, so to tell a no-calls session from an unpriced one you must read
 `coverage.status` from `--json`, or the `priced calls 0 of 0` line. No code path renders an
 unknown cost as `0`, and none renders a known zero as "unknown" in the contract.
 
-`runtime.costBasis` is `provider-rate-estimate` for this adapter. `billing.recordedCostUsd` is
-always `null`: the runtime's own `cost` column is kept in the reader's output but is not this
-adapter's pricing basis, because it is absent or zero for the provider profiles OpenCode is
-typically used with.
+### Why a recorded zero is never read as "free"
+
+A session whose every call records `cost: 0` is **not** reported as a free total unless a rate
+card says so. The ledger has no free flag, and a recorded zero is indistinguishable from a
+call the runtime could not price: the paid `step-5-preview` sessions contain both, in the same
+store, in the same session. The only other candidate signal is the provider id, and that is an
+external pricing assumption rather than a fact in the ledger — the same provider carries both
+`-free` and non-free models — so inferring free from it is the same guess as inferring it from
+a model name suffix, just with a longer reach.
+
+So the conservative reading is the one implemented: no recorded cost and no card means
+`cost unavailable`, exit code `2`, exact token counts, models named. **A fresh install still
+needs a provider profile to price a session whose runtime recorded nothing** — a free-model
+session on a fresh install reports unavailable, not `$0.00`, and the remedy is
+`--init-config` plus `doctor`.
+
+Because the runtime records a per-call total and never a per-token split, the per-row costs in
+the "What was used, and what it cost" table are `—` on the recorded basis, with the basis
+stated in a note beneath it, rather than a rate breakdown of a number that was not derived
+that way.
 
 ## Session selection
 

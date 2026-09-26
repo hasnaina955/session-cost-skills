@@ -19,12 +19,23 @@
 //
 // ## Cost basis
 //
-// `provider-rate-estimate`, priced through the shared provider-driver registry. OpenCode runs
-// against whatever provider the user configured, so unlike the MCode adapter this one ships no
-// rate table: rates come from the user's own provider profile. A model with a rate card is
-// priced from it, a genuinely free model is genuinely $0, and a model with no card reports
-// token counts with the cost unavailable. A missing rate is never rendered as a number.
+// Two bases, in this order of authority:
+//
+// 1. `runtime-recorded`. OpenCode writes a per-call `cost` into its ledger, and that figure is
+//    what the provider actually billed. When any call in scope carries a positive recorded cost
+//    the report headlines the *sum of the recorded costs* and does no rate arithmetic at all. A
+//    zero-cost call inside such a session is part of that total, not a reason to fall back.
+// 2. `provider-rate-estimate`. Only where the ledger recorded nothing does the report fall back
+//    to pricing through the shared provider-driver registry. OpenCode runs against whatever
+//    provider the user configured, so unlike the MCode adapter this one ships no rate table:
+//    rates come from the user's own provider profile. A model with a rate card is priced from
+//    it, a model whose card is genuinely free is genuinely $0, and a model with no card reports
+//    exact token counts with the cost unavailable.
+//
+// A missing or unpriced cost is never rendered as a number, in any mode, including aggregates
+// and `--list`.
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { writeDashboard } from './lib/dashboard.mjs';
 import {
@@ -53,16 +64,57 @@ import { createLiveSurface, nextInterval, renderLiveFrame } from './lib/live-vie
 
 const RUNTIME_ID = 'opencode';
 const PER_MILLION = 1_000_000;
+const COST_BASIS_RECORDED = 'runtime-recorded';
+const COST_BASIS_ESTIMATED = 'provider-rate-estimate';
 const CONTRACT_RUNTIME = Object.freeze({
   id: RUNTIME_ID,
-  costBasis: 'provider-rate-estimate',
   storageSource: '.local/share/opencode/opencode.db session, message, and session_message tables',
   inputTokenMeaning: 'excludes-cache',
   reasoningIncludedInOutput: false,
-  provenanceKind: 'provider-rate-estimate',
-  provenanceSource: 'OpenCode runtime ledger plus provider rate cards from the session-cost config',
   rateSources: [],
 });
+// The recorded basis reports what OpenCode's ledger says was billed; the estimated basis
+// reports what the user's rate cards imply. The provenance must name the one in force, or a
+// consumer cannot tell a figure it can trust from a figure it has to recompute.
+const CONTRACT_PROVENANCE = Object.freeze({
+  [COST_BASIS_RECORDED]: Object.freeze({
+    provenanceKind: COST_BASIS_RECORDED,
+    provenanceSource: 'OpenCode runtime ledger per-call cost records',
+  }),
+  [COST_BASIS_ESTIMATED]: Object.freeze({
+    provenanceKind: COST_BASIS_ESTIMATED,
+    provenanceSource: 'OpenCode runtime ledger plus provider rate cards from the session-cost config',
+  }),
+});
+
+// Which figure a report is allowed to headline, and what it is allowed to call itself.
+//
+// The runtime's own recorded cost is the most authoritative number available: it is what the
+// provider billed, for whatever provider the user configured. It wins whenever the ledger
+// recorded any, so a fresh install with no provider profile still reports real sessions
+// correctly. Only where the ledger recorded nothing does the report fall back to rate
+// resolution, and then only when every model in scope actually has a rate.
+function selectCostBasis(fin) {
+  const hasRecordedCalls = fin.calls > 0 && fin.callsWithRecordedCost > 0;
+  if (hasRecordedCalls) {
+    return { costBasis: COST_BASIS_RECORDED, rateKnown: true, totalCost: fin.recordedCostUsd };
+  }
+  return { costBasis: COST_BASIS_ESTIMATED, rateKnown: fin.rateKnown, totalCost: fin.rateKnown ? fin.totalCost : null };
+}
+
+// `rateKnown` used to mean "this figure is a real number" and is read that way by the
+// renderers, the exit code and the contract, so it now answers that question about whichever
+// basis is in force rather than about the rate cards specifically.
+function withSelectedCost(target, fin) {
+  const selected = selectCostBasis(fin);
+  const totalCost = selected.rateKnown ? selected.totalCost : null;
+  return {
+    ...target,
+    ...selected,
+    totalCost,
+    allInUsdPerM: totalCost !== null && target.totalTokens > 0 ? (totalCost / target.totalTokens) * PER_MILLION : 0,
+  };
+}
 // A session whose most recent call is this recent is treated as still running, so the report
 // can say the totals are a snapshot rather than a final figure.
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
@@ -147,8 +199,10 @@ function printHelp() {
   models discover       list configured models and aliases
   config explain        explain provider/model matching
 
-Cost is estimated from provider rate cards in your session-cost config. A model with no
-applicable card is reported with its token counts and an unavailable cost, never as $0.`);
+Cost is taken from the OpenCode ledger's own per-call cost where it records any, and is
+otherwise estimated from provider rate cards in your session-cost config. A model with neither
+a recorded cost nor an applicable card is reported with its token counts and an unavailable
+cost, never as $0.`);
 }
 
 // Thrown instead of process.exit(): exiting while handles are still open trips a libuv
@@ -226,6 +280,24 @@ function finalize(agg) {
     cacheRate: promptTokens > 0 ? agg.cacheReadTokens / promptTokens : 0,
     allInUsdPerM: totalTokens > 0 ? (totalCost / totalTokens) * PER_MILLION : 0,
   };
+}
+
+// ---------------------------------------------------------------- standing summary
+
+function readJsonFile(file) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '')); } catch { return null; }
+}
+
+// `--config` points at the standing-summary file, not at the provider configuration
+// (`--session-config`). It carries the settings that should apply to every run rather than
+// being spelled out on each invocation. Mirrors the Cline and MCode adapters.
+function loadConfig(dataDir) {
+  const configPath = path.resolve(opts.configPath ?? path.join(dataDir, 'session-cost.json'));
+  if (!fs.existsSync(configPath)) return { path: configPath, values: {} };
+  const values = readJsonFile(configPath);
+  if (!values || typeof values !== 'object') fail(`invalid config JSON: ${configPath}`);
+  if (!opts.includeChildrenExplicit && values.includeChildren === true) opts.includeChildren = true;
+  return { path: configPath, values };
 }
 
 // ---------------------------------------------------------------- ledger
@@ -335,38 +407,46 @@ function buildSessionReport(ctx, registry, sessionId, includeChildren) {
   }
 
   const sessions = ids.map((id) => {
-    const fin = finalize(perSession[id] ?? emptyAggregate());
+    const sub = selectCostBasis(finalize(perSession[id] ?? emptyAggregate()));
     const meta = sessionMeta(ctx.sessionsById, id);
     return {
       row: {
         sessionId: id,
         parentSessionId: meta?.parent_id ?? null,
         status: 'completed',
-        startedAt: Number.isFinite(fin.firstTs) ? new Date(fin.firstTs).toISOString() : null,
-        endedAt: Number.isFinite(fin.lastTs) ? new Date(fin.lastTs).toISOString() : null,
+        startedAt: Number.isFinite(sub.firstTs) ? new Date(sub.firstTs).toISOString() : null,
+        endedAt: Number.isFinite(sub.lastTs) ? new Date(sub.lastTs).toISOString() : null,
       },
       metrics: {
-        inputTokens: fin.inputTokens,
-        outputTokens: fin.outputTokens,
-        cacheReadTokens: fin.cacheReadTokens,
-        cacheWriteTokens: fin.cacheWriteTokens,
-        totalTokens: fin.totalTokens,
-        calls: fin.calls,
-        pricedCalls: fin.pricedCalls,
-        unpricedCalls: fin.unpricedCalls,
-        cost: fin.rateKnown ? fin.totalCost : null,
+        inputTokens: sub.inputTokens,
+        outputTokens: sub.outputTokens,
+        cacheReadTokens: sub.cacheReadTokens,
+        cacheWriteTokens: sub.cacheWriteTokens,
+        totalTokens: sub.totalTokens,
+        calls: sub.calls,
+        pricedCalls: sub.pricedCalls,
+        unpricedCalls: sub.unpricedCalls,
+        // Null, not zero, whenever the cost is not known on the basis in force: no rate card
+        // for the estimated basis, no recorded call for the recorded basis.
+        cost: sub.rateKnown ? sub.totalCost : null,
+        costBasis: sub.costBasis,
         title: meta?.title ?? null,
         source: 'runtime-ledger',
-        lastTs: fin.lastTs,
+        lastTs: sub.lastTs,
       },
     };
   });
 
   const models = [...perModel.values()].map((entry) => {
     const fin = finalize(entry);
+    const selected = selectCostBasis(fin);
     return {
       ...fin,
       rateKnown: fin.rateKnown,
+      // A model's headline cost follows the report's basis rule on its own calls, so a
+      // partially recorded model does not contradict the total it contributes to.
+      costBasis: selected.costBasis,
+      totalCost: selected.rateKnown ? selected.totalCost : null,
       rateCoverage: fin.calls === 0 ? 'no-calls' : fin.rateKnown ? 'complete' : 'unavailable',
       missingRateComponents: fin.rateKnown ? [] : [...REQUIRED_COMPONENTS],
       rateFingerprints: [...entry.rateFingerprints],
@@ -378,9 +458,9 @@ function buildSessionReport(ctx, registry, sessionId, includeChildren) {
   const lastTs = fin.lastTs;
   const snapshotAt = Date.now();
   const meta = sessionMeta(ctx.sessionsById, sessionId);
-  // The ledger also records OpenCode's own per-call cost. It is reported as a cross-check
-  // only: it is null unless at least one call actually carries one, so an unpriced model can
-  // never appear as a recorded $0.00.
+  const selected = selectCostBasis(fin);
+  // The ledger records OpenCode's own per-call cost. It is the primary basis whenever at least
+  // one call actually carries one, so an unpriced model can never appear as a recorded $0.00.
   const recordedCost = {
     calls: fin.calls,
     callsWithRecordedCost: fin.callsWithRecordedCost,
@@ -414,16 +494,17 @@ function buildSessionReport(ctx, registry, sessionId, includeChildren) {
     childSessions: childIds,
     childSessionsBilled: includeChildren ? childIds : [],
     perSession: Object.fromEntries(ids.map((id) => {
-      const sub = finalize(perSession[id] ?? emptyAggregate());
+      const sub = selectCostBasis(finalize(perSession[id] ?? emptyAggregate()));
       return [id, {
         role: id === sessionId ? 'target' : 'child',
         billed: true,
         calls: sub.calls,
         totalTokens: sub.totalTokens,
         cacheRate: sub.cacheRate,
-        // Null, not zero, whenever a call in the session had no applicable rate.
+        // Null, not zero, whenever the session's cost is not known on the basis in force.
         totalCost: sub.rateKnown ? sub.totalCost : null,
         rateKnown: sub.rateKnown,
+        costBasis: sub.costBasis,
       }];
     })),
     sessions,
@@ -444,12 +525,13 @@ function buildSessionReport(ctx, registry, sessionId, includeChildren) {
     sessionActive: lastTs !== null && snapshotAt - lastTs < LIVE_WINDOW_MS,
     sourceCoverage: ctx.coverage,
     warnings,
-    rateKnown: fin.rateKnown,
+    rateKnown: selected.rateKnown,
     currency: (() => {
       const currencies = [...new Set(models.map((m) => m.rateCurrency).filter(Boolean))];
       return currencies.length === 1 ? currencies[0] : null;
     })(),
     ...fin,
+    ...withSelectedCost(fin, fin),
   };
 }
 
@@ -480,17 +562,26 @@ function enhanceReport(report, selection = null) {
       cacheHitRate: report.cacheRate,
     },
     billing: {
-      classification: report.rateKnown ? 'rate-estimated' : 'cost-unavailable',
+      // Exactly one of the two cost figures may be non-null, and which one is decided by the
+      // basis: a recorded total is not also an estimate, and vice versa.
+      classification: report.costBasis === COST_BASIS_RECORDED ? COST_BASIS_RECORDED
+        : (report.rateKnown ? 'rate-estimated' : 'cost-unavailable'),
       currency: report.currency ?? 'USD',
-      recordedCostUsd: null,
-      estimatedCostUsd: report.rateKnown ? report.totalCost : null,
+      recordedCostUsd: report.costBasis === COST_BASIS_RECORDED && report.rateKnown ? report.totalCost : null,
+      estimatedCostUsd: report.costBasis === COST_BASIS_ESTIMATED && report.rateKnown ? report.totalCost : null,
       rateKnown: report.rateKnown,
+      coverage: report.calls === 0 ? 'no-calls' : (report.rateKnown ? 'complete' : 'unavailable'),
     },
     warnings: report.warnings,
     ...report,
   };
   return withNormalizedContract(enhanced, {
-    runtime: { ...CONTRACT_RUNTIME, rateSources: report.rateSources },
+    runtime: {
+      ...CONTRACT_RUNTIME,
+      ...CONTRACT_PROVENANCE[report.costBasis] ?? CONTRACT_PROVENANCE[COST_BASIS_ESTIMATED],
+      costBasis: report.costBasis,
+      rateSources: report.rateSources,
+    },
     selection,
   });
 }
@@ -524,14 +615,24 @@ const fmtRate = (value) => {
 /**
  * The single place a cost is rendered.
  *
- * `rateKnown === false` means no applicable rate exists, and that must read as "unknown", not
- * as a dollar amount. The other two states are real numbers: a priced total, and a priced total
- * of zero for a genuinely free model.
+ * `rateKnown === false` means the cost is not known on the basis in force — no applicable rate
+ * for the estimated basis, no recorded call for the recorded one — and that must read as
+ * "unknown", not as a dollar amount. The known states are real numbers: a recorded total, a
+ * priced total, and a priced total of zero for a genuinely free model.
  */
 function costLabel(report) {
   if (report.calls === 0) return '$0.000000 (no calls)';
   if (!report.rateKnown) return 'cost unavailable';
-  return `${USD(report.totalCost)}${report.models.some((m) => m.rateIsFree) ? ' (free model)' : ''}`;
+  const free = report.costBasis === COST_BASIS_ESTIMATED && report.models.some((m) => m.rateIsFree);
+  const recorded = report.costBasis === COST_BASIS_RECORDED ? ' (recorded by OpenCode)' : '';
+  return `${USD(report.totalCost)}${free ? ' (free model)' : ''}${recorded}`;
+}
+
+// A model's cost on the basis that applies to its own calls. Kept beside costLabel so no table
+// can print a rate-card estimate next to a recorded total without saying which is which.
+function modelCostLabel(model) {
+  if (!model.rateKnown && model.costBasis === COST_BASIS_ESTIMATED) return 'unavailable';
+  return `${USD(model.totalCost)}${model.costBasis === COST_BASIS_RECORDED ? ' recorded' : ''}`;
 }
 
 function renderText(report, selection = null) {
@@ -539,7 +640,13 @@ function renderText(report, selection = null) {
   const billedChildren = report.childSessionsBilled.length;
   const unbilledChildren = report.childSessions.length - billedChildren;
   const unpricedModels = report.models.filter((model) => !model.rateKnown);
-  const anyPriced = report.models.some((model) => model.rateKnown);
+  // A recorded total is authoritative even though no model has a rate card behind it, so the
+  // headline and the "is anything known" question are asked of the same basis.
+  const costKnown = report.rateKnown;
+  const recordedBasis = report.costBasis === COST_BASIS_RECORDED;
+  // The runtime records a per-call total, never a per-component split, so a component
+  // breakdown is only renderable when the numbers behind it came from rate cards.
+  const showComponents = costKnown && !recordedBasis;
   const modelLabel = report.multiModel
     ? `${report.models.length} models`
     : (report.models[0]?.modelId ?? 'unknown model');
@@ -557,29 +664,29 @@ function renderText(report, selection = null) {
   if (selection?.candidateIds?.length) out.push(`Selection candidates: ${selection.candidateIds.join(', ')}`);
   out.push('');
 
-  // Never print $0.000000 as a headline: with no applicable rate for any model that reads as
-  // "this session was free" when the truth is "the cost is unknown".
-  if (anyPriced) {
-    out.push(`TOTAL COST ${costLabel(report)} for ${M(report.totalTokens)} M tokens — ${USD(report.allInUsdPerM)}/M all-in${report.rateKnown ? '' : ' (priced calls only)'}`);
+  // Never print $0.000000 as a headline: with nothing known about cost that reads as "this
+  // session was free" when the truth is "the cost is unknown".
+  if (costKnown) {
+    out.push(`TOTAL COST ${costLabel(report)} for ${M(report.totalTokens)} M tokens — ${USD(report.allInUsdPerM)}/M all-in${showComponents ? '' : ' (see basis note)'}`);
   } else {
-    out.push(`COST UNAVAILABLE — ${M(report.totalTokens)} M tokens were measured, but no model in this session has an applicable rate.`);
+    out.push(`COST UNAVAILABLE — ${M(report.totalTokens)} M tokens were measured, but nothing in this session records a cost and no model has an applicable rate.`);
     out.push('Token counts below are exact; the cost is unknown, not zero (see "Rates actually billed").');
   }
   out.push('');
 
   const effective = (cost, tokens) => (tokens > 0 && cost > 0 ? `$${((cost / tokens) * PER_MILLION).toFixed(4)}` : '—');
   const share = (tokens) => (report.promptTokens > 0 ? `${((tokens / report.promptTokens) * 100).toFixed(1)}%` : '—');
-  const money = (value) => (anyPriced ? USD(value) : '—');
+  const money = (value) => (showComponents ? USD(value) : '—');
 
   out.push('What was used, and what it cost');
   out.push(...renderTable(
     ['Token type', 'Tokens (M)', 'Share of prompt', 'Rate $/M', 'Cost'],
     [
-      ['Fresh input (uncached)', M(report.inputTokens), share(report.inputTokens), report.rateKnown ? effective(report.costInput, report.inputTokens) : '—', money(report.costInput)],
-      ['Cached prompt read', M(report.cacheReadTokens), share(report.cacheReadTokens), report.rateKnown ? effective(report.costCacheRead, report.cacheReadTokens) : '—', money(report.costCacheRead)],
-      ['Cache write', M(report.cacheWriteTokens), share(report.cacheWriteTokens), report.rateKnown ? effective(report.costCacheWrite, report.cacheWriteTokens) : '—', money(report.costCacheWrite)],
-      ['Output', M(report.outputTokens), '—', report.rateKnown ? effective(report.costOutput, report.outputTokens) : '—', money(report.costOutput)],
-      ['Total', M(report.totalTokens), '—', '—', anyPriced ? USD(report.totalCost) : '—'],
+      ['Fresh input (uncached)', M(report.inputTokens), share(report.inputTokens), showComponents ? effective(report.costInput, report.inputTokens) : '—', money(report.costInput)],
+      ['Cached prompt read', M(report.cacheReadTokens), share(report.cacheReadTokens), showComponents ? effective(report.costCacheRead, report.cacheReadTokens) : '—', money(report.costCacheRead)],
+      ['Cache write', M(report.cacheWriteTokens), share(report.cacheWriteTokens), showComponents ? effective(report.costCacheWrite, report.cacheWriteTokens) : '—', money(report.costCacheWrite)],
+      ['Output', M(report.outputTokens), '—', showComponents ? effective(report.costOutput, report.outputTokens) : '—', money(report.costOutput)],
+      ['Total', M(report.totalTokens), '—', '—', costKnown ? USD(report.totalCost) : '—'],
     ],
     ['l', 'r', 'r', 'r', 'r'],
   ));
@@ -587,11 +694,19 @@ function renderText(report, selection = null) {
   if (report.reasoningTokens) {
     out.push(`(Reasoning ${M(report.reasoningTokens)} M is reported separately and is never added to the output row.)`);
   }
+  if (recordedBasis) {
+    out.push('(The OpenCode runtime records a per-call cost, not a per-token split, so the per-row costs');
+    out.push(' above are not available on this basis. The total is its recorded figure.)');
+  }
 
   out.push('');
   out.push('Rates actually billed');
   for (const model of report.models) {
     const who = report.multiProvider ? `${model.providerKey} · ` : '';
+    if (model.costBasis === COST_BASIS_RECORDED) {
+      out.push(`  ${who}${model.modelId} — ${model.calls} call(s), ${M(model.totalTokens)} M tokens, ${modelCostLabel(model)} as recorded by the OpenCode runtime`);
+      continue;
+    }
     if (!model.rateKnown) {
       out.push(`  ${who}${model.modelId} — no applicable rate for ${model.calls} call(s), ${M(model.totalTokens)} M tokens; cost unavailable, not zero`);
       for (const reason of model.unpricedReasons) out.push(`    ${reason}`);
@@ -604,7 +719,9 @@ function renderText(report, selection = null) {
     if (model.providerDriver) out.push(`    driver: ${model.providerDriver.id}@${model.providerDriver.version} (${model.providerDriver.fingerprint})`);
     if (model.rateFingerprints.length) out.push(`    rate fingerprints: ${model.rateFingerprints.slice(0, 4).join(', ')}${model.rateFingerprints.length > 4 ? ', ...' : ''}`);
   }
-  if (report.rateKnown) {
+  if (recordedBasis) {
+    out.push(`  ${report.callsWithRecordedCost} of ${report.calls} call(s) carry a cost recorded by the OpenCode runtime.`);
+  } else if (report.rateKnown) {
     out.push(`  priced calls ${report.pricedCalls} of ${report.calls}`);
   } else {
     out.push(`  ! ${report.unpricedCalls} of ${report.calls} call(s) are unpriced and are NOT in the total above.`);
@@ -616,7 +733,7 @@ function renderText(report, selection = null) {
     out.push('message store held per-call rows for it. Those figures are exact totals but there is no');
     out.push('per-model split behind them, so this report does not claim per-call precision.');
   }
-  if (report.recordedCost.amountUsd !== null) {
+  if (report.recordedCost.amountUsd !== null && !recordedBasis) {
     out.push(`Runtime cross-check: OpenCode recorded $${report.recordedCost.amountUsd.toFixed(6)} across ${report.recordedCost.callsWithRecordedCost} of ${report.recordedCost.calls} call(s).`);
   }
   if (unbilledChildren > 0) {
@@ -638,7 +755,7 @@ function renderText(report, selection = null) {
         String(model.calls),
         M(model.totalTokens),
         `${(model.cacheRate * 100).toFixed(1)}%`,
-        model.rateKnown ? USD(model.totalCost) : 'unavailable',
+        modelCostLabel(model),
       ]),
       ['l', 'l', 'r', 'r', 'r', 'r'],
     ));
@@ -657,16 +774,17 @@ function renderText(report, selection = null) {
           M(entry.totalTokens),
           `${(entry.cacheRate * 100).toFixed(1)}%`,
           // Null becomes "unavailable" here, never $0.00.
-          entry.rateKnown ? USD(entry.totalCost) : 'unavailable',
+          entry.rateKnown ? `${USD(entry.totalCost)}${entry.costBasis === COST_BASIS_RECORDED ? ' recorded' : ''}` : 'unavailable',
         ];
       }),
       ['l', 'l', 'r', 'r', 'r', 'r'],
     ));
   }
-  if (!anyPriced) {
+  if (!costKnown) {
     out.push('');
-    out.push('No rate source is configured for these models. Add a provider profile with rate cards to your');
-    out.push('session-cost config (see --init-config and --doctor) and the cost will be estimated instead.');
+    out.push('Nothing in this session records a cost, and no rate source is configured for these models.');
+    out.push('Add a provider profile with rate cards to your session-cost config (see --init-config and');
+    out.push('--doctor) and the cost will be estimated from them.');
   }
   return out.join('\n');
 }
@@ -792,7 +910,8 @@ function aggregateReports(reports, { label, duplicateSuppressedSessionIds = [] }
   const fin = finalize(total);
   const models = [...perModel.values()].map((entry) => {
     const model = finalize(entry);
-    return { ...model, rateKnown: model.rateKnown, rateCoverage: model.calls === 0 ? 'no-calls' : model.rateKnown ? 'complete' : 'unavailable', missingRateComponents: model.rateKnown ? [] : [...REQUIRED_COMPONENTS], rateFingerprints: [...entry.rateFingerprints], effectiveThrough: null };
+    const selected = selectCostBasis(model);
+    return { ...model, rateKnown: model.rateKnown, costBasis: selected.costBasis, totalCost: selected.rateKnown ? selected.totalCost : null, rateCoverage: model.calls === 0 ? 'no-calls' : model.rateKnown ? 'complete' : 'unavailable', missingRateComponents: model.rateKnown ? [] : [...REQUIRED_COMPONENTS], rateFingerprints: [...entry.rateFingerprints], effectiveThrough: null };
   });
   const currencies = [...new Set(models.map((model) => model.rateCurrency).filter(Boolean))];
   return {
@@ -816,7 +935,7 @@ function aggregateReports(reports, { label, duplicateSuppressedSessionIds = [] }
     },
     rateCoverage: { calls: fin.calls, pricedCalls: fin.pricedCalls, unpricedCalls: fin.unpricedCalls },
     configuration: effectiveConfiguration,
-    rateKnown: reports.every((report) => report.rateKnown),
+    rateKnown: selectCostBasis(fin).rateKnown,
     currency: currencies.length === 1 ? currencies[0] : null,
     rootSessionIds: reports.flatMap((report) => report.rootSessionIds),
     includedSessionIds: [...new Set(reports.flatMap((report) => report.includedSessionIds))],
@@ -830,17 +949,18 @@ function aggregateReports(reports, { label, duplicateSuppressedSessionIds = [] }
     ledgerLastCallAt: fin.lastTs,
     sessionActive: reports.some((report) => report.sessionActive),
     warnings: [...new Set(reports.flatMap((report) => report.warnings))],
+    ...withSelectedCost(fin, fin),
   };
 }
 
 function renderAggregate(report, label) {
   const out = [`${label} — ${report.rootSessionIds.length} session(s)`, ''];
   out.push(`TOTAL COST ${costLabel(report)} for ${M(report.totalTokens)} M tokens across ${report.calls} LLM call(s)`);
-  out.push(`Cache rate ${(report.cacheRate * 100).toFixed(1)}% of prompt · ${report.pricedCalls} of ${report.calls} call(s) priced`);
+  out.push(`Cache rate ${(report.cacheRate * 100).toFixed(1)}% of prompt · ${report.costBasis === COST_BASIS_RECORDED ? `${report.callsWithRecordedCost} of ${report.calls} call(s) carry a recorded cost` : `${report.pricedCalls} of ${report.calls} call(s) priced`}`);
   out.push('');
   out.push(...renderTable(
     ['Provider', 'Model', 'Calls', 'Tokens (M)', 'Cost'],
-    report.models.map((model) => [model.providerKey || '—', model.modelId, String(model.calls), M(model.totalTokens), model.rateKnown ? USD(model.totalCost) : 'unavailable']),
+    report.models.map((model) => [model.providerKey || '—', model.modelId, String(model.calls), M(model.totalTokens), modelCostLabel(model)]),
     ['l', 'l', 'r', 'r', 'r'],
   ));
   for (const warning of report.warnings) out.push(`! ${warning}`);
@@ -954,6 +1074,8 @@ async function main() {
   });
 
   const ctx = await loadLedgerContext();
+  // Before session selection: the standing summary can widen the tree via `includeChildren`.
+  loadConfig(ctx.dataDir);
   ctx.sessionsById = new Map(ctx.sessions.map((session) => [session.id, session]));
   const candidates = filterSessions(ctx);
 
@@ -1091,9 +1213,10 @@ async function main() {
     const verdict = evaluateBudget({
       amountUsd: report.rateKnown ? report.totalCost : null,
       budget: opts.budget,
-      // A session that did not fully price is reported as unknown rather than guessed either way.
+      // A session whose cost is not known on the basis in force is reported as unknown rather
+      // than guessed either way.
       coverage: report.rateKnown ? 'complete' : 'unknown',
-      basis: 'provider-rate-estimate',
+      basis: report.costBasis,
       sessionId: report.sessionId ?? null,
     });
     console.error(verdict.message);

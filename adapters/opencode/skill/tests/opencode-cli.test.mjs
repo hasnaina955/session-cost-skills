@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import path from 'node:path';
 import { validateJsonSchema } from '../../../../scripts/validate-json-schema.mjs';
 import { REPORT_CONTRACT_VERSION, assertNormalizedReport } from '../scripts/lib/report-contract.mjs';
-import { createOpenCodeFixture, runCli, runJson } from '../../../../tests/helpers/contract-fixtures.mjs';
+import { createOpenCodeFixture, createOpenCodeRecordedCostFixture, runCli, runJson } from '../../../../tests/helpers/contract-fixtures.mjs';
 
 // The end-to-end contract for the OpenCode CLI, against a synthetic ledger.
 //
@@ -321,4 +322,132 @@ test('a bad invocation fails before storage is opened and without a stack trace'
     assert.doesNotMatch(result.stderr, /\.mjs:\d+$/m, `${args.join(' ')} leaked a stack trace`);
     assert.doesNotMatch(result.stderr, /sqlite|opencode\.db/i, `${args.join(' ')} reached storage`);
   }
+});
+
+function withRecordedFixture(t) {
+  const fixture = createOpenCodeRecordedCostFixture();
+  t.after(() => fs.rmSync(fixture.dataDir, { recursive: true, force: true }));
+  return fixture;
+}
+
+test('the runtime-recorded cost is the primary basis, with no provider profile configured', (t) => {
+  const fixture = withRecordedFixture(t);
+  // No --session-config at all: this is the fresh install the recorded basis exists for.
+  const { result, output: report } = runJson(fixture.script, fixture.dataDir, ['--session', 'ses_paid'], fixture.environment);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(validateJsonSchema(report, schema), [], 'report must satisfy normalized-report-v1');
+  assert.equal(assertNormalizedReport(report), report, 'report must satisfy the normalized contract');
+
+  assert.equal(report.runtime.costBasis, 'runtime-recorded');
+  assert.equal(report.billing.classification, 'runtime-recorded');
+  assert.equal(report.billing.recordedCostUsd, fixture.recordedPaid, 'the recorded total must be reported, not a rate estimate');
+  assert.equal(report.billing.estimatedCostUsd, null, 'a recorded total is not also an estimate');
+  assert.equal(report.billing.amountUsd, fixture.recordedPaid);
+  assert.equal(report.billing.rateKnown, true);
+  assert.equal(report.totalCost, fixture.recordedPaid);
+  assert.equal(report.provenance.kind, 'runtime-recorded');
+
+  // The zero-cost call inside the session is part of the total, not a reason to fall back.
+  assert.equal(report.recordedCost.calls, 3);
+  assert.equal(report.recordedCost.callsWithRecordedCost, 2);
+  assert.equal(report.models[0].costBasis, 'runtime-recorded');
+  assert.equal(report.models[0].totalCost, fixture.recordedPaid);
+  assert.equal(report.sessions[0].metrics.cost, fixture.recordedPaid);
+
+  // The text report must say where the number came from and must not print a rate breakdown
+  // it does not have.
+  const text = runCli(fixture.script, fixture.dataDir, ['--session', 'ses_paid'], fixture.environment);
+  assert.equal(text.status, 0, text.stderr);
+  assert.match(text.stdout, /TOTAL COST \$1\.500000 \(recorded by OpenCode\)/);
+  assert.match(text.stdout, /as recorded by the OpenCode runtime/);
+  // The per-component rows are unknowable on this basis, so they must be dashes, not zeros.
+  assert.match(text.stdout, /The OpenCode runtime records a per-call cost, not a per-token split/);
+});
+
+test('a recorded cost outranks rate arithmetic that disagrees with it', (t) => {
+  const fixture = withRecordedFixture(t);
+  // These cards price ses_paid's 100 fresh input tokens at $0.10 and its 200 cache-read tokens
+  // at $0.02. A rate-based total would be visible and wrong.
+  const { result, output: report } = runJson(fixture.script, fixture.dataDir, ['--session', 'ses_paid', '--session-config', fixture.configPath], fixture.environment);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(report.runtime.costBasis, 'runtime-recorded');
+  assert.equal(report.billing.recordedCostUsd, fixture.recordedPaid);
+  assert.equal(report.billing.estimatedCostUsd, null);
+  assert.equal(report.totalCost, fixture.recordedPaid);
+  // The rate card is still resolved and reported, as coverage, not as the headline.
+  assert.equal(report.models[0].rateKnown, true);
+  assert.equal(report.models[0].rateCoverage, 'complete');
+});
+
+test('a zero recorded cost with no rate card is unavailable, never $0.0000', (t) => {
+  const fixture = withRecordedFixture(t);
+  // The model is literally named "free", which is not evidence of anything. With no card
+  // behind it the report must refuse to call it free.
+  const result = runCli(fixture.script, fixture.dataDir, ['--session', 'ses_free_named'], fixture.environment);
+  assert.equal(result.status, 2, 'an unknown cost exits 2');
+  assert.doesNotMatch(result.stdout, /\$0\.000000(?! \(no calls\))/, 'a zero-cost call is not proof of a free model');
+  assert.match(result.stdout, /COST UNAVAILABLE/);
+  assert.match(result.stdout, /vendor-model-free/);
+  // Token counts are still exact and still printed.
+  assert.match(result.stdout, /0\.0009 M tokens/);
+
+  const { output: report } = runJson(fixture.script, fixture.dataDir, ['--session', 'ses_free_named'], fixture.environment);
+  assert.equal(report.runtime.costBasis, 'provider-rate-estimate');
+  assert.equal(report.billing.classification, 'cost-unavailable');
+  assert.equal(report.billing.recordedCostUsd, null);
+  assert.equal(report.billing.estimatedCostUsd, null);
+  assert.equal(report.totalCost, null);
+  assert.equal(report.billing.amountUsd, null);
+  assert.equal(report.usage.totalTokens, 930);
+});
+
+test('a rate card whose every component is zero is a genuine, labelled free total', (t) => {
+  const fixture = withRecordedFixture(t);
+  // The difference from the case above is the evidence: a configured card that says zero.
+  const { result, output: report } = runJson(fixture.script, fixture.dataDir, ['--session', 'ses_free_named', '--session-config', fixture.configPath], fixture.environment);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(report.runtime.costBasis, 'provider-rate-estimate');
+  assert.equal(report.billing.estimatedCostUsd, 0);
+  assert.equal(report.billing.recordedCostUsd, null);
+  assert.equal(report.billing.rateKnown, true);
+  assert.equal(report.totalCost, 0);
+
+  const text = runCli(fixture.script, fixture.dataDir, ['--session', 'ses_free_named', '--session-config', fixture.configPath], fixture.environment);
+  assert.equal(text.status, 0, text.stderr);
+  assert.match(text.stdout, /\$0\.000000 \(free model\)/);
+  assert.match(text.stdout, /every rate component is 0, so this model is genuinely free/);
+});
+
+test('a recorded-cost ledger still reports a zero-cost session as unavailable in a list', (t) => {
+  const fixture = withRecordedFixture(t);
+  // A list of mixed sessions must not turn the unpriced zero into a number just because a
+  // sibling session in the same run has a recorded cost.
+  const { result, output: listed } = runJson(fixture.script, fixture.dataDir, ['--list', '5'], fixture.environment);
+  assert.equal(result.status, 0, result.stderr);
+  const free = listed.sessions.find((row) => row.sessionId === 'ses_free_named');
+  const paid = listed.sessions.find((row) => row.sessionId === 'ses_paid');
+  assert.equal(paid.billing.amountUsd, fixture.recordedPaid);
+  assert.equal(paid.runtime.costBasis, 'runtime-recorded');
+  assert.equal(free.billing.amountUsd, null, 'an unknown cost must stay null in --list');
+  assert.equal(free.billing.rateKnown, false);
+  assert.equal(free.totalCost, null);
+});
+
+test('--config is read as the standing summary, like the other adapters', (t) => {
+  const fixture = withRecordedFixture(t);
+  const summaryPath = path.join(fixture.dataDir, 'standing-summary.json');
+  // includeChildren is the standing setting the other two adapters honour from this file.
+  fs.writeFileSync(summaryPath, JSON.stringify({ includeChildren: true }), 'utf8');
+
+  const { result, output } = runJson(fixture.script, fixture.dataDir, ['--session', 'ses_paid', '--config', summaryPath], fixture.environment);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(output.includeChildren, true, '--config must set includeChildren');
+
+  // A file that exists but is not JSON is a user error and must be reported, not ignored.
+  const broken = path.join(fixture.dataDir, 'broken.json');
+  fs.writeFileSync(broken, '{ not json', 'utf8');
+  const invalid = runCli(fixture.script, fixture.dataDir, ['--session', 'ses_paid', '--config', broken], fixture.environment);
+  assert.equal(invalid.status, 2);
+  assert.match(invalid.stderr, /invalid config JSON/);
+  assert.doesNotMatch(invalid.stderr, /\.mjs:\d+$/m, 'a bad config must not leak a stack trace');
 });

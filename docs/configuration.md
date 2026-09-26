@@ -209,6 +209,27 @@ missing the result is `coverage: "partial"` naming `missingComponents`; when non
 is `coverage: "unavailable"`. There is no branch that substitutes a different model, a
 different provider, or a runtime-specific price for a missing rate.
 
+### You can add rates for a new provider id, not for one that is already known
+
+A profile whose `match.providerIds` overlaps a built-in driver's is refused: the registry
+raises "multiple provider drivers match \<id\>" rather than pick one, because choosing
+between two drivers that both claim a provider id is exactly the silent guess this tool
+exists to avoid. The refusal is correct; it is also a cliff, and it surprises people who
+are only trying to correct a price.
+
+So a profile can supply rates for a provider id the tool has never heard of, and cannot
+override or extend the rate cards of a built-in one. To price a model the built-in
+catalog does not already cover, use a distinct profile id whose `match.providerIds` names
+the provider; to change the rates of a known provider, mirror the model as a `models` alias
+onto a rate the tool does know instead of colliding with the built-in driver.
+
+This bites OpenCode hardest. An OpenCode session names whatever provider the user
+configured, and the common case is a provider id that a built-in driver already claims, so
+`--doctor` reports the overlap where the same config would have been accepted for MCode.
+Run `providers` and `config explain` to see which drivers currently claim an id, and note
+that the OpenCode adapter no longer needs a profile for sessions whose cost the runtime
+itself recorded (see `adapters/opencode/skill/SKILL.md`).
+
 ## Validation rules
 
 `validateConfig` rejects, in order: an unsupported or missing `schemaVersion`; a

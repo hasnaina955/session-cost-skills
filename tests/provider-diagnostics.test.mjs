@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
@@ -107,4 +109,48 @@ test('both CLIs expose doctor, providers, models discover, and config explain', 
   assert.equal(unknown.status, 2);
   assert.equal(JSON.parse(unknown.stdout).explanation.status, 'unknown');
   assert.ok(JSON.parse(unknown.stdout).explanation.suggestions.length > 0);
+});
+
+// Regression: both CLIs used to hand the *loaded-configuration wrapper* to the diagnostics
+// module instead of the config inside it. The wrapper has no `.providers`, so every
+// user-defined provider profile was invisible to `providers`, `models discover` and
+// `config explain` — the commands answered exactly as if no config had been passed at all.
+test('a configured provider profile is visible to providers, models discover, and config explain', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-provider-config-'));
+  const configPath = path.join(dir, 'session-config.json');
+  fs.writeFileSync(configPath, JSON.stringify({
+    schemaVersion: 1,
+    providers: [{
+      id: 'acme',
+      driverId: 'openai-compatible',
+      match: { providerIds: ['acme'], runtimes: ['cline', 'mcode'] },
+      credentialEnv: 'ACME_TOKEN',
+      rateCards: [{ model: 'acme-small', effectiveFrom: '2020-01-01T00:00:00.000Z', input: 1, output: 2, cacheRead: 0.1, cacheWrite: 0.25 }],
+    }],
+    models: [],
+  }, null, 2));
+
+  for (const [script, runtimeId] of [[clineScript, 'cline'], [mcodeScript, 'mcode']]) {
+    const providers = spawnSync(process.execPath, [script, '--session-config', configPath, '--providers', '--json'], { encoding: 'utf8' });
+    assert.equal(providers.status, 0, providers.stderr);
+    const listed = JSON.parse(providers.stdout).providers.map((provider) => provider.id);
+    assert.ok(listed.includes('acme'), `${runtimeId}: --providers must list the configured acme profile, got ${listed.join(', ')}`);
+    // The built-ins must still be there: the fix adds visibility, it does not replace the list.
+    assert.ok(listed.length > 4, `${runtimeId}: --providers lost the built-in drivers`);
+
+    const explained = spawnSync(process.execPath, [script, '--session-config', configPath, '--provider', 'acme', '--model', 'acme-small', 'config', 'explain', '--json'], { encoding: 'utf8' });
+    assert.equal(explained.status, 0, explained.stderr);
+    const explanation = JSON.parse(explained.stdout).explanation;
+    assert.notEqual(explanation.status, 'unknown', `${runtimeId}: config explain resolved acme to unknown`);
+    assert.equal(explanation.status, 'matched');
+
+    const discovered = spawnSync(process.execPath, [script, '--session-config', configPath, '--provider', 'acme', 'models', 'discover'], { encoding: 'utf8' });
+    assert.equal(discovered.status, 0, discovered.stderr);
+    assert.match(discovered.stdout, /acme-small/);
+
+    // The no-silent-guessing rule still holds: a provider that resolves to nothing is unknown.
+    const unresolvable = spawnSync(process.execPath, [script, '--session-config', configPath, '--provider', 'acme', '--model', 'not-a-model', 'config', 'explain', '--json'], { encoding: 'utf8' });
+    assert.equal(unresolvable.status, 2);
+    assert.equal(JSON.parse(unresolvable.stdout).explanation.status, 'unknown');
+  }
 });

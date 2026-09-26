@@ -192,6 +192,15 @@ function runSetup(configuration) {
 }
 
 function runDiagnostic(configuration) {
+  // The diagnostics module reads the *config* (providers/models) alongside the layer sources,
+  // not the loaded-configuration wrapper, so a configured profile is visible to it. Passing
+  // the wrapper would make `doctor` list only the built-in drivers and report a configured
+  // provider as unknown.
+  const diagnosticConfiguration = {
+    ...configuration.config,
+    sources: configuration.sources,
+    profileSources: configuration.profileSources,
+  };
   let report;
   let status = 0;
   const knownModels = Object.fromEntries((configuration?.config?.providers ?? []).map((provider) => [provider.id, [
@@ -202,14 +211,14 @@ function runDiagnostic(configuration) {
   ]]));
   const allKnownModels = [...new Set(Object.values(knownModels).flat())];
   if (opts.diagnostic === 'providers') {
-    report = { action: 'providers', providers: doctorReport({ configuration, runtimeId: 'cline' }).providers };
+    report = { action: 'providers', providers: doctorReport({ configuration: diagnosticConfiguration, runtimeId: 'cline' }).providers };
   } else if (opts.diagnostic === 'models') {
-    report = { action: 'models', models: discoverModels({ configuration, runtimeId: 'cline', providerId: opts.provider, knownModels }) };
+    report = { action: 'models', models: discoverModels({ configuration: diagnosticConfiguration, runtimeId: 'cline', providerId: opts.provider, knownModels }) };
   } else {
     const explanation = opts.provider || opts.model
-      ? explainModelMatch({ runtimeId: 'cline', providerId: opts.provider, modelId: opts.model, configuration, knownModelIds: allKnownModels, rateRecords: [] })
+      ? explainModelMatch({ runtimeId: 'cline', providerId: opts.provider, modelId: opts.model, configuration: diagnosticConfiguration, knownModelIds: allKnownModels, rateRecords: [] })
       : null;
-    report = { action: opts.diagnostic, ...doctorReport({ configuration, runtimeId: 'cline', providerId: opts.provider, modelId: opts.model }), explanation };
+    report = { action: opts.diagnostic, ...doctorReport({ configuration: diagnosticConfiguration, runtimeId: 'cline', providerId: opts.provider, modelId: opts.model }), explanation };
     if (explanation?.status === 'unknown' || explanation?.status === 'ambiguous') status = 2;
   }
   console.log(opts.json ? JSON.stringify(report, null, 2) : renderDiagnostics(report));

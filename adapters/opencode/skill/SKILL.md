@@ -1,16 +1,19 @@
 ---
 name: opencode
 description: |
-  Report an OpenCode session's real token usage and its estimated cost from OpenCode's own
+  Report an OpenCode session's real token usage and its cost from OpenCode's own
   SQLite ledger: fresh input, cached input (cache read/write), output, reasoning tokens, the
-  cache-hit rate, and the per-model cost split. Costs are estimated by applying rate cards from
-  the provider profile in the user's session-cost configuration — this adapter ships no bundled
-  rate table, because OpenCode sessions span whatever providers the user has configured. Trigger
+  cache-hit rate, and the per-model cost split. The cost is taken from the per-call cost the
+  OpenCode runtime itself recorded wherever it recorded any; only where it recorded nothing is
+  it estimated by applying rate cards from the provider profile in the user's session-cost
+  configuration — this adapter ships no bundled rate table, because OpenCode sessions span
+  whatever providers the user has configured. Trigger
   on "session cost", "cost summary", "token usage", "cache rate", "how much did this cost",
   "cost of this session/task", or any request for a token-and-cost breakdown. Do NOT use it for
-  plan, subscription, or credit-balance questions, or for forecasting future spend. When no rate
-  applies to a model, it reports exact token counts and says the cost is unavailable — a guessed
-  rate produces a wrong number, which is worse than no number.
+  plan, subscription, or credit-balance questions, or for forecasting future spend. When the
+  runtime recorded no cost and no rate applies to a model, it reports exact token counts and
+  says the cost is unavailable — a guessed rate produces a wrong number, which is worse than no
+  number.
 ---
 
 # Session Cost (OpenCode)
@@ -175,23 +178,36 @@ session and a reader who conflates them either invents money or denies spend:
 
 | Case | What the script says | What it means |
 | --- | --- | --- |
+| A session whose **runtime recorded a cost** | `TOTAL COST $x (recorded by OpenCode)`; `--json` gives `costBasis: "runtime-recorded"` and a non-null `recordedCostUsd` | A real billed figure, taken from the ledger's own per-call costs. This is the primary basis and needs no provider profile at all. |
 | A session with **no calls** | `priced calls 0 of 0`; `--json` gives `coverage: "no-calls"`, `amountUsd: 0`, `rateKnown: true` | A known zero. Nothing was spent because nothing ran. The text headline still reads `COST UNAVAILABLE`, so use `--json` or the call count to tell this apart. |
-| A session with **calls but no applicable rate** | `COST UNAVAILABLE`, every cost cell `—`, exit code `2`, and a `! N of M call(s) are unpriced` warning | An unknown cost, not a zero. Report the exact token counts and say the cost is unavailable. |
-| A **genuinely free model** | `TOTAL COST $0.000000 (free model)`, and the rate line says every rate component is 0 | A priced zero. The model really is free; the number is known. |
+| A session with **calls but no recorded cost and no applicable rate** | `COST UNAVAILABLE`, every cost cell `—`, exit code `2`, and a `! N of M call(s) are unpriced` warning | An unknown cost, not a zero. Report the exact token counts and say the cost is unavailable. |
+| A **genuinely free model** — a rate card whose four components are all `0` | `TOTAL COST $0.000000 (free model)`, and the rate line says every rate component is 0 | A priced zero. The card really is free; the number is known. |
 
 Never report an unknown cost as `0`, and never report a known zero as "unavailable". No code
 path in this adapter collapses the three.
 
+Note the fourth row's evidence. A model whose name ends in `-free` is **not** a free total here:
+the ledger has no free flag, and a recorded `cost: 0` cannot be told apart from a call the
+runtime failed to price — the same `step-5-preview` sessions contain both. A zero is only
+reported as a priced zero when a configured rate card says zero, or as the recorded basis in a
+session that has real recorded spend alongside it. Otherwise it is `cost unavailable`, and a
+fresh install needs a provider profile (`--init-config`, then `doctor`) for exactly those
+sessions.
+
 ### When no rate applies
 
 This adapter ships **no rate table**. Every rate it applies comes from a provider profile in the
-session-cost configuration, matched on the provider id and model the ledger recorded. So:
+session-cost configuration, matched on the provider id and model the ledger recorded — and only
+for the sessions whose runtime recorded no cost of its own. So:
 
 - `COST UNAVAILABLE` with `no rate is configured for model <m> at provider <p>` means the model
   is real but unconfigured. Report the tokens, name the missing profile, and offer to add one
   (see `--init-config` and `doctor`).
 - `no provider driver matches <p>` means no configured profile or built-in driver claims that
   provider id at all. Same remedy, and it is a configuration problem rather than a rate problem.
+  A profile whose `match.providerIds` collides with a built-in driver is refused outright
+  ("multiple provider drivers match") — pick a distinct provider id, or a `models` alias onto a
+  rate the tool already knows.
 - Never substitute another provider's published rate. A different provider's card produces a
   confident wrong number, which is the one outcome this skill exists to prevent.
 

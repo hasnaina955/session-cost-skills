@@ -499,3 +499,97 @@ export function createOpenCodeFixture() {
   };
 }
 
+/**
+ * A ledger whose calls carry the cost the OpenCode runtime recorded, which is the case the
+ * contract fixture cannot express: every row there records 0, so no report built from it ever
+ * has a recorded total to report. Kept separate rather than added to `createOpenCodeFixture`
+ * so the existing per-session and provider-filtered assertions stay exactly as they are.
+ *
+ * Runs with NO config at all (the fresh-install case) and with a config whose rate cards are
+ * deliberately far from the recorded figures, so the two bases cannot be confused.
+ */
+export function createOpenCodeRecordedCostFixture() {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-cost-opencode-recorded-'));
+  const ledgerDir = path.join(dataDir, '.local', 'share', 'opencode');
+  fs.mkdirSync(ledgerDir, { recursive: true });
+  const database = new DatabaseSync(path.join(ledgerDir, 'opencode.db'));
+  database.exec(`
+    CREATE TABLE session (
+      id TEXT PRIMARY KEY, parent_id TEXT, title TEXT, agent TEXT, version TEXT, directory TEXT,
+      cost REAL, tokens_input INTEGER, tokens_output INTEGER, tokens_reasoning INTEGER,
+      tokens_cache_read INTEGER, tokens_cache_write INTEGER, time_created INTEGER, time_updated INTEGER,
+      model TEXT
+    );
+    CREATE TABLE session_v2 (
+      id TEXT PRIMARY KEY, parent_id TEXT, title TEXT, agent TEXT, version TEXT, directory TEXT,
+      cost REAL, tokens_input INTEGER, tokens_output INTEGER, tokens_reasoning INTEGER,
+      tokens_cache_read INTEGER, tokens_cache_write INTEGER, time_created INTEGER, time_updated INTEGER,
+      model TEXT
+    );
+    CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, time_updated INTEGER, data TEXT);
+    CREATE TABLE session_message (id TEXT PRIMARY KEY, session_id TEXT, type TEXT, seq INTEGER, time_created INTEGER, time_updated INTEGER, data TEXT);
+  `);
+  const insV2 = database.prepare('INSERT INTO session_v2 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+  const insSM = database.prepare('INSERT INTO session_message VALUES (?,?,?,?,?,?,?)');
+  const tk = (input, output, reasoning, cacheRead, cacheWrite) => ({ input, output, reasoning, cache: { read: cacheRead, write: cacheWrite } });
+  // Deliberately not a built-in provider id: an overlapping profile would be refused as
+  // ambiguous, which is the documented cliff rather than anything this fixture should test.
+  const PROVIDER = 'recorded-provider';
+  const paidTs = Date.parse(isoOffset({ days: -6 }));
+  const freeTs = Date.parse(isoOffset({ days: -7 }));
+
+  // ses_paid mixes a zero-cost call into real recorded spend, exactly as the real
+  // step-5-preview sessions do. The zero call belongs to the total; it is not a fallback
+  // trigger.
+  insV2.run('ses_paid', null, 'Recorded cost fixture', 'build', '2.0.16', '/w', 1.5, 100, 10, 0, 200, 0, paidTs, paidTs + 5_000,
+    JSON.stringify({ id: 'paid-model', providerID: PROVIDER }));
+  insSM.run(...opencodeV2Message({ sessionId: 'ses_paid', created: paidTs, model: 'paid-model', provider: PROVIDER, tokens: tk(100, 10, 0, 200, 0), cost: 1.0 }));
+  insSM.run(...opencodeV2Message({ sessionId: 'ses_paid', created: paidTs + 1_000, model: 'paid-model', provider: PROVIDER, tokens: tk(0, 0, 0, 0, 0), cost: 0 }));
+  insSM.run(...opencodeV2Message({ sessionId: 'ses_paid', created: paidTs + 2_000, model: 'paid-model', provider: PROVIDER, tokens: tk(0, 5, 0, 0, 0), cost: 0.5 }));
+
+  // ses_free_named records 0 for every call, and the name says "free". The name is not
+  // evidence: with no rate card behind it this must be unavailable, not $0.
+  insV2.run('ses_free_named', null, 'Free-named but unconfigured', 'build', '2.0.16', '/w', 0, 300, 30, 0, 600, 0, freeTs, freeTs + 1_000,
+    JSON.stringify({ id: 'vendor-model-free', providerID: PROVIDER }));
+  for (const offset of [0, 1_000]) {
+    insSM.run(...opencodeV2Message({ sessionId: 'ses_free_named', created: freeTs + offset, model: 'vendor-model-free', provider: PROVIDER, tokens: tk(150, 15, 0, 300, 0), cost: 0 }));
+  }
+
+  database.close();
+
+  // The same ledger, plus rate cards chosen so a rate-based total is nothing like the
+  // recorded one: $1000/M input would price ses_paid's 100 fresh input tokens at $0.10 on its
+  // own. Any report that shows the rate figure instead of the recorded one is wrong.
+  const configPath = path.join(dataDir, 'session-cost-recorded.json');
+  fs.writeFileSync(configPath, `${JSON.stringify({
+    schemaVersion: 1,
+    providers: [{
+      id: 'recorded-profile',
+      driverId: 'openai-compatible',
+      match: { providerIds: [PROVIDER], runtimes: ['opencode'] },
+      currency: 'USD',
+      rateCards: [
+        { model: 'paid-model', effectiveFrom: OPENCODE_EFFECTIVE_FROM, input: 1000, output: 2000, cacheRead: 100, cacheWrite: 1000 },
+        { model: 'vendor-model-free', effectiveFrom: OPENCODE_EFFECTIVE_FROM, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      ],
+    }],
+    models: [],
+  }, null, 2)}\n`, 'utf8');
+
+  return {
+    dataDir,
+    script: opencodeScript,
+    configPath,
+    provider: PROVIDER,
+    // The per-call recorded costs of ses_paid, which must be the headline on every basis.
+    recordedPaid: 1.5,
+    environment: {
+      HOME: dataDir,
+      USERPROFILE: dataDir,
+      APPDATA: path.join(dataDir, 'AppData', 'Roaming'),
+      XDG_CONFIG_HOME: path.join(dataDir, '.config'),
+    },
+    sessionIds: ['ses_paid', 'ses_free_named'],
+  };
+}
+
