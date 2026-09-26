@@ -1388,6 +1388,17 @@ async function watchSession() {
   const surface = createLiveSurface(process.stdout);
   quiet = true;
   let previous = null;
+  // Motion state. The frame counter and the cost history are the view's only memory; both are
+  // derived from the report the loop already produces, so the animation cannot invent a figure.
+  // The cost history is bounded because a long-running watch would otherwise grow it without
+  // limit, and the frame only ever renders the last dozen samples anyway.
+  let frameIndex = 0;
+  const history = [];
+  const motion = {
+    color: surface.interactive,
+    width: process.stdout.columns,
+    budgetUsd: typeof opts.budget === 'number' ? opts.budget : null,
+  };
   try {
     for (;;) {
       let staleReason = null;
@@ -1397,11 +1408,23 @@ async function watchSession() {
         staleReason = error instanceof Error ? error.message : String(error);
       }
       if (lastReport) {
-        surface.draw(renderLiveFrame(lastReport, { previous, stale: false }));
-        previous = lastReport.billing?.amountUsd ?? null;
+        const current = lastReport.billing?.amountUsd ?? null;
+        if (typeof current === 'number') {
+          history.push(current);
+          if (history.length > 24) history.shift();
+        }
+        surface.draw(renderLiveFrame(lastReport, {
+          previous,
+          stale: false,
+          history: [...history],
+          frameIndex,
+          ...motion,
+        }));
+        previous = current;
       } else {
-        surface.draw(renderLiveFrame(null, { previous, stale: true, staleReason: staleReason ?? 'no report yet' }));
+        surface.draw(renderLiveFrame(null, { previous, stale: true, staleReason: staleReason ?? 'no report yet', frameIndex, ...motion }));
       }
+      frameIndex += 1;
       await new Promise((resolve) => setTimeout(
         resolve,
         nextInterval(lastReport, { activeMs: 500, idleMs: opts.watchInterval ?? 3000 }),
