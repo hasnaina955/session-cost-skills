@@ -156,9 +156,30 @@ test('CommandCode rendered rows support non-1M context windows and promo badges'
 
 test('the bundled CommandCode catalog priceable includes the MiniMax flagship', () => {
   const table = readRateTable(fileURLToPath(new URL('../references/provider-rates.json', import.meta.url)));
-  assert.equal(table._meta.sourceCoverage.commandcode.sourceModels, 79);
-  assert.equal(table._meta.sourceCoverage.commandcode.publishedModels, 78);
-  assert.equal(table._meta.sourceCoverage.commandcode.excludedModels, 1);
+
+  // These counts used to be asserted as exact integers (79/78/1). That made the test a
+  // tripwire on a third party's publishing schedule: CommandCode added an 80th model and a
+  // perfectly correct `--refresh-rates` turned the suite red, teaching the next person that
+  // refreshing rates is a test failure. The counts are data, not behaviour. What has to hold is
+  // that the coverage block is internally consistent and that the flagship is inside the
+  // priceable set — which is what the test's name actually claims.
+  const coverage = table._meta.sourceCoverage.commandcode;
+  assert.ok(coverage.sourceModels > 0, 'the source must have contributed at least one model');
+  assert.equal(
+    coverage.publishedModels + coverage.excludedModels,
+    coverage.sourceModels,
+    'every source model must be either published or excluded, never lost',
+  );
+
+  const commandcode = table.providers.commandcode;
+  const excluded = commandcode.excludedModelIds ?? [];
+  const flagship = commandcode.models['minimax-m3'];
+  assert.ok(flagship, 'the MiniMax flagship must be present in the bundled catalog');
+  assert.ok(
+    !excluded.includes('minimax-m3'),
+    'the flagship must be priceable, not one of the excluded incomplete models',
+  );
+
   const resolved = resolveRate(table, 'commandcode', 'minimax-m3', {
     at: '2026-09-26T00:00:00Z',
     contextTokens: 1_000,
