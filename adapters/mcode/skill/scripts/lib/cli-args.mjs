@@ -39,6 +39,16 @@ function requireInteger(argv, index, flag, { min, max }) {
   return value;
 }
 
+// A budget may legitimately be 0, meaning block any spend, so this is the one numeric
+// option that accepts zero and rejects negatives and non-numbers.
+function requireNonNegativeNumber(argv, index, flag) {
+  const raw = requireValue(argv, index, flag);
+  if (!/^\d+(?:\.\d+)?$/.test(raw)) throw new CliUsageError(`${flag} expects an amount like 5 or 5.50, but got "${raw}"`);
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) throw new CliUsageError(`${flag} must not be negative, but got ${raw}`);
+  return value;
+}
+
 function requireDate(argv, index, flag) {
   const raw = requireValue(argv, index, flag);
   if (!DATE.test(raw)) throw new CliUsageError(`${flag} expects YYYY-MM-DD, but got "${raw}"`);
@@ -91,6 +101,7 @@ const COMMON_FLAGS = Object.freeze({
   // adapter help text and actually does something: a flag that parses and is then ignored
   // is worse than a flag that does not exist.
   explain: { key: 'explain', value: true },
+  csv: { key: 'csv', value: true },
   rollup: {
     key: 'rollup',
     value: (argv, i) => {
@@ -102,6 +113,7 @@ const COMMON_FLAGS = Object.freeze({
     },
   },
   top: { key: 'top', value: (argv, i) => requireInteger(argv, i, '--top', { min: 1, max: 1000 }) },
+  budget: { key: 'budget', value: (argv, i) => requireNonNegativeNumber(argv, i, '--budget') },
 });
 
 export const RUNTIME_FLAGS = Object.freeze({
