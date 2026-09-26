@@ -496,8 +496,10 @@ export function compareToBaseline(session, history, options = {}) {
   let excludedBy = 'none';
   const prior = [];
   for (const candidate of unique) {
-    if (candidate.entry === session) { excludedBy = excludedBy === 'none' ? 'object-identity' : excludedBy; continue; }
+    // The id check comes first: when a caller passes the target's own row, the meaningful
+    // statement is that its session id was excluded, not that a duplicate object was found.
     if (targetId && candidate.id === targetId) { excludedBy = 'session-id'; continue; }
+    if (candidate.entry === session) { excludedBy = excludedBy === 'none' ? 'object-identity' : excludedBy; continue; }
     prior.push(candidate);
   }
 
@@ -544,7 +546,7 @@ export function compareToBaseline(session, history, options = {}) {
       : { value: null, note: 'no session row was supplied' };
 
     const stats = samples.length ? distribution(samples, reader.unit) : null;
-    if (stats) baseline?.metrics[metric] = stats;
+    if (stats && baseline) baseline.metrics[metric] = stats;
     const sampleSize = stats ? stats.n : 0;
     if (thinnestSample === null || sampleSize < thinnestSample) thinnestSample = sampleSize;
 
@@ -616,6 +618,257 @@ export function compareToBaseline(session, history, options = {}) {
     insufficientReason: status === INSIGHTS_STATUS.COMPARED
       ? null
       : insufficientReason({ availableSessions: prior.length, thinnestSample, minSamples, unmeasurableMetrics }),
+  };
+}
+
+// ------------------------------------------------------------------ recurring drivers
+//
+// Everything below aggregates sessions that already happened. There is no per-day rate turned
+// into a monthly figure, no average multiplied out to a month, and no "at this rate" line. A
+// weekday total is what a weekday cost; it is not a claim about next Tuesday.
+
+/**
+ * Per-model rows for a set of reports, from exactly one source.
+ *
+ * Two adapters, two shapes: a report may carry per-session `metrics.models` maps, or a
+ * flat `report.models[]`. Adding them together would count the same tokens twice, so the
+ * per-session rows win when present and the report aggregate is used only when they are not.
+ * The source used travels with the result so a reader knows which one they are reading.
+ */
+function collectModelRows(reportList, entries) {
+  const fromSessions = [];
+  for (const entry of entries) {
+    const models = entry?.metrics?.models;
+    if (!models || typeof models !== 'object') continue;
+    for (const [key, value] of Object.entries(models)) {
+      if (value && typeof value === 'object') fromSessions.push({ key, sessionId: sessionIdOf(entry), ...value });
+    }
+  }
+  if (fromSessions.length) return { rows: fromSessions, source: 'per-session model rows' };
+
+  const fromReports = [];
+  for (const report of reportList) {
+    for (const model of report?.models ?? []) {
+      if (!model || typeof model !== 'object') continue;
+      const key = `${model.providerKey ?? model.provider ?? 'unknown'}|${model.modelId ?? model.model ?? 'unknown'}`;
+      fromReports.push({ key, ...model });
+    }
+  }
+  return { rows: fromReports, source: fromReports.length ? 'report model aggregate' : 'none' };
+}
+
+// A model row with no rate attached is unknown, whether the runtime said so with
+// `rateKnown: false` or left unpriced calls sitting in `unpricedCalls`.
+function rowIsUnpriced(row) {
+  return row.rateKnown === false || Number(row.unpricedCalls) > 0;
+}
+
+function aggregateModels(rows) {
+  const buckets = new Map();
+  for (const row of rows) {
+    const key = String(row.key ?? `${row.provider ?? 'unknown'}|${row.model ?? 'unknown'}`);
+    if (!buckets.has(key)) {
+      buckets.set(key, {
+        model: row.model ?? row.modelId ?? 'unknown',
+        provider: row.provider ?? row.providerKey ?? null,
+        calls: 0,
+        unpricedCalls: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        knownCostUsd: 0,
+        hasUnknownCost: false,
+        sessions: new Set(),
+      });
+    }
+    const bucket = buckets.get(key);
+    const unpriced = rowIsUnpriced(row);
+    bucket.calls += Number(row.calls) || 0;
+    bucket.unpricedCalls += Number(row.unpricedCalls) || 0;
+    bucket.inputTokens += Number(row.inputTokens) || 0;
+    bucket.outputTokens += Number(row.outputTokens) || 0;
+    bucket.cacheReadTokens += Number(row.cacheReadTokens) || 0;
+    bucket.cacheWriteTokens += Number(row.cacheWriteTokens) || 0;
+    if (row.sessionId) bucket.sessions.add(row.sessionId);
+    const cost = Number(row.cost ?? row.totalCost);
+    if (unpriced || !finite(cost)) bucket.hasUnknownCost = true;
+    else bucket.knownCostUsd += cost;
+  }
+
+  const aggregated = [...buckets.entries()].map(([key, bucket]) => ({
+    key,
+    model: bucket.model,
+    provider: bucket.provider,
+    calls: bucket.calls,
+    unpricedCalls: bucket.unpricedCalls,
+    inputTokens: bucket.inputTokens,
+    outputTokens: bucket.outputTokens,
+    cacheReadTokens: bucket.cacheReadTokens,
+    cacheWriteTokens: bucket.cacheWriteTokens,
+    // null, never 0: an unpriced model must not sit at the bottom of a cost ranking looking
+    // like the cheapest thing in the range.
+    costUsd: bucket.hasUnknownCost ? null : bucket.knownCostUsd,
+    knownCostUsd: bucket.knownCostUsd,
+    coverage: bucket.unpricedCalls > 0 || bucket.hasUnknownCost ? 'partial' : bucket.calls === 0 ? 'no-calls' : 'complete',
+    sessions: bucket.sessions.size,
+  }));
+
+  // Unknown last, exactly as the rollup ranking does, so a partial cost never reads as cheap.
+  aggregated.sort((left, right) => {
+    if (left.costUsd === null && right.costUsd === null) return 0;
+    if (left.costUsd === null) return 1;
+    if (right.costUsd === null) return -1;
+    return right.costUsd - left.costUsd;
+  });
+  return aggregated;
+}
+
+/** Bucket sessions by UTC day of their start, keeping unknown cost unknown. */
+function aggregateDays(entries) {
+  const buckets = new Map();
+  let undated = 0;
+  for (const entry of entries) {
+    const startedAt = startedAtOf(entry);
+    if (!startedAt) { undated += 1; continue; }
+    const day = utcDayKey(startedAt);
+    if (!buckets.has(day)) {
+      buckets.set(day, {
+        day,
+        weekday: weekdayOf(startedAt),
+        sessions: 0,
+        calls: 0,
+        knownCostUsd: 0,
+        hasUnknownCost: false,
+      });
+    }
+    const bucket = buckets.get(day);
+    bucket.sessions += 1;
+    bucket.calls += Number(entry?.metrics?.calls) || 0;
+    const cost = sessionCostUsd(entry);
+    if (cost === null) bucket.hasUnknownCost = true;
+    else bucket.knownCostUsd += cost;
+  }
+  const days = [...buckets.values()].map((bucket) => ({
+    day: bucket.day,
+    weekday: bucket.weekday,
+    sessions: bucket.sessions,
+    calls: bucket.calls,
+    costUsd: bucket.hasUnknownCost ? null : bucket.knownCostUsd,
+    knownCostUsd: bucket.knownCostUsd,
+    coverage: bucket.hasUnknownCost ? 'partial' : bucket.sessions === 0 ? 'no-calls' : 'complete',
+  }));
+  // Ranked by measured cost, most first, unknowns last. This is a ranking of days that
+  // already happened; it is not an ordering of days to come.
+  days.sort((left, right) => {
+    if (left.costUsd === null && right.costUsd === null) return left.day < right.day ? -1 : 1;
+    if (left.costUsd === null) return 1;
+    if (right.costUsd === null) return -1;
+    if (right.costUsd !== left.costUsd) return right.costUsd - left.costUsd;
+    return left.day < right.day ? -1 : 1;
+  });
+  return { days, undated };
+}
+
+/** The same measured days grouped by weekday, so "which day costs most" is answerable. */
+function aggregateWeekdays(days) {
+  const buckets = new Map();
+  for (const day of days) {
+    if (!buckets.has(day.weekday)) {
+      buckets.set(day.weekday, { weekday: day.weekday, days: 0, sessions: 0, knownCostUsd: 0, hasUnknownCost: false });
+    }
+    const bucket = buckets.get(day.weekday);
+    bucket.days += 1;
+    bucket.sessions += day.sessions;
+    bucket.knownCostUsd += day.knownCostUsd;
+    if (day.costUsd === null) bucket.hasUnknownCost = true;
+  }
+  const weekdays = [...buckets.values()].map((bucket) => ({
+    weekday: bucket.weekday,
+    days: bucket.days,
+    sessions: bucket.sessions,
+    costUsd: bucket.hasUnknownCost ? null : bucket.knownCostUsd,
+    knownCostUsd: bucket.knownCostUsd,
+    coverage: bucket.hasUnknownCost ? 'partial' : 'complete',
+  }));
+  weekdays.sort((left, right) => {
+    if (left.costUsd === null && right.costUsd === null) return 0;
+    if (left.costUsd === null) return 1;
+    if (right.costUsd === null) return -1;
+    return right.costUsd - left.costUsd;
+  });
+  return weekdays;
+}
+
+/**
+ * What each parent's subagents cost, relative to the parent.
+ *
+ * The share is `null` unless both sides are fully known. An unpriced subagent, an unpriced
+ * parent, or a parent that genuinely cost nothing all make the ratio unanswerable, and a
+ * small number there would read as "subagents are cheap", which is exactly the claim this
+ * project refuses to make from an unmeasured input.
+ */
+function aggregateSubagents(entries) {
+  const perParent = [];
+  for (const entry of entries) {
+    const id = sessionIdOf(entry);
+    if (!id) continue;
+    const children = entries.filter((other) => other?.row?.parentSessionId === id);
+    if (!children.length) continue;
+
+    const parentCost = sessionCostUsd(entry);
+    let knownSubagentCost = 0;
+    let hasUnknownSubagent = false;
+    for (const child of children) {
+      const cost = sessionCostUsd(child);
+      if (cost === null) hasUnknownSubagent = true;
+      else knownSubagentCost += cost;
+    }
+    const coverage = hasUnknownSubagent ? 'partial' : parentCost === null ? 'unknown' : 'complete';
+    perParent.push({
+      parentSessionId: id,
+      parentCostUsd: parentCost,
+      subagentIds: children.map(sessionIdOf).filter(Boolean),
+      subagentCount: children.length,
+      subagentCostUsd: hasUnknownSubagent ? null : knownSubagentCost,
+      knownSubagentCostUsd: knownSubagentCost,
+      share: coverage === 'complete' && parentCost > 0 ? knownSubagentCost / parentCost : null,
+      coverage,
+      note: hasUnknownSubagent
+        ? 'at least one subagent carries no rate, so the share is unavailable rather than small'
+        : parentCost === 0
+          ? 'the parent session measured $0, so a share of it has no denominator'
+          : null,
+    });
+  }
+  perParent.sort((left, right) => {
+    const leftShare = left.share ?? -1;
+    const rightShare = right.share ?? -1;
+    if (leftShare !== rightShare) return rightShare - leftShare;
+    return right.knownSubagentCostUsd - left.knownSubagentCostUsd;
+  });
+
+  let knownParentCost = 0;
+  let knownSubagentTotal = 0;
+  let hasUnknown = false;
+  for (const row of perParent) {
+    if (row.parentCostUsd === null) hasUnknown = true;
+    else knownParentCost += row.parentCostUsd;
+    if (row.subagentCostUsd === null) hasUnknown = true;
+    else knownSubagentTotal += row.subagentCostUsd;
+  }
+  return {
+    perParent,
+    aggregate: {
+      parents: perParent.length,
+      subagents: perParent.reduce((sum, row) => sum + row.subagentCount, 0),
+      parentCostUsd: hasUnknown ? null : knownParentCost,
+      knownParentCostUsd: knownParentCost,
+      subagentCostUsd: hasUnknown ? null : knownSubagentTotal,
+      knownSubagentCostUsd: knownSubagentTotal,
+      share: !hasUnknown && knownParentCost > 0 ? knownSubagentTotal / knownParentCost : null,
+      coverage: hasUnknown ? 'partial' : perParent.length ? 'complete' : 'no-subagents',
+    },
   };
 }
 

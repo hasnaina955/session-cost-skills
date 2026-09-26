@@ -53,7 +53,9 @@
     "sync:live-view": "node scripts/sync-live-view.mjs",
     "check:live-view": "node scripts/sync-live-view.mjs --check",
     "sync:setup": "node scripts/sync-setup.mjs",
-    "check:setup": "node scripts/sync-setup.mjs --check"
+    "check:setup": "node scripts/sync-setup.mjs --check",
+    "sync:rollup-cache": "node scripts/sync-rollup-cache.mjs",
+    "check:rollup-cache": "node scripts/sync-rollup-cache.mjs --check"
   },
   "engines": {
     "node": ">=22.15"
