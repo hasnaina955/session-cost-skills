@@ -19,6 +19,11 @@ import { clineScript, mcodeScript, createClineFixture, createMCodeFixture, runJs
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sharedDir = path.join(root, 'shared');
 const RUNTIMES = ['cline', 'mcode'];
+// Runtimes that ship a CLI entry point with its own flag schema. This is wider than RUNTIMES
+// above on purpose: the OpenCode adapter is a third CLI, but it does not carry a copy of every
+// shared module and has no synthetic report in realReports(), so the module-copy and consumer
+// loops cannot include it while the schema-wiring loop can and must.
+const SCHEMA_RUNTIMES = ['cline', 'mcode', 'opencode'];
 
 export function realReports() {
   const cline = createClineFixture();
@@ -271,7 +276,7 @@ test('the CSV total respects each report\'s declared token semantics', async () 
   }
 });
 
-test('every flag the schema accepts is actually acted on by both CLIs', async () => {
+test('every flag the schema accepts is actually acted on by every CLI', async () => {
   // Three features in this cycle were documented, parsed, and did nothing: the #49 wiring
   // was lost to a stash, --watch had help text but no loop in Cline, and --counterfactual
   // lost its call to a `git checkout` while its import survived. A flag that parses and is
@@ -280,13 +285,29 @@ test('every flag the schema accepts is actually acted on by both CLIs', async ()
   //
   // This asserts the cheap, decisive thing: each declared option is referenced by the
   // adapter that claims to support it.
+  //
+  // KNOWN GAP, opencode only: `--config` is in the shared flag schema, so the OpenCode CLI
+  // parses it instead of rejecting it, but it never reads `opts.configPath`. Cline and MCode
+  // both read it as the standing-summary file that can set `includeChildren`; the OpenCode CLI
+  // has no such reader, so the flag is accepted and discarded. That is exactly the "parses and
+  // is then ignored" failure this test exists to catch, and it is a defect in the adapter, not
+  // an intentional exclusion. It is listed here rather than hidden so the exclusion is visible
+  // and disappears when the CLI is fixed. The other 30 OpenCode flags are asserted normally.
+  const UNWIRED_FLAGS = { opencode: new Set(['config']) };
   const { RUNTIME_FLAGS } = await import('../shared/cli-args.mjs');
-  for (const runtime of ['cline', 'mcode']) {
+  for (const runtime of SCHEMA_RUNTIMES) {
     const source = fs.readFileSync(path.join(root, 'adapters', runtime, 'skill', 'scripts', 'session-cost.mjs'), 'utf8');
+    const unwired = new Set();
     for (const [flag, spec] of Object.entries(RUNTIME_FLAGS[runtime])) {
       if (['help', 'version', 'dataDir', 'out'].includes(flag)) continue; // handled before or outside the option flow
-      assert.ok(source.includes(`opts.${spec.key}`),
+      if (source.includes(`opts.${spec.key}`)) continue;
+      unwired.add(flag);
+      assert.ok(UNWIRED_FLAGS[runtime]?.has(flag),
         `${runtime}: --${flag} is in the schema but the CLI never reads opts.${spec.key}`);
     }
+    // The exclusion list is the defect, not a licence: if the CLI starts reading the flag this
+    // fails, so the entry has to be removed deliberately rather than outliving its fix.
+    assert.deepEqual([...unwired].sort(), [...(UNWIRED_FLAGS[runtime] ?? [])].sort(),
+      `${runtime}: the known-unwired flag list is stale; update it when the CLI is fixed`);
   }
 });

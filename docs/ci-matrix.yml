@@ -27,6 +27,13 @@ supported:
   # uploaded from Ubuntu.
   jobs: [verify, bun, release]
 
+# `verify` covers every adapter: the Cline, MCode, and OpenCode CLIs, their
+# shared-module copies, and the three release archives. Adding a runtime means
+# adding it to the verify job, not to a job list here — the OS/Node matrix above
+# is deliberately independent of how many adapters exist.
+runtimes_covered: [cline, mcode, opencode]
+archives_built: [cline, mcode, opencode, bundle]
+
 # Workflows that exist. release.yml is tag-triggered and publishes the archives
 # with SHA256SUMS.txt, so a release is no longer cut by hand.
 workflows: [ci.yml, release.yml]

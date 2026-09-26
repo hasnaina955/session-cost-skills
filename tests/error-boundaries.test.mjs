@@ -27,8 +27,8 @@ function mcodeDirWith(contents) {
   return dir;
 }
 
-test('both adapters ship the same error-boundary translator', () => {
-  for (const runtime of ['cline', 'mcode']) {
+test('every adapter ships the same error-boundary translator', () => {
+  for (const runtime of ['cline', 'mcode', 'opencode']) {
     assert.equal(fs.readFileSync(new URL(`../adapters/${runtime}/skill/scripts/lib/error-boundaries.mjs`, import.meta.url), 'utf8'), canonical);
   }
 });

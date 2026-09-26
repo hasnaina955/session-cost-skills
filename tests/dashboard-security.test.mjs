@@ -187,8 +187,8 @@ const renderers = [
 ];
 
 
-test('both installable adapters contain the canonical dashboard renderer', () => {
-  for (const adapter of ['cline', 'mcode']) {
+test('every installable adapter contains the canonical dashboard renderer', () => {
+  for (const adapter of ['cline', 'mcode', 'opencode']) {
     const adapterSource = fs.readFileSync(new URL(
       `../adapters/${adapter}/skill/scripts/lib/dashboard.mjs`,
       import.meta.url,

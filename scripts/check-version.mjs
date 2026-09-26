@@ -1,6 +1,6 @@
 // Enforces the release version contract documented in docs/release.md.
 //
-// One semantic version describes the repository, both adapter skills, and every
+// One semantic version describes the repository, every adapter skill, and every
 // release archive. Nothing else carries an independent version number except the
 // normalized report contract, which versions its own schema.
 import assert from 'node:assert/strict';
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
-const RUNTIMES = ['cline', 'mcode'];
+const RUNTIMES = ['cline', 'mcode', 'opencode'];
 
 const packageJson = JSON.parse(read('package.json'));
 const version = packageJson.version;
@@ -39,12 +39,20 @@ assert.ok(
 // Every adapter CLI must expose the installed version. The flag itself is defined in
 // the shared argument schema, so assert the CLI routes through that schema rather than
 // grepping for a literal that legitimately moves when the parser is refactored.
+//
+// The runtime id may be written inline (`versionBanner('mcode')`) or bound to a
+// module-level constant (`const RUNTIME_ID = 'opencode'` then `versionBanner(RUNTIME_ID)`),
+// so both spellings are accepted — but either way the constant must carry the runtime's own
+// id, so the banner cannot silently report the wrong adapter.
 const schema = read('shared/cli-args.mjs');
 for (const runtime of RUNTIMES) {
   const cli = read(`adapters/${runtime}/skill/scripts/session-cost.mjs`);
-  assert.ok(cli.includes(`versionBanner('${runtime}')`), `the ${runtime} CLI must report its own runtime id`);
+  const declaredId = new RegExp(`(?:const|let|var)\\s+[A-Za-z_$][\\w$]*\\s*=\\s*'${runtime}'`).test(cli);
+  const inlineId = cli.includes(`versionBanner('${runtime}')`) && cli.includes(`runtimeId: '${runtime}'`);
+  assert.ok(declaredId || inlineId, `the ${runtime} CLI must report and parse against its own runtime id`);
+  assert.ok(cli.includes('versionBanner'), `the ${runtime} CLI must report its version through the shared banner`);
   assert.ok(cli.includes('parseCliArgs'), `the ${runtime} CLI must parse arguments through the shared schema`);
-  assert.ok(cli.includes(`runtimeId: '${runtime}'`), `the ${runtime} CLI must parse against its own runtime schema`);
+  assert.ok(/parseCliArgs\([^)]*runtimeId:/.test(cli), `the ${runtime} CLI must parse against a declared runtime schema`);
   const helpIndex = cli.search(/--data-dir/);
   assert.ok(helpIndex > -1, `the ${runtime} CLI must document --data-dir`);
   assert.ok(cli.slice(helpIndex, helpIndex + 400).includes('--version'), `the ${runtime} help text must document --version`);

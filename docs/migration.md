@@ -12,6 +12,7 @@ Each installed skill reports itself without reading a session ledger:
 ```powershell
 node "$env:USERPROFILE\.cline\skills\session-cost\scripts\session-cost.mjs" --version
 node "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs" --version
+node "$env:USERPROFILE\.config\opencode\skill\session-cost\scripts\session-cost.mjs" --version
 ```
 
 ```text
@@ -28,16 +29,20 @@ Three fields matter when you are upgrading:
 - `report contract: <version>` is the normalized report contract the skill emits. This
   number moves independently of the skill version, so a report can change shape without
   the skill version changing, and vice versa.
-- `node:` shows the running Node and the `>= 22.15.0` floor, because both adapters need
+- `node:` shows the running Node and the `>= 22.15.0` floor, because every adapter needs
   `node:sqlite`.
 
-Run both adapters separately. They share a version number but never a directory and
+Run each adapter separately. They share a version number but never a directory and
 never a ledger:
 
 | Adapter | Install target |
 | --- | --- |
 | Cline | `%USERPROFILE%\.cline\skills\session-cost\` |
 | MCode | `%USERPROFILE%\.minimax\skills\session-cost\` |
+| OpenCode | `%USERPROFILE%\.config\opencode\skill\session-cost\` |
+
+The OpenCode copy resolves its ledger from your user home directory rather than from its own
+location, so it runs correctly from any directory.
 
 ## Step 2: install over the old copy
 
@@ -78,7 +83,9 @@ Copy-Item "$env:TEMP\provider-rates.json" "$Skill\references\provider-rates.json
 
 Or simply run `--refresh-rates` afterwards, which re-fetches both providers and records
 a new history entry. The Cline adapter has no equivalent file; its cost comes from the
-runtime ledger, so an install cannot lose anything.
+runtime ledger, so an install cannot lose anything. Neither does the OpenCode adapter: it
+ships no rate table and prices from the provider profile in your session/config file, which
+lives outside the skill directory.
 
 ## What changed in the normalized report
 
@@ -96,16 +103,20 @@ been stable; what changes between versions is the optional top-level fields:
 If you consume `--json` output, these are the fields to read:
 
 - `runtime.costBasis` is `runtime-recorded` for Cline and `provider-rate-estimate` for
-  MCode. It is the field that tells you which cost field carries the number.
+  MCode and OpenCode. It is the field that tells you which cost field carries the number.
+  MCode's estimate comes from a rate table that ships with the skill; OpenCode's comes from
+  the provider profile in your configuration, and OpenCode ships no rate table.
 - `billing.recordedCostUsd` and `billing.estimatedCostUsd` are separate. A
   `runtime-recorded` report can never carry an estimate, and a `provider-rate-estimate`
   report can never carry a recorded amount; the validator rejects both violations.
 - Unknown cost is `null`, never `0`. A session with no calls may report a zero amount
-  with `coverage: "no-calls"`, which is a different statement from "priced at zero".
+  with `coverage: "no-calls"`, which is a different statement from "priced at zero". The
+  OpenCode adapter relies on this: a known zero, an unpriceable session, and a genuinely
+  free model are three distinct contract states, and no code path collapses them.
 - `coverage.status` and `coverage.unknownReasons` say why a number is missing. Read the
   reasons before treating a total as complete.
 - `usage.semantics.inputTokenMeaning` is `includes-cache` for Cline and `excludes-cache`
-  for MCode. Do not apply one runtime's fresh-input formula to the other's data.
+  for MCode and OpenCode. Do not apply one runtime's fresh-input formula to another's data.
 - `sessionGraph` carries `rootSessionIds`, `includedSessionIds`, `excludedSessionIds`,
   and `duplicateSuppressedSessionIds`, so you can tell a child that was excluded from
   one that was counted.
@@ -120,7 +131,8 @@ If you consume `--json` output, these are the fields to read:
 
 The per-adapter `[Cline](../adapters/cline/USAGE.md)` and
 [MCode](../adapters/mcode/USAGE.md)` usage references describe the human-readable output
-of the current version.
+of the current version, as does the [OpenCode](../adapters/opencode/skill/SKILL.md) skill
+reference.
 
 ## Moving your configuration
 
@@ -239,8 +251,10 @@ The rules to check against:
 - `driverId` must be one of `commandcode`, `stepfun`, `openai-compatible`, or
   `anthropic-compatible`. Any other value fails with
   `provider profile <id> references unsupported driver <driverId>`.
-- `match.runtimes` entries are `cline` and/or `mcode`. A profile that lists only one
-  runtime is invisible to the other.
+- `match.runtimes` entries are `cline`, `mcode`, and/or `opencode`. A profile that lists
+  only some runtimes is invisible to the others — a profile you add for OpenCode must say
+  `"opencode"`, or OpenCode reports `cost unavailable` while Cline and MCode price the same
+  call.
 - `currency` is three uppercase letters, and it is the currency the rates are in. It
   flows into `billing.currency` in the report; a wrong value is a wrong number, not a
   display issue.
@@ -271,6 +285,7 @@ Run these in order. Each one has a definite exit code, so a script can rely on t
 | `doctor` | Exit `0`, with a configuration sources line listing the layers that merged |
 | A normal report | Exit `0`, with `runtime.costBasis` matching the adapter |
 | MCode only: `--rates` | Exit `0`, with rate coverage and freshness for the mirrored providers |
+| OpenCode only: a report for a model you configured | Exit `0` with a cost; `COST UNAVAILABLE` means the profile is missing or does not list `opencode` |
 
 Then re-check anything you were working around before:
 

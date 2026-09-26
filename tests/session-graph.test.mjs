@@ -12,8 +12,8 @@ const fixtures = [
   { session_id: 'other', parent_session_id: null },
 ];
 
-test('both adapters contain the same recursive session graph implementation', () => {
-  for (const adapter of ['cline', 'mcode']) {
+test('every adapter contains the same recursive session graph implementation', () => {
+  for (const adapter of ['cline', 'mcode', 'opencode']) {
     const source = fs.readFileSync(new URL(`../adapters/${adapter}/skill/scripts/lib/session-graph.mjs`, import.meta.url), 'utf8');
     assert.equal(source, canonical);
   }

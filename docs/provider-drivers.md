@@ -25,18 +25,18 @@ function for every entry in `operations`, and returns the manifest frozen with a
 Required manifest fields: `schemaVersion` (`1`), `contractVersion` (`1.0.0`), `id`,
 `version`, `match`, `capabilities`, `tokenSemantics`, `source`, and a non-empty
 `operations` array. `match` needs at least one `providerIds` entry and at least one
-entry in `runtimes`, each of which is `cline` or `mcode`. `source` needs `kind`, `url`,
-and a `parserVersion` of at least `1`. `modelAliases` and `credentialEnv` are optional;
+entry in `runtimes`, each of which is `cline`, `mcode`, or `opencode`. `source` needs `kind`,
+`url`, and a `parserVersion` of at least `1`. `modelAliases` and `credentialEnv` are optional;
 `credentialEnv` is a variable name or `null`.
 
 ## The four built-in drivers
 
 | Driver | Version | Provider ids | Runtimes | Pricing | Rate retrieval | Operations |
 | --- | --- | --- | --- | --- | --- | --- |
-| `commandcode` | 3.0.0 | `commandcode`, `custom_provider:commandcode` | cline, mcode | `mirrored-rate` | `network` | detect, listModels, fetchRates, resolveRate |
-| `stepfun` | 2.0.0 | `stepfun`, `custom_provider:stepfun` | cline, mcode | `mirrored-rate` | `network` | detect, listModels, fetchRates, resolveRate |
-| `openai-compatible` | 1.0.0 | `openai-compatible`, `custom_provider:openai-compatible` | cline, mcode | `mirrored-rate` | `manual` | detect, listModels, normalizeUsage, parseStream, resolveRate |
-| `anthropic-compatible` | 1.0.0 | `anthropic-compatible`, `custom_provider:anthropic-compatible` | cline, mcode | `mirrored-rate` | `manual` | detect, listModels, normalizeUsage, parseStream, resolveRate |
+| `commandcode` | 3.0.0 | `commandcode`, `custom_provider:commandcode` | cline, mcode, opencode | `mirrored-rate` | `network` | detect, listModels, fetchRates, resolveRate |
+| `stepfun` | 2.0.0 | `stepfun`, `custom_provider:stepfun` | cline, mcode, opencode | `mirrored-rate` | `network` | detect, listModels, fetchRates, resolveRate |
+| `openai-compatible` | 1.0.0 | `openai-compatible`, `custom_provider:openai-compatible` | cline, mcode, opencode | `mirrored-rate` | `manual` | detect, listModels, normalizeUsage, parseStream, resolveRate |
+| `anthropic-compatible` | 1.0.0 | `anthropic-compatible`, `custom_provider:anthropic-compatible` | cline, mcode, opencode | `mirrored-rate` | `manual` | detect, listModels, normalizeUsage, parseStream, resolveRate |
 
 Capability differences that matter: `commandcode` declares `modelDiscovery: true`,
 `contextTiers: true`, and `timeBands: true`; `stepfun` declares `contextTiers: false` and
@@ -114,7 +114,7 @@ const manifest = {
   contractVersion: '1.0.0',
   id: 'acme-compatible',
   version: '1.0.0',
-  match: { providerIds: ['acme', 'custom_provider:acme'], runtimes: ['cline', 'mcode'] },
+  match: { providerIds: ['acme', 'custom_provider:acme'], runtimes: ['cline', 'mcode', 'opencode'] },
   capabilities: {
     pricing: 'mirrored-rate',
     modelDiscovery: false,

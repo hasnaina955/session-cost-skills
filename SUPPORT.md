@@ -2,7 +2,7 @@
 
 Session Cost Skills is free software under the [MIT License](LICENSE). Anyone may use, copy, modify, merge, publish, distribute, sublicense, and sell the source subject to that license.
 
-No purchase is required for Cline usage, MCode usage, local accounting, dashboards, normalized JSON, account mode, rate coverage, provider profiles, or compatible provider drivers.
+No purchase is required for Cline usage, MCode usage, OpenCode usage, local accounting, dashboards, normalized JSON, account mode, rate coverage, provider profiles, or compatible provider drivers.
 
 ## Installation support
 
@@ -26,7 +26,20 @@ Confirm:
 %USERPROFILE%\.minimax\skills\session-cost\SKILL.md
 ```
 
-The two skills may be updated independently. Do not merge their ledgers, token semantics, or rate catalogs.
+OpenCode:
+
+```text
+Copy the contents of adapters/opencode/skill/ to
+%USERPROFILE%\.config\opencode\skill\session-cost\
+
+Confirm:
+%USERPROFILE%\.config\opencode\skill\session-cost\SKILL.md
+```
+
+The OpenCode adapter reads its ledger from your user home directory rather than from its own
+location, so the copy runs correctly from any directory.
+
+The three skills may be updated independently. Do not merge their ledgers, token semantics, or rate catalogs.
 
 ### Updating
 
@@ -43,12 +56,15 @@ node "$Skill\scripts\session-cost.mjs" --version
 **MCode only:** `references/provider-rates.json` lives inside the skill folder, so copying
 over it discards rates you fetched with `--refresh-rates`. The two lines above preserve
 them; skip them and run `--refresh-rates` afterwards instead. Cline has no such file, so
-a Cline update cannot lose anything.
+a Cline update cannot lose anything, and the OpenCode adapter has no such file either — it
+ships no rate table and prices from your own provider profile, which lives outside the skill
+directory.
 
 ## Released archives
 
-Releases publish three archives plus a `SHA256SUMS.txt` file: one installable Cline skill, one
-installable MCode skill, and a bundle containing both. Verify the checksum before installing:
+Releases publish four archives plus a `SHA256SUMS.txt` file: one installable skill per runtime
+(Cline, MCode, OpenCode) and a bundle containing all three. Verify the checksum before
+installing:
 
 ```powershell
 Get-FileHash .\session-cost-cline-v0.3.0.zip -Algorithm SHA256

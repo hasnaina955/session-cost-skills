@@ -4,7 +4,47 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
-Nothing yet. The next batch of changes lands here before it is cut into a release.
+### Added
+
+- A third runtime adapter, `adapters/opencode`, reporting an OpenCode session's token usage and
+  cost from OpenCode's own `opencode.db`. It reads both message-store generations the runtime
+  keeps live in one file — 1.x `message` and 2.x `session_message` — and applies a measured
+  precedence rule where they disagree, because the 1.x store demonstrably retains more calls for
+  the sessions where they differ, plus a session-aggregate fallback that no session on the
+  install measured needed but that a future runtime could. `tokens.input` excludes cache reads,
+  so fresh and cached prompt are never billed at one rate.
+- The OpenCode adapter prices from the provider profile in the user's own session-cost
+  configuration and **ships no rate table**, unlike MCode: OpenCode runs against whatever
+  provider the user configured, including local and self-hosted ones, so no single bundled
+  catalog could be correct. A call is priced only when all four rate components are applicable.
+  No rate, or a partial card, produces `cost unavailable` with exact token counts and exit code
+  `2` — never a rendered `0`. The three zero-shaped outcomes stay distinct: a session with no
+  calls is a known zero (`coverage: "no-calls"`), a session with calls but no applicable rate is
+  unavailable, and a genuinely free model is a priced zero labelled as free.
+- OpenCode skill documentation: `adapters/opencode/skill/SKILL.md` and
+  `adapters/opencode/skill/references/ledger-internals.md`, built from measurements taken on a
+  real install rather than from the reader's source alone.
+- `scripts/build-release.mjs` now packages OpenCode alongside Cline and MCode, so a release
+  publishes one archive per adapter plus a bundle. `scripts/check-version.mjs` and
+  `scripts/rehearse-release.mjs` cover all three: the rehearsal extracts the OpenCode archive
+  the way a customer would and runs `--version`, `--help`, a report, and a dashboard from the
+  extracted copy. Archives remain byte-reproducible.
+- Canonical-copy test loops for `dashboard`, `error-boundaries`, `explain`, `session-graph`,
+  `cli-args`, and the CLI flag-schema wiring now assert an OpenCode copy, but only for modules
+  the adapter actually ships. It deliberately does not carry `cost-centres`, `counterfactual`,
+  `insights`, `rollup`, `rollup-cache`, `setup`, or `provider-drivers`, because its CLI rejects
+  those flags as unknown, so those contract loops stay scoped to Cline and MCode.
+- Documentation for the third runtime: an OpenCode install target and quick-usage block in
+  `README.md` and `SUPPORT.md`, a three-column runtime-difference table, and updated
+  architecture, release, migration, provider-driver, and CI-matrix references. A provider
+  profile must now list `opencode` in `match.runtimes` for the OpenCode CLI to see it.
+
+### Changed
+
+- `scripts/check-version.mjs` accepts a runtime id written either inline or bound to a
+  module-level constant, as the OpenCode CLI does, while still requiring the constant to carry
+  that runtime's own id. The check is unchanged for the Cline and MCode CLIs, which use inline
+  literals.
 
 ## 0.4.0
 

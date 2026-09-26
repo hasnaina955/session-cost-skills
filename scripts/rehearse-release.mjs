@@ -10,7 +10,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { forbiddenPackageReason, readDeterministicZip, repositoryRoot } from './lib/release-pkg.mjs';
-import { createClineFixture, createMCodeFixture, runCli } from '../tests/helpers/contract-fixtures.mjs';
+import { createClineFixture, createMCodeFixture, createOpenCodeFixture, runCli } from '../tests/helpers/contract-fixtures.mjs';
+
+const RUNTIMES = ['cline', 'mcode', 'opencode'];
+const FIXTURES = { cline: createClineFixture, mcode: createMCodeFixture, opencode: createOpenCodeFixture };
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8'));
 const version = packageJson.version;
@@ -44,7 +47,7 @@ execFileSync(process.execPath, [path.join(repositoryRoot, 'scripts', 'build-rele
 const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'session-cost-release-'));
 const checks = [];
 
-for (const runtime of ['cline', 'mcode']) {
+for (const runtime of RUNTIMES) {
   const archive = path.join(outputDir, `session-cost-${runtime}-v${version}.zip`);
   assert.ok(fs.existsSync(archive), `missing release archive ${path.basename(archive)}`);
 
@@ -85,8 +88,12 @@ for (const runtime of ['cline', 'mcode']) {
   assert.match(helpResult.stdout, /--session/, `${runtime}: help text lost its documented flags`);
   checks.push(`${runtime}: --help renders`);
 
-  const fixture = runtime === 'cline' ? createClineFixture() : createMCodeFixture();
-  const report = runCli(script, fixture.dataDir, ['--session', fixture.sessionIds[0], '--json'], fixture.environment);
+  const fixture = FIXTURES[runtime]();
+  // The OpenCode adapter ships no rate table, so its report only prices when a provider profile
+  // is supplied. Every fixture is therefore asked for the config path it understands; the Cline
+  // and MCode fixtures simply do not define one.
+  const configArgs = fixture.configPath ? ['--session-config', fixture.configPath] : [];
+  const report = runCli(script, fixture.dataDir, ['--session', fixture.sessionIds[0], ...configArgs, '--json'], fixture.environment);
   assert.equal(report.status, 0, `${runtime}: an installed copy could not produce a report: ${report.stderr}`);
   const parsed = JSON.parse(report.stdout);
   assert.equal(parsed.runtime.id, runtime, `${runtime}: the installed copy reported the wrong runtime`);
@@ -95,7 +102,7 @@ for (const runtime of ['cline', 'mcode']) {
   checks.push(`${runtime}: installed copy reports a ${runtime} session with ${parsed.usage.totalTokens} tokens`);
 
   const dashboard = path.join(workspace, `${runtime}-dashboard.html`);
-  const dashboardResult = runCli(script, fixture.dataDir, ['--session', fixture.sessionIds[0], '--dashboard', '--out', dashboard], fixture.environment);
+  const dashboardResult = runCli(script, fixture.dataDir, ['--session', fixture.sessionIds[0], ...configArgs, '--dashboard', '--out', dashboard], fixture.environment);
   assert.equal(dashboardResult.status, 0, `${runtime}: dashboard generation failed: ${dashboardResult.stderr}`);
   assert.ok(fs.existsSync(dashboard), `${runtime}: no dashboard was written`);
   checks.push(`${runtime}: installed copy writes a dashboard`);
@@ -103,14 +110,16 @@ for (const runtime of ['cline', 'mcode']) {
 
 const bundle = path.join(outputDir, `session-cost-bundle-v${version}.zip`);
 const bundleNames = readArchive(bundle).map((entry) => entry.path);
-for (const required of ['LICENSE', 'README.md', 'CHANGELOG.md', 'cline/VERSION', 'mcode/VERSION']) {
+for (const required of ['LICENSE', 'README.md', 'CHANGELOG.md', ...RUNTIMES.map((runtime) => `${runtime}/VERSION`)]) {
   assert.ok(bundleNames.includes(required), `bundle archive is missing ${required}`);
 }
-assert.ok(bundleNames.includes('cline/SKILL.md') && bundleNames.includes('mcode/SKILL.md'), 'bundle archive is missing a skill');
+for (const runtime of RUNTIMES) {
+  assert.ok(bundleNames.includes(`${runtime}/SKILL.md`), `bundle archive is missing the ${runtime} skill`);
+}
 for (const entry of readArchive(bundle)) {
   assert.equal(forbiddenPackageReason(entry.path), null, `bundle archive contains ${entry.path}`);
 }
-checks.push(`bundle: ${bundleNames.length} entries including both skills, the MIT notice, and both VERSION files`);
+checks.push(`bundle: ${bundleNames.length} entries including all ${RUNTIMES.length} skills, the MIT notice, and every VERSION file`);
 
 fs.rmSync(workspace, { recursive: true, force: true });
 for (const check of checks) console.log(`  ✔ ${check}`);

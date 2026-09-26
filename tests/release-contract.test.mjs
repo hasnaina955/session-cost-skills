@@ -14,15 +14,17 @@ import {
   sha256,
 } from '../scripts/lib/release-pkg.mjs';
 import { readSkillVersion, versionBanner, formatVersionBanner } from '../adapters/cline/skill/scripts/lib/skill-version.mjs';
-import { clineScript, mcodeScript, runCli } from './helpers/contract-fixtures.mjs';
+import { clineScript, mcodeScript, opencodeScript, runCli } from './helpers/contract-fixtures.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(repositoryRoot, file), 'utf8');
 const packageJson = JSON.parse(read('package.json'));
+const RUNTIMES = ['cline', 'mcode', 'opencode'];
+const SCRIPTS = { cline: clineScript, mcode: mcodeScript, opencode: opencodeScript };
 
-test('the release version, both adapter VERSION files, and the changelog agree', () => {
+test('the release version, every adapter VERSION file, and the changelog agree', () => {
   assert.match(packageJson.version, /^\d+\.\d+\.\d+/);
-  for (const runtime of ['cline', 'mcode']) {
+  for (const runtime of RUNTIMES) {
     assert.equal(read(`adapters/${runtime}/skill/VERSION`).trim(), packageJson.version);
   }
   assert.ok(read('CHANGELOG.md').includes(`## ${packageJson.version}`));
@@ -33,16 +35,16 @@ test('the package cannot be published to npm by accident', () => {
   assert.equal(packageJson.files, undefined, 'no npm files allowlist: GitHub archives are the distribution channel');
 });
 
-test('both adapters expose the same skill-version implementation', () => {
+test('every adapter exposes the same skill-version implementation', () => {
   const canonical = read('shared/skill-version.mjs');
-  for (const runtime of ['cline', 'mcode']) {
+  for (const runtime of RUNTIMES) {
     assert.equal(read(`adapters/${runtime}/skill/scripts/lib/skill-version.mjs`), canonical);
   }
 });
 
 test('an installed skill reports its own version, runtime, and contract version', () => {
-  for (const [runtime, script] of [['cline', clineScript], ['mcode', mcodeScript]]) {
-    const result = runCli(script, os.tmpdir(), ['--version']);
+  for (const runtime of RUNTIMES) {
+    const result = runCli(SCRIPTS[runtime], os.tmpdir(), ['--version']);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, new RegExp(`^session-cost ${packageJson.version.replace(/\./g, '\\.')} \\(${runtime} adapter\\)`));
     assert.match(result.stdout, /report contract: 1\.2\.0/);
@@ -52,7 +54,7 @@ test('an installed skill reports its own version, runtime, and contract version'
 
 test('version reporting never opens runtime storage or prints local paths', () => {
   const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'session-cost-version-'));
-  for (const script of [clineScript, mcodeScript]) {
+  for (const script of RUNTIMES.map((runtime) => SCRIPTS[runtime])) {
     const result = runCli(script, empty, ['--version']);
     assert.equal(result.status, 0);
     assert.equal(result.stdout.includes(empty), false, 'version output leaked a local data directory');
@@ -129,7 +131,12 @@ test('release archives match the published checksums and never carry local data'
   const result = spawnSync(process.execPath, [path.join(repositoryRoot, 'scripts', 'build-release.mjs'), '--out', out], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   const sums = fs.readFileSync(path.join(out, 'SHA256SUMS.txt'), 'utf8').trim().split('\n');
-  assert.equal(sums.length, 3, 'cline, mcode, and bundle archives are expected');
+  // One archive per adapter plus the bundle.
+  assert.equal(sums.length, RUNTIMES.length + 1, `${RUNTIMES.join(', ')}, and bundle archives are expected`);
+  for (const runtime of RUNTIMES) {
+    assert.ok(sums.some((line) => line.endsWith(`session-cost-${runtime}-v${packageJson.version}.zip`)),
+      `no archive was published for the ${runtime} adapter`);
+  }
   for (const line of sums) {
     const [digest, name] = line.split(/\s+/);
     assert.match(digest, /^[a-f0-9]{64}$/);

@@ -6,9 +6,9 @@ import { clineScript, mcodeScript, createClineFixture, createMCodeFixture, runJs
 
 const FINGERPRINT = /^sha256:[a-f0-9]{64}$/;
 
-test('both adapters ship the same cost-explainer implementation', () => {
+test('every adapter ships the same cost-explainer implementation', () => {
   const canonical = fs.readFileSync(new URL('../shared/explain.mjs', import.meta.url), 'utf8');
-  for (const runtime of ['cline', 'mcode']) {
+  for (const runtime of ['cline', 'mcode', 'opencode']) {
     assert.equal(fs.readFileSync(new URL(`../adapters/${runtime}/skill/scripts/lib/explain.mjs`, import.meta.url), 'utf8'), canonical);
   }
 });

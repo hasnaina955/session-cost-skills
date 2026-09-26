@@ -18,7 +18,7 @@ npm run verify
 
 This checks JavaScript syntax, verifies generated adapter modules, validates the shared report contract, runs every discovered adapter/fixture test, and checks dashboard CSP and DOM-sink safety.
 
-`.github/workflows/ci.yml` is the single source of truth for what CI runs. It runs `npm run verify` on ubuntu, windows, and macos against Node 22.15 and 24 (fail-fast disabled, so one broken pair still reports the others), the full test suite under Bun on ubuntu, and a release rehearsal on ubuntu and windows. Every action is pinned to a full commit SHA. `.github/workflows/release.yml` is tag-triggered and publishes the three archives with `SHA256SUMS.txt`, so a release is no longer cut by hand. Do not copy a matrix from anywhere else in this repository; edit the workflow itself.
+`.github/workflows/ci.yml` is the single source of truth for what CI runs. It runs `npm run verify` on ubuntu, windows, and macos against Node 22.15 and 24 (fail-fast disabled, so one broken pair still reports the others), the full test suite under Bun on ubuntu, and a release rehearsal on ubuntu and windows. Every action is pinned to a full commit SHA. `.github/workflows/release.yml` is tag-triggered and publishes one archive per adapter plus the bundle, with `SHA256SUMS.txt`, so a release is no longer cut by hand. Do not copy a matrix from anywhere else in this repository; edit the workflow itself.
 
 Bun on Windows is not covered and is known to fail: 11 tests error on temp-directory cleanup with `EBUSY: resource busy or locked, rm '<tmpdir>'`, because the fixtures delete a directory whose SQLite handle is still open. POSIX permits that and Windows does not. The same tests pass under Node on the same machine.
 
@@ -46,10 +46,18 @@ Each adapter keeps its own generated copy so it remains independently installabl
 
 - Cline adapter: `adapters/cline`
 - MCode adapter: `adapters/mcode`
+- OpenCode adapter: `adapters/opencode`
 - Shared documentation: `docs`
 - Shared release rules: `README.md` and `SECURITY.md`
 
-Do not copy Cline's input-token formula into MCode code. The two runtimes use different cache semantics.
+Do not copy Cline's input-token formula into MCode or OpenCode code. The three runtimes do not
+share cache semantics: Cline's `inputTokens` includes cached prompt tokens, while MCode's and
+OpenCode's input counts exclude them.
+
+The OpenCode adapter ships a deliberately partial set of generated modules. It does not carry
+`cost-centres`, `counterfactual`, `insights`, `rollup`, `rollup-cache`, `setup`, or
+`provider-drivers`, because its CLI rejects those flags as unknown. A canonical-copy test loop
+must only assert a module that is actually present in the adapter.
 
 ## Reporting bugs
 

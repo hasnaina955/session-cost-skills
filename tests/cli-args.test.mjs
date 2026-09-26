@@ -6,11 +6,14 @@ import path from 'node:path';
 import { CliUsageError, RUNTIME_FLAGS, parseCliArgs, valueFlagsFor } from '../shared/cli-args.mjs';
 import { clineScript, mcodeScript, runCli } from './helpers/contract-fixtures.mjs';
 
-const RUNTIMES = ['cline', 'mcode'];
+// Every adapter carries a copy of the shared parser and declares a runtime flag schema, so
+// each of them is parsed and exercised here. `RUNTIME_FLAGS` must already carry an entry for
+// every runtime in this list.
+const RUNTIMES = ['cline', 'mcode', 'opencode'];
 const parse = (argv, runtimeId = 'cline') => parseCliArgs(argv, { runtimeId });
 const canonical = fs.readFileSync(new URL('../shared/cli-args.mjs', import.meta.url), 'utf8');
 
-test('both adapters ship the same argument parser', () => {
+test('every adapter ships the same argument parser', () => {
   for (const runtime of RUNTIMES) {
     assert.equal(fs.readFileSync(new URL(`../adapters/${runtime}/skill/scripts/lib/cli-args.mjs`, import.meta.url), 'utf8'), canonical);
   }

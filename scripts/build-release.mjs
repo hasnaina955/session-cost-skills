@@ -1,9 +1,10 @@
 // Builds the customer-facing release archives for one version.
 //
-//   session-cost-cline-vX.Y.Z.zip    installable Cline skill
-//   session-cost-mcode-vX.Y.Z.zip    installable MCode skill
-//   session-cost-bundle-vX.Y.Z.zip   both skills plus shared docs and the MIT notice
-//   SHA256SUMS.txt                   checksums for every archive
+//   session-cost-cline-vX.Y.Z.zip      installable Cline skill
+//   session-cost-mcode-vX.Y.Z.zip      installable MCode skill
+//   session-cost-opencode-vX.Y.Z.zip  installable OpenCode skill
+//   session-cost-bundle-vX.Y.Z.zip     every skill plus shared docs and the MIT notice
+//   SHA256SUMS.txt                     checksums for every archive
 //
 // Archives are deterministic: the same commit always produces the same bytes.
 import fs from 'node:fs';
@@ -51,6 +52,7 @@ function skillEntries(runtimeId) {
 
 const clineEntries = skillEntries('cline');
 const mcodeEntries = skillEntries('mcode');
+const opencodeEntries = skillEntries('opencode');
 const sharedEntries = BUNDLE_DOCS
   .filter((file) => fs.existsSync(path.join(repositoryRoot, file)))
   .map((file) => ({ path: file, data: fs.readFileSync(path.join(repositoryRoot, file)) }));
@@ -58,7 +60,8 @@ const sharedEntries = BUNDLE_DOCS
 const archives = [
   { name: `session-cost-cline-v${version}.zip`, entries: clineEntries },
   { name: `session-cost-mcode-v${version}.zip`, entries: mcodeEntries },
-  { name: `session-cost-bundle-v${version}.zip`, entries: [...clineEntries, ...mcodeEntries, ...sharedEntries] },
+  { name: `session-cost-opencode-v${version}.zip`, entries: opencodeEntries },
+  { name: `session-cost-bundle-v${version}.zip`, entries: [...clineEntries, ...mcodeEntries, ...opencodeEntries, ...sharedEntries] },
 ];
 
 for (const archive of archives) {

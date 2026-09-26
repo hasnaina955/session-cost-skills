@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Local-first token, cache, billing, and usage dashboards for the Cline and MiniMax Code (`MCode`) `session-cost` skills.
+Local-first token, cache, billing, and usage dashboards for the Cline, MiniMax Code (`MCode`), and OpenCode `session-cost` skills.
 
 This repository keeps runtime-specific accounting adapters separate while sharing the product architecture, release process, documentation, and regression-test conventions.
 
@@ -11,6 +11,7 @@ This repository keeps runtime-specific accounting adapters separate while sharin
 - Public MIT-licensed repository
 - Cline adapter: local sessions, Cline account limits, cost/credits, and interactive dashboards
 - MCode adapter: native ledger accounting, CommandCode/StepFun rates, comparisons, and interactive dashboards
+- OpenCode adapter: `opencode.db` ledger accounting across both message-store generations, priced from your own provider profile
 - Shared release and verification workflow
 - No credentials, session databases, generated reports, or API keys belong in this repository
 
@@ -24,6 +25,7 @@ This repository keeps runtime-specific accounting adapters separate while sharin
 - Cline daily, weekly, and monthly account periods
 - CommandCode and StepFun provider-rate accounting
 - Effective-dated, context-aware MCode rates with immutable refresh history and fingerprints
+- OpenCode pricing from the user's own provider profile, with no bundled rate table and an explicit `cost unavailable` when no rate applies
 - Versioned built-in and user-installed provider driver manifests
 - Layered project/user configuration with safe provider profiles and model aliases
 - Secret-safe `doctor`, provider discovery, model discovery, and match explanations
@@ -35,10 +37,11 @@ This repository keeps runtime-specific accounting adapters separate while sharin
 
 ## Installation
 
-The source is split into two installable skills:
+The source is split into three installable skills:
 
 - `adapters/cline/skill/` → `%USERPROFILE%\.cline\skills\session-cost\`
 - `adapters/mcode/skill/` → `%USERPROFILE%\.minimax\skills\session-cost\`
+- `adapters/opencode/skill/` → `%USERPROFILE%\.config\opencode\skill\session-cost\`
 
 To install or update, copy the folder contents over the target:
 
@@ -46,8 +49,9 @@ To install or update, copy the folder contents over the target:
 Copy-Item -Recurse -Force .\adapters\mcode\skill\* "$env:USERPROFILE\.minimax\skills\session-cost\"
 ```
 
-Keep the two installed copies separate. They share the public skill name but use different
-runtime ledgers and token semantics.
+Keep the installed copies separate. They share the public skill name but use different
+runtime ledgers and token semantics. The OpenCode copy resolves its ledger from your user home
+directory, so it also runs correctly from any other location.
 
 MCode stores refreshed provider rates inside the skill folder, so an update overwrites
 them. See [docs/migration.md](docs/migration.md) for the two lines that preserve them.
@@ -86,17 +90,29 @@ node "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs" --
 node "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs" --dashboard
 ```
 
+OpenCode:
+
+```powershell
+node "$env:USERPROFILE\.config\opencode\skill\session-cost\scripts\session-cost.mjs"
+node "$env:USERPROFILE\.config\opencode\skill\session-cost\scripts\session-cost.mjs" --doctor
+node "$env:USERPROFILE\.config\opencode\skill\session-cost\scripts\session-cost.mjs" --dashboard
+```
+
 ## Runtime differences
 
-| Concern | Cline | MCode |
-| --- | --- | --- |
-| Primary data | `data/db/sessions.db` and message JSON | `v2/sqlite/runtime-state.sqlite` and session logs |
-| `inputTokens` | Includes cached prompt tokens | `input_tokens` excludes cached tokens |
-| Cost source | Recorded per-call `metrics.cost` | Provider-rate calculation for BYOK providers |
-| Account mode | Optional read-only Cline API view | Not applicable; use rate coverage |
-| Providers | Cline/ClinePass/OpenAI-compatible/etc. | Mirrored CommandCode and StepFun rates |
+| Concern | Cline | MCode | OpenCode |
+| --- | --- | --- | --- |
+| Primary data | `data/db/sessions.db` and message JSON | `v2/sqlite/runtime-state.sqlite` and session logs | `.local/share/opencode/opencode.db`, tables `session`/`message` and `session_v2`/`session_message` |
+| `inputTokens` | Includes cached prompt tokens | `input_tokens` excludes cached tokens | `tokens.input` excludes cached tokens |
+| Cost source | Recorded per-call `metrics.cost` | Provider-rate calculation for BYOK providers | Provider-rate estimate from your own provider profile |
+| Account mode | Optional read-only Cline API view | Not applicable; use rate coverage | Not applicable |
+| Providers | Cline/ClinePass/OpenAI-compatible/etc. | Mirrored CommandCode and StepFun rates | Whatever you have configured; no rate table is bundled |
+| Rate refresh | n/a | `--rates`, `--refresh-rates` | n/a — configure a provider profile instead |
+| Unknown cost | `not recorded` | `COST UNAVAILABLE` | `COST UNAVAILABLE`, with exact token counts |
 
-Never use the Cline fresh-input formula on MCode data.
+Never use the Cline fresh-input formula on MCode or OpenCode data. The OpenCode adapter
+distinguishes a known zero (no calls) from an unpriceable session from a genuinely free model,
+and never renders an unknown cost as `0`.
 
 ## Development
 
@@ -121,13 +137,14 @@ npm run check:config
 npm run check:contracts
 npm run check:cline
 npm run check:mcode
+npm run check:opencode
 ```
 
-The verification command performs syntax and generated-copy checks, validates the normalized JSON contract, runs recursively discovered Cline and MCode tests, exercises synthetic ledger fixtures, and checks dashboard safety.
+The verification command performs syntax and generated-copy checks, validates the normalized JSON contract, runs recursively discovered Cline, MCode, and OpenCode tests, exercises synthetic ledger fixtures, and checks dashboard safety.
 
 ## Free and optional support
 
-The source code, skill installers, dashboards, and documentation are free under the MIT license. Payment is optional and is never required to use the Cline or MCode skill.
+The source code, skill installers, dashboards, and documentation are free under the MIT license. Payment is optional and is never required to use the Cline, MCode, or OpenCode skill.
 
 A Gumroad product may be offered for voluntary support, compatibility assistance, or sponsored development. Paid support must not unlock features that are already available in the public repository. Commercial terms are separate from the MIT grant and require legal review before publication. See [SUPPORT.md](SUPPORT.md).
 
@@ -135,6 +152,7 @@ A Gumroad product may be offered for voluntary support, compatibility assistance
 
 - [Cline usage reference](adapters/cline/USAGE.md)
 - [MCode usage reference](adapters/mcode/USAGE.md)
+- [OpenCode skill reference](adapters/opencode/skill/SKILL.md) and [ledger internals](adapters/opencode/skill/references/ledger-internals.md)
 - [Architecture](docs/architecture.md)
 - [Configuration](docs/configuration.md)
 - [Provider drivers](docs/provider-drivers.md)

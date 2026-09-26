@@ -14,7 +14,7 @@ what they installed. It is the answer to "which version am I running?" for this 
 | Optional support | The published support offering | Separate and commercial. Never gates a repository feature. |
 
 There is exactly one version number in this project: the release version. The repository,
-both adapter skills, and all three archives always agree. A skill installed from an older
+every adapter skill, and every archive always agree. A skill installed from an older
 archive keeps reporting its own older version; it never inherits a newer number.
 
 The report contract version is deliberately independent. A release can ship a new report
@@ -32,6 +32,7 @@ Every installed skill answers `--version` without touching session storage:
 ```powershell
 node "$env:USERPROFILE\.cline\skills\session-cost\scripts\session-cost.mjs" --version
 node "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs" --version
+node "$env:USERPROFILE\.config\opencode\skill\session-cost\scripts\session-cost.mjs" --version
 ```
 
 ```text
@@ -54,7 +55,8 @@ repository is the source of truth; GitHub releases are the artifact channel.
 | --- | --- | --- |
 | `session-cost-cline-v<version>.zip` | `cline/` — the installable Cline skill | `%USERPROFILE%\.cline\skills\session-cost\` |
 | `session-cost-mcode-v<version>.zip` | `mcode/` — the installable MCode skill | `%USERPROFILE%\.minimax\skills\session-cost\` |
-| `session-cost-bundle-v<version>.zip` | Both skills plus README, LICENSE, CHANGELOG, SUPPORT | Choose one skill directory |
+| `session-cost-opencode-v<version>.zip` | `opencode/` — the installable OpenCode skill | `%USERPROFILE%\.config\opencode\skill\session-cost\` |
+| `session-cost-bundle-v<version>.zip` | Every skill plus README, LICENSE, CHANGELOG, SUPPORT | Choose one skill directory |
 
 `SHA256SUMS.txt` accompanies every release. Verify an archive before installing it:
 
@@ -62,7 +64,7 @@ repository is the source of truth; GitHub releases are the artifact channel.
 Get-FileHash .\session-cost-cline-v0.3.0.zip -Algorithm SHA256
 ```
 
-The two skills are versioned together but installed separately. They share a version number,
+The skills are versioned together but installed separately. They share a version number,
 never a directory, and never a ledger.
 
 ## What never ships
@@ -91,11 +93,11 @@ npm run check:release     # confirms dist/ matches what this commit should produ
    the version contract, the generated-copy checks, and the full test suite.
 2. Update `CHANGELOG.md`. Keep work under `## Unreleased`; move it into a `## <version>`
    section when cutting the release.
-3. Bump `package.json` `version` and both `adapters/<runtime>/skill/VERSION` files together.
+3. Bump `package.json` `version` and every `adapters/<runtime>/skill/VERSION` file together.
    `npm run check:version` fails if they disagree, if the changelog has no matching section,
    or if the package would become publishable.
 4. Run the rehearsal. It builds the archives, extracts them the way a customer would, and
-   runs `--version`, `--help`, a report, and a dashboard from the extracted copy:
+   runs `--version`, `--help`, a report, and a dashboard from each extracted copy:
 
    ```powershell
    npm run rehearse:release
@@ -103,8 +105,8 @@ npm run check:release     # confirms dist/ matches what this commit should produ
 
 5. Tag `v<version>` and push the tag. The release workflow rebuilds the archives, verifies
    their checksums, re-runs the rehearsal, and attaches them to the GitHub release.
-6. Confirm the GitHub release for the tag contains exactly the three archives and
-   `SHA256SUMS.txt`, and that the checksums match a local `npm run build:release`.
+6. Confirm the GitHub release for the tag contains exactly one archive per adapter, the
+   bundle, and `SHA256SUMS.txt`, and that the checksums match a local `npm run build:release`.
 
 `npm run check:release` intentionally is **not** part of `npm run verify`: it compares
 against a built `dist/`, which does not exist in a fresh checkout. The release workflow and
@@ -112,7 +114,13 @@ against a built `dist/`, which does not exist in a fresh checkout. The release w
 
 ## Supported runtime matrix
 
-Node.js 22.15 or newer. 22.15 is the floor because `node:sqlite` is required by both
-adapters; CI exercises that exact floor alongside the current release. Windows, Ubuntu, and
+Node.js 22.15 or newer. 22.15 is the floor because `node:sqlite` is required by every
+adapter; CI exercises that exact floor alongside the current release. Windows, Ubuntu, and
 macOS are all covered. `.github/workflows/ci.yml` is the single source of truth for the
 matrix, and every action is pinned to a full commit SHA.
+
+| Adapter | Ledger | `runtime.costBasis` |
+| --- | --- | --- |
+| Cline | `data/db/sessions.db` plus message JSON | `runtime-recorded` |
+| MCode | `v2/sqlite/runtime-state.sqlite` plus session logs | `provider-rate-estimate` |
+| OpenCode | `.local/share/opencode/opencode.db`, both message stores | `provider-rate-estimate` |
