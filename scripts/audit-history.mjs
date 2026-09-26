@@ -35,6 +35,11 @@ const contentRules = {
 // secret-shaped input is rejected. Matches are only ignored when the matched value
 // is one of these documented fixtures; any other value in a test file is still reported.
 const FIXTURE_ALLOWLIST_FILES = /(^|\/)([^/]*\.test\.mjs|tests\/.*\.mjs)$/;
+// Documented, deliberately fake credential literals that appear only in test files, to
+// prove secrets never reach a report, a CSV, or a dashboard. Each is scoped twice over:
+// the file must match FIXTURE_ALLOWLIST_FILES, and the exact literal must appear below.
+// A real credential anywhere else, or a different value in one of these files, is still
+// reported. Do not add a value here that could plausibly be live.
 const FIXTURE_ALLOWLIST_VALUES = new Set([
   'do-not-serialize',
   'literal-secret',
@@ -43,6 +48,7 @@ const FIXTURE_ALLOWLIST_VALUES = new Set([
   'oauth-token',
   'expired-token',
   'runtime-only',
+  'sk-ant-SECRETKEYVALUE',
 ]);
 
 function matchedLiteral(text) {

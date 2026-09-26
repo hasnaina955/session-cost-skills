@@ -1,9 +1,9 @@
 # History secret and data audit
 
 - Result: PASS
-- Generated: 2026-09-25T18:31:29.824Z
-- Reachable commits scanned: 28
-- Historical paths scanned: 81
+- Generated: 2026-09-26T00:14:40.983Z
+- Reachable commits scanned: 72
+- Historical paths scanned: 143
 - Findings: none
 
 ## Method
