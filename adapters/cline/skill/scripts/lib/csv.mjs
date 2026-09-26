@@ -106,7 +106,7 @@ export const CSV_COLUMNS = Object.freeze([
   { name: 'outputTokens', type: 'integer', description: 'Output tokens.' },
   { name: 'cacheReadTokens', type: 'integer', description: 'Cache-read tokens.' },
   { name: 'cacheWriteTokens', type: 'integer', description: 'Cache-write tokens.' },
-  { name: 'totalTokens', type: 'integer', description: 'Input, output, cache-read and cache-write tokens.' },
+  { name: 'totalTokens', type: 'integer', description: 'Total tokens, summed per the report\'s declared token semantics: input+output when input already includes cache, otherwise all four columns.' },
   { name: 'costUsd', type: 'number', description: 'The charge in USD, only when the whole of it is known; otherwise empty.' },
   { name: 'knownCostUsd', type: 'number', description: 'Every amount the ledger disclosed; a lower bound unless coverage is complete.' },
   { name: 'costBasis', type: COST_BASES.join('|'), description: 'One of COST_BASES.' },
@@ -333,7 +333,15 @@ export function buildCsvRows(report, { scope = 'session', neutralizeFormulas = f
       ? 'root'
       : parentSessionId ? 'child' : 'unknown';
     const callCountKnown = per ? true : metrics?.callCountKnown !== false;
-    const parts = [metrics?.inputTokens, metrics?.outputTokens, metrics?.cacheReadTokens, metrics?.cacheWriteTokens];
+    // Total tokens depend on the runtime's declared token semantics, and the two adapters
+    // differ: Cline's inputTokens already includes cached tokens, MCode's excludes them.
+    // Summing all four columns therefore double-counted the cache on Cline and reported
+    // 2025 tokens where 1650 were real. The report states which case this is, so read it
+    // rather than assuming.
+    const cacheInsideInput = report?.usage?.semantics?.inputTokenMeaning === 'includes-cache';
+    const parts = cacheInsideInput
+      ? [metrics?.inputTokens, metrics?.outputTokens]
+      : [metrics?.inputTokens, metrics?.outputTokens, metrics?.cacheReadTokens, metrics?.cacheWriteTokens];
     const summed = sumOf(parts);
     const charge = resolveCharge({
       basis,

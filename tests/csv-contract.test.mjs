@@ -579,21 +579,31 @@ test('a real fully priced Cline report reconciles row by row with the report tot
   }
   assert.equal(rows[0].calls, '2');
   assert.equal(rows[0].inputTokens, '1500');
-  assert.equal(rows[0].totalTokens, '2025');
+  // Cline's inputTokens already includes cached tokens, so the total is input+output.
+  // Summing all four columns double-counted the cache and reported 2025 for 1650 real
+  // tokens. The export now reads the report's declared token semantics.
+  assert.equal(rows[0].totalTokens, '1650');
   assert.equal(rows[0].costUsd, '0.15');
 
   const source = output.sessions;
   assert.equal(sumOfColumn(rows, 'costUsd').toFixed(10), Number(output.billing.amountUsd).toFixed(10), 'the charge column sums to the reported total');
+  // totalTokens is reconciled too: leaving it out is how the double-count above went
+  // unnoticed, because every other column happened to line up.
   for (const token of ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'calls']) {
     const expected = source.reduce((total, entry) => total + entry.metrics[token], 0);
     assert.equal(sumOfColumn(rows, token), expected, `${token} must reconcile with the report`);
   }
-  const expectedTotal = source.reduce((total, entry) => total
-    + entry.metrics.inputTokens
-    + entry.metrics.outputTokens
-    + entry.metrics.cacheReadTokens
-    + entry.metrics.cacheWriteTokens, 0);
-  assert.equal(sumOfColumn(rows, 'totalTokens'), expectedTotal, 'totalTokens must reconcile with the report');
+  // Cline's per-session rows do not state totalTokens, so it is derived the way the report
+  // derives it: per the declared token semantics. Reading metrics.totalTokens here would be
+  // NaN, which is how the double-count stayed invisible.
+  const cacheInsideInput = output.usage.semantics.inputTokenMeaning === 'includes-cache';
+  const expectedTokens = source.reduce((total, entry) => total + (
+    cacheInsideInput
+      ? entry.metrics.inputTokens + entry.metrics.outputTokens
+      : entry.metrics.inputTokens + entry.metrics.outputTokens + entry.metrics.cacheReadTokens + entry.metrics.cacheWriteTokens
+  ), 0);
+  assert.equal(sumOfColumn(rows, 'totalTokens'), expectedTokens, 'totalTokens must reconcile per the declared semantics');
+  assert.equal(sumOfColumn(rows, 'totalTokens'), output.usage.totalTokens, 'and must match the report headline');
   for (const row of rows) {
     const entry = source.find((item) => item.row.sessionId === row.sessionId);
     assert.equal(row.costUsd, String(Number(entry.metrics.cost.toPrecision(15))), 'each row carries its own session cost');

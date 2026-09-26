@@ -247,3 +247,26 @@ test('an unpriced session reports a null cost rather than a smaller total', () =
     }
   }
 });
+
+test('the CSV total respects each report\'s declared token semantics', async () => {
+  // Cline's inputTokens already includes cached tokens; MCode's excludes them. Summing all
+  // four columns double-counted the cache on Cline and reported 2025 tokens where 1650 were
+  // real. The report states which case it is, so the export must read that rather than
+  // assume one shape.
+  const { renderCsv, CSV_COLUMN_NAMES } = await import('../shared/csv.mjs');
+  const column = CSV_COLUMN_NAMES.indexOf('totalTokens');
+  for (const [runtime, report] of Object.entries(realReports())) {
+    const meaning = report.usage.semantics.inputTokenMeaning;
+    const cells = renderCsv(report).split('\n').slice(1).filter(Boolean).map((line) => Number(line.split(',')[column] || 0));
+    const total = cells.reduce((sum, value) => sum + value, 0);
+    assert.equal(total, report.usage.totalTokens, `${runtime}: the CSV token total must equal the report's own`);
+    // And the per-row total must follow the same rule as the report's aggregate.
+    const perSession = report.sessions.reduce((sum, entry) => {
+      const m = entry.metrics;
+      return sum + (meaning === 'includes-cache'
+        ? (m.inputTokens || 0) + (m.outputTokens || 0)
+        : (m.inputTokens || 0) + (m.outputTokens || 0) + (m.cacheReadTokens || 0) + (m.cacheWriteTokens || 0));
+    }, 0);
+    assert.equal(total, perSession, `${runtime}: rows must total per the ${meaning} rule`);
+  }
+});
