@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+Nothing yet. The next batch of changes lands here before it is cut into a release.
+
+## 0.4.1
+
 ### Fixed
 
 - `--watch` reported `$0.0000` for a session it could not price. Non-negotiable rule 1 says an
