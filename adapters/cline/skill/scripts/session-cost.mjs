@@ -488,7 +488,9 @@ function loadConfig(dataDir) {
   const configPath = path.resolve(opts.configPath ?? path.join(dataDir, 'session-cost.json'));
   if (!fs.existsSync(configPath)) return { path: configPath, values: {} };
   const values = readJson(configPath);
-  if (!values || typeof values !== 'object') die(`invalid config JSON: ${configPath}`);
+  // An array parses and `typeof [] === 'object'`, so it would otherwise pass as a valid
+  // config and silently behave as an empty one. Reject it.
+  if (!values || typeof values !== 'object' || Array.isArray(values)) die(`invalid config JSON: ${configPath}`);
   if (!opts.includeChildrenExplicit && values.includeChildren === true) opts.includeChildren = true;
   return { path: configPath, values };
 }

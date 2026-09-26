@@ -20,6 +20,21 @@ In both CLIs the only key read from it is `includeChildren`, and only when
 aliases, and rate cards belong in the session/provider config, never in the standing
 summary. See [migration](migration.md) if you have provider settings in the wrong file.
 
+### A missing standing summary and a broken one are not the same
+
+A standing-summary file that does not exist is normal and means "no overrides". A file that
+exists but cannot be parsed is refused: the CLI exits 2 and names the path.
+
+That distinction matters because `includeChildren` decides whether sub-agent sessions fold into
+a reported total. Reading a broken file as an empty one silently defaults it to false and
+under-reports a task's sub-agent spend, so all three runtimes refuse it rather than guess. A
+JSON array is refused too, even though it parses: `typeof [] === 'object'`, so it would
+otherwise pass a naive object check and then behave as an empty config.
+
+The two files are treated the same way when the path is named but absent: neither errors, since
+a standing summary that has not been written yet is the normal state, and the project config is
+optional. The refusal is specifically for a file that exists and cannot be read.
+
 ## Precedence
 
 `CONFIG_PRECEDENCE` in `shared/config.mjs` is the contract, highest priority first:

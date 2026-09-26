@@ -795,7 +795,14 @@ function parseDate(value, endOfDay = false) {
 }
 function loadConfig(dataDir) {
   const configPath = path.resolve(opts.configPath ?? path.join(dataDir, 'session-cost.json'));
-  const values = readJsonFile(configPath) ?? {};
+  // A missing file is the normal case and means "no standing overrides". A file that exists
+  // but cannot be read is a different thing entirely: this config carries `includeChildren`,
+  // which decides whether sub-agent sessions fold into the total. Treating a broken file as
+  // empty silently defaults that to false and under-reports a task's sub-agent spend, so it
+  // is refused instead. This matches the Cline and OpenCode adapters.
+  if (!fs.existsSync(configPath)) return { path: configPath, values: {} };
+  const values = readJsonFile(configPath);
+  if (!values || typeof values !== 'object' || Array.isArray(values)) fail(`invalid config JSON: ${configPath}`);
   if (!opts.includeChildrenExplicit && values.includeChildren === true) opts.includeChildren = true;
   return { path: configPath, values };
 }
