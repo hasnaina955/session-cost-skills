@@ -4,7 +4,39 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
-Nothing yet. The next batch of changes lands here before it is cut into a release.
+### Fixed
+
+- `--watch` reported `$0.0000` for a session it could not price. Non-negotiable rule 1 says an
+  unknown cost is `null`, never `0`, and both adapters keep a legacy `totalCost` aggregate that
+  is `0` - not `null` - when nothing could be priced, so the guard fell through to it and turned
+  "we do not know what this cost" into a figure a reader takes as "this session was free". The
+  same trap applied to every model row. Found by watching a live MCode session on a model with
+  no mirrored rate, where the text report correctly said `COST UNAVAILABLE` while the live view
+  showed `$0.0000` for the same session. The report's own declared verdict now wins, and the
+  legacy aggregate is only consulted when nothing contradicts it.
+- `--refresh-rates` could never succeed. `RATES_SOURCE.stepfun` is a raw `.md` document that
+  correctly answers `content-type: text/markdown`, and `text/markdown` was missing from the
+  allowlist, so `fetchText` rejected the skill's own configured URL. Because the refresh is
+  transactional, the successful CommandCode fetch was discarded with it, so rate tables silently
+  froze while the tool kept reporting plausible numbers. The allowlist and `RATES_SOURCE` are two
+  independent declarations of one fact and had drifted; `adapters/mcode/skill/tests/rates-refresh-source.test.mjs`
+  now asserts they agree, and still refuses genuinely hostile content types.
+- The bundled-catalog test pinned the live provider's exact model counts (`79/78/1`), so a correct
+  `--refresh-rates` turned the suite red when CommandCode published an 80th model - teaching the
+  next person that refreshing rates is a test failure. Those numbers are data, not behaviour. The
+  test now asserts the coverage block is internally consistent and that the MiniMax flagship is
+  inside the priceable set, which is what its name claims.
+
+### Added
+
+- `tests/builtin-rate-fixtures.test.mjs` closes the asymmetry between the two driver families. The
+  generic protocol drivers already assert that their offline usage, stream and pricing fixtures
+  cover the protocol driver list, so a protocol driver cannot be added without them. The built-in
+  drivers that mirror a pricing page over the network - commandcode and stepfun - had no such
+  guard: their parser cases lived in the MCode adapter's suite as inline assertions with nothing
+  tying them to the manifest list, so a new `rateRetrieval: 'network'` driver could ship with a
+  parser that had never run without a network call and CI would stay green. All three wrong-money
+  bugs fixed in 0.4.0 lived in exactly such parsers.
 
 ## 0.4.0
 
