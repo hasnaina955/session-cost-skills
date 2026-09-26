@@ -22,6 +22,23 @@ const ANSI = {
   showCursor: '\x1b[?25h',
 };
 
+// Any string that came from the ledger is untrusted: a session title, a model id, a
+// provider name. A title containing ANSI escapes can clear the screen, move the cursor,
+// or rewrite the window title, which would make the tool display a forged report. This is
+// the terminal twin of the stored-DOM-XSS the dashboard guards against, so escape
+// sequences and other control characters are stripped rather than printed.
+export function sanitizeForTerminal(value) {
+  if (value == null) return '';
+  // Drop CSI/OSC and any other escape sequence, then any remaining C0/C1 control char.
+  return String(value)
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+    .replace(/\x1b[@-Z\\-_]|\x1b\[[0-?]*[ -\/]*[@-~]/g, '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g, '')
+    .trim();
+}
+
+const safe = (value, max = 24) => sanitizeForTerminal(value).slice(0, max);
 const money = (value) => (typeof value === 'number' && Number.isFinite(value) ? `$${value.toFixed(4)}` : 'unavailable');
 const millions = (value) => (typeof value === 'number' && Number.isFinite(value) ? `${(value / 1e6).toFixed(2)} M` : 'n/a');
 const clock = (iso) => (iso ? new Date(iso).toISOString().slice(11, 19) : '--:--:--');
@@ -96,7 +113,7 @@ export function renderLiveFrame(rawReport, { previous = null, stale = false, sta
   const title = ' session-cost · live ';
   out.push(`┌─${title}${'─'.repeat(Math.max(0, WIDTH - title.length - 11))} ${clock(report?.snapshot?.capturedAt)} ─┐`);
 
-  const session = `${view?.sessionId ?? 'unknown'} · ${(view?.title ?? '').slice(0, 24)}`;
+  const session = `${safe(view?.sessionId, 22)} · ${safe(view?.title)}`;
   const badge = stale ? 'STALE' : view?.active ? 'RUNNING' : 'IDLE';
   out.push(line(`${session.slice(0, WIDTH - 12).padEnd(WIDTH - 12)}  ${badge}`));
   const last = view?.lastActivity
@@ -110,7 +127,7 @@ export function renderLiveFrame(rawReport, { previous = null, stale = false, sta
     : Math.abs(cost - previous) < 1e-9 ? '·' : `+${(cost - previous).toFixed(4)}`;
   out.push(line(`TOTAL COST${isEstimate ? ' (estimate)' : ''}`.padEnd(24) + money(cost) + '  ' + growth));
   out.push(line(burn == null ? '' : `$${burn.usdPerMinute.toFixed(2)}/min over ${burn.spanMinutes >= 60 ? `${(burn.spanMinutes / 60).toFixed(1)}h` : `${burn.spanMinutes.toFixed(1)}m`}`));
-  if (stale && staleReason) out.push(line(`last read failed: ${staleReason}`));
+  if (stale && staleReason) out.push(line(`last read failed: ${safe(staleReason, 60)}`));
   out.push(`├${'─'.repeat(WIDTH)}┤`);
 
   out.push(line(`Total tokens  ${millions(usage.totalTokens)}`));
@@ -129,15 +146,15 @@ export function renderLiveFrame(rawReport, { previous = null, stale = false, sta
   const models = [...(view?.models ?? [])].sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0)).slice(0, 4);
   const modelTotal = models.reduce((sum, model) => sum + (model.cost ?? 0), 0) || 1;
   for (const model of models) {
-    const name = model.rateKey ?? model.modelId ?? model.model;
-    out.push(row(`${model.providerKey ?? model.provider ?? '?'}/${name ?? '?'}`, `${money(model.cost ?? model.totalCost).padStart(10)} ${bar((model.cost ?? model.totalCost ?? 0) / modelTotal, 12)}`));
+    const name = safe(model.rateKey ?? model.modelId ?? model.model, 22);
+    out.push(row(`${safe(model.providerKey ?? model.provider, 14) || '?'}/${name || '?'}`, `${money(model.cost ?? model.totalCost).padStart(10)} ${bar((model.cost ?? model.totalCost ?? 0) / modelTotal, 12)}`));
   }
 
   const included = view?.tree ?? [];
   if (included.length > 1) {
     out.push(`├${'─'.repeat(WIDTH)}┤`);
     out.push(line(`SESSION TREE — ${included.length} sessions incl. subagents`));
-    for (const id of included.slice(0, 5)) out.push(line(`  ${id}`));
+    for (const id of included.slice(0, 5)) out.push(line(`  ${safe(id, 40)}`));
   }
   out.push(`├${'─'.repeat(WIDTH)}┤`);
   out.push(`│${' '.repeat(Math.max(1, WIDTH - 17))}Ctrl-C to stop │`);
