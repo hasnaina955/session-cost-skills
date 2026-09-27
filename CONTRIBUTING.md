@@ -5,7 +5,8 @@ Thanks for helping improve the session-cost skills.
 ## Development workflow
 
 1. Fork the repository and create a focused feature branch.
-2. Read the relevant adapter `SKILL.md` and `references/` documentation.
+2. Read [docs/principles.md](docs/principles.md), then the relevant adapter `SKILL.md`
+   and `references/` documentation. The principles are not negotiable.
 3. Preserve runtime-specific accounting semantics.
 4. Run `npm run verify`.
 5. Open a pull request describing the behavior and compatibility impact.

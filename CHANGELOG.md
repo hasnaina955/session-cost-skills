@@ -6,6 +6,12 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- `docs/principles.md` lists the 16 rules this project does not trade, each linked to the test
+  that enforces it. The CHANGELOG had been citing "non-negotiable rule 1" for two releases with no
+  document defining the rules, so a contributor or agent could not follow rules they could not
+  find. Two rules cannot be test-enforced and say so: no forecasting, and the free-software
+  guarantee. `check:docs` now fails if the document cites a `tests/` file that does not exist, so
+  a rule cannot claim enforcement it does not have.
 - `SESSION_COST_NOW` pins the reported clock: `generatedAt`, snapshot `capturedAt`, and the UTC
   day boundary `--today` uses. With the clock pinned, two runs of the same command produce
   byte-identical output, which is what makes rendered output testable at all. An invalid value
@@ -40,6 +46,9 @@ All notable changes to this project are documented here.
   choice rather than an oversight. `shared/budget.mjs` keeps its bare `Date.now()` default: that
   module is contractually import-free so that no dependency can be pulled in, and it already
   accepts the clock as an argument.
+- The README quoted `session-cost 0.3.0` in its `--version` example, two releases behind the
+  published 0.4.1. `check:docs` now asserts the quoted version against `package.json`, so it
+  cannot drift again.
 
 ## 0.4.1
 
