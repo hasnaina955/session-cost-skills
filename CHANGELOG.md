@@ -6,6 +6,13 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- `docs/roadmap-plan.md` now opens with a status table recording what has shipped, what is still
+  ahead, and the two findings deliberately left as issues rather than quietly fixed:
+  `calculateTokenCost` coerces unusable token counts into a finite `0` (#67), and
+  `bandForTimestamp` resolves a `null` timestamp to the off-peak band, which is the cheaper of the
+  two. Both are reachable only in narrow circumstances today, and both are the kind of thing that
+  becomes reachable later without anyone noticing.
+
 - `shared/charts.mjs` renders bar, stacked-bar, and sparkline charts as inline SVG **strings**, built
   in Node at report time rather than drawn in the browser. That is a constraint, not a limitation:
   no script means the dashboard works with JavaScript disabled and prints to PDF, the existing

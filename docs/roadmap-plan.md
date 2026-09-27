@@ -4,6 +4,32 @@ This document is an execution plan. It is written so that an agent or contributo
 context can pick up one work package (WP), finish it in one pull request, and know when it is
 done. Read sections 1-3 once; after that, each WP stands alone.
 
+## 0. Status
+
+Delivered and merged, each on its own PR with the full CI matrix green:
+
+| WP | Result |
+| --- | --- |
+| WP-0.1 | Landed the in-flight work; rebased #61 onto a fixed `main` so its stale-green checks re-ran |
+| WP-0.2 | Roadmap checkboxes and the test count synced; the README `--version` example is now asserted against `package.json` |
+| WP-0.3 | `docs/principles.md`: 16 rules, each linked to the test that enforces it, and `check:docs` fails on a citation that does not resolve |
+| WP-1.1 | `SESSION_COST_NOW` pins the reported clock; a source scan fails the build on a raw `Date.now()` in a reporting path |
+| WP-1.2 | Golden tests over ten rendered scenarios, plus a fixture epoch so the corpus cannot expire |
+| WP-1.3 | Seven accounting invariants over seeded random ledgers |
+| WP-1.4 | Storage schema-drift detection: a renamed column fails by name instead of reading as zero |
+| WP-1.5 | Bun runs on Windows; the `EBUSY` cleanup failures are gone |
+| WP-1.6 | Seeded fuzzing of session logs, message files, and pricing pages |
+| WP-3.0 | A bounded per-call timeline, and MCode `--json` reports that emit it |
+| WP-3.1 | A zero-dependency inline-SVG chart module |
+| v0.5.0 | Cut, with a cross-platform skill update workflow (`docs/updating.md`) |
+
+Still ahead: WP-2.1-2.4 (the shared CLI kernel), WP-3.2-3.5 (dashboard v2, terminal bars, themes,
+share card), WP-4.x (MCP server, installer, perf budget), and Phase 5 adapters.
+
+Two findings are recorded rather than papered over, both filed as issues:
+`calculateTokenCost` coerces unusable token counts into a finite `0` (#67), and `bandForTimestamp`
+resolves a `null` timestamp to the off-peak band, which is the cheaper one.
+
 ## 1. Direction
 
 ### The thesis
