@@ -1,3 +1,4 @@
+import { removeDirectory } from './helpers/temp-dir.mjs';
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -72,7 +73,7 @@ function mcodeReport(args) {
 
 after(() => {
   for (const fixture of [clineFixture, mcodeFixture]) {
-    if (fixture !== null) fs.rmSync(fixture.dataDir, { recursive: true, force: true });
+    if (fixture !== null) removeDirectory(fixture.dataDir);
   }
 });
 

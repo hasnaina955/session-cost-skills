@@ -21,7 +21,12 @@ This checks JavaScript syntax, verifies generated adapter modules, validates the
 
 `.github/workflows/ci.yml` is the single source of truth for what CI runs. It runs `npm run verify` on ubuntu, windows, and macos against Node 22.15 and 24 (fail-fast disabled, so one broken pair still reports the others), the full test suite under Bun on ubuntu, and a release rehearsal on ubuntu and windows. Every action is pinned to a full commit SHA. `.github/workflows/release.yml` is tag-triggered and publishes the three archives with `SHA256SUMS.txt`, so a release is no longer cut by hand. Do not copy a matrix from anywhere else in this repository; edit the workflow itself.
 
-Bun on Windows is not covered and is known to fail: 11 tests error on temp-directory cleanup with `EBUSY: resource busy or locked, rm '<tmpdir>'`, because the fixtures delete a directory whose SQLite handle is still open. POSIX permits that and Windows does not. The same tests pass under Node on the same machine.
+Bun runs on both ubuntu and windows. Windows previously failed 11 tests with
+`EBUSY: resource busy or locked, rm '<tmpdir>'` because the fixtures deleted a temp directory
+whose SQLite handle was still open: POSIX permits that delete and Windows does not. Temp
+directory cleanup goes through `removeDirectory` in `tests/helpers/temp-dir.mjs`, which retries,
+and the Windows Bun job is part of the matrix. Use that helper in new tests rather than a bare
+`fs.rmSync`, or the failure returns.
 
 `npm run check:workflows` fails if any workflow pins an action to a mutable tag instead of a
 full 40-character commit SHA, and requires `ci.yml` to declare least-privilege

@@ -1,3 +1,4 @@
+import { removeDirectory } from './helpers/temp-dir.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -87,7 +88,7 @@ test('provider detection rejects ambiguity and model aliases remain deterministi
 
 test('user-installed driver modules load in deterministic filename order', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'provider-drivers-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.after(() => removeDirectory(directory));
   const manifest = {
     schemaVersion: 1,
     contractVersion: '1.0.0',

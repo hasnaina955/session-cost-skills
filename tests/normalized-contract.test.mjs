@@ -1,3 +1,4 @@
+import { removeDirectory } from './helpers/temp-dir.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -65,7 +66,7 @@ test('both adapters contain the canonical contract implementation and schema', (
 
 test('Cline CLI satisfies the shared contract across all report modes', (t) => {
   const fixture = { ...createClineFixture(), runtimeId: 'cline', runtimeSession: 'cline-root' };
-  t.after(() => fs.rmSync(fixture.dataDir, { recursive: true, force: true }));
+  t.after(() => removeDirectory(fixture.dataDir));
 
   const root = runJson(fixture.script, fixture.dataDir, ['--session', fixture.runtimeSession, '--include-children']);
   assert.equal(root.result.status, 0, root.result.stderr);
@@ -141,7 +142,7 @@ test('Cline CLI satisfies the shared contract across all report modes', (t) => {
 
 test('MCode CLI satisfies the shared contract across all report modes', (t) => {
   const fixture = { ...createMCodeFixture(), runtimeId: 'mcode', runtimeSession: 'mcode-root' };
-  t.after(() => fs.rmSync(fixture.dataDir, { recursive: true, force: true }));
+  t.after(() => removeDirectory(fixture.dataDir));
 
   const root = runJson(fixture.script, fixture.dataDir, ['--session', fixture.runtimeSession, '--include-children'], fixture.environment);
   assert.equal(root.result.status, 0, root.result.stderr);

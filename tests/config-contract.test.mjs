@@ -1,3 +1,4 @@
+import { removeDirectory } from './helpers/temp-dir.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -30,7 +31,7 @@ function writeConfig(file, value) {
 
 test('configuration layers merge in deterministic precedence with winning sources', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'session-cost-config-'));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  t.after(() => removeDirectory(root));
   const cwd = path.join(root, 'project');
   const home = path.join(root, 'home');
   fs.mkdirSync(cwd, { recursive: true });
@@ -86,7 +87,7 @@ test('configuration layers merge in deterministic precedence with winning source
 
 test('config init, migration, import, export, and validation are deterministic', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'session-cost-config-io-'));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  t.after(() => removeDirectory(root));
   const target = path.join(root, '.session-cost.json');
   const initialized = initConfig(target);
   assert.equal(initialized.config.schemaVersion, 1);
@@ -100,7 +101,7 @@ test('config init, migration, import, export, and validation are deterministic',
 
 test('configuration and reports never serialize secret values', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'session-cost-config-secret-'));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  t.after(() => removeDirectory(root));
   const invalid = {
     ...emptyConfig(),
     providers: [{
@@ -128,7 +129,7 @@ test('configuration and reports never serialize secret values', (t) => {
 
 test('both CLIs expose safe config init, validate, export, and import actions', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'session-cost-config-cli-'));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  t.after(() => removeDirectory(root));
   const projectConfig = path.join(root, '.session-cost.json');
   const importedConfig = path.join(root, 'imported.json');
 

@@ -1,8 +1,9 @@
+import { removeDirectory } from './helpers/temp-dir.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { createClineFixture, clineScript, runCli, runJson } from './helpers/contract-fixtures.mjs';
+import { clineScript, createClineFixture, runCli, runJson } from './helpers/contract-fixtures.mjs';
 
 function database(fixture) {
   return new DatabaseSync(`${fixture.dataDir}/data/db/sessions.db`);
@@ -19,7 +20,7 @@ function messagesPath(fixture, sessionId) {
 
 test('root aggregate is end-to-end, preserves stored cost, and is not double-counted', (t) => {
   const fixture = createClineFixture();
-  t.after(() => fs.rmSync(fixture.dataDir, { recursive: true, force: true }));
+  t.after(() => removeDirectory(fixture.dataDir));
   fs.writeFileSync(messagesPath(fixture, 'cline-root'), '{"messages":[', 'utf8');
   const db = database(fixture);
   db.prepare('UPDATE sessions SET metadata_json = ? WHERE session_id = ?').run(JSON.stringify({
@@ -48,7 +49,7 @@ test('root aggregate is end-to-end, preserves stored cost, and is not double-cou
 
 test('null aggregate cost never overwrites valid per-message cost', (t) => {
   const fixture = createClineFixture();
-  t.after(() => fs.rmSync(fixture.dataDir, { recursive: true, force: true }));
+  t.after(() => removeDirectory(fixture.dataDir));
   fs.writeFileSync(messagesPath(fixture, 'cline-child'), '{"messages":[', 'utf8');
   fs.writeFileSync(messagesPath(fixture, 'cline-grandchild'), '{"messages":[', 'utf8');
   const db = database(fixture);
@@ -65,7 +66,7 @@ test('null aggregate cost never overwrites valid per-message cost', (t) => {
 
 test('Cline text and JSON expose the same aggregate scope and billing classification', (t) => {
   const fixture = createClineFixture();
-  t.after(() => fs.rmSync(fixture.dataDir, { recursive: true, force: true }));
+  t.after(() => removeDirectory(fixture.dataDir));
   fs.writeFileSync(messagesPath(fixture, 'cline-root'), '{"messages":[', 'utf8');
   const db = database(fixture);
   db.prepare('UPDATE sessions SET metadata_json = ? WHERE session_id = ?').run(JSON.stringify({

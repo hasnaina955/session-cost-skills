@@ -1,3 +1,4 @@
+import { removeDirectory } from './helpers/temp-dir.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -562,7 +563,7 @@ const sumOfColumn = (rows, column) => rows.reduce((total, row) => total + (row[c
 
 test('a real fully priced Cline report reconciles row by row with the report total', (t) => {
   const fixture = createClineFixture();
-  t.after(() => fs.rmSync(fixture.dataDir, { recursive: true, force: true }));
+  t.after(() => removeDirectory(fixture.dataDir));
   const { result, output } = runJson(fixture.script, fixture.dataDir, ['--session', 'cline-root', '--include-children']);
   assert.equal(result.status, 0, result.stderr);
 
@@ -614,7 +615,7 @@ test('a real fully priced Cline report reconciles row by row with the report tot
 
 test('a real partly priced session leaves the charge cell empty on real CLI output', (t) => {
   const fixture = createClineFixture();
-  t.after(() => fs.rmSync(fixture.dataDir, { recursive: true, force: true }));
+  t.after(() => removeDirectory(fixture.dataDir));
   const { result, output } = runJson(fixture.script, fixture.dataDir, ['--session', 'cline-partial']);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(output.billing.coverage, 'partial');
@@ -638,7 +639,7 @@ test('a real partly priced session leaves the charge cell empty on real CLI outp
 
 test('a real session with no calls is a known zero charge', (t) => {
   const fixture = createClineFixture();
-  t.after(() => fs.rmSync(fixture.dataDir, { recursive: true, force: true }));
+  t.after(() => removeDirectory(fixture.dataDir));
   const { result, output } = runJson(fixture.script, fixture.dataDir, ['--session', 'cline-truncated']);
   assert.equal(result.status, 0, result.stderr);
   const [row] = rowsOf(output);
@@ -649,7 +650,7 @@ test('a real session with no calls is a known zero charge', (t) => {
 
 test('a real Cline aggregate total is a complete cost with an empty call count', (t) => {
   const fixture = createClineFixture();
-  t.after(() => fs.rmSync(fixture.dataDir, { recursive: true, force: true }));
+  t.after(() => removeDirectory(fixture.dataDir));
   fs.writeFileSync(path.join(fixture.dataDir, 'data', 'sessions', 'cline-root.json'), '{"messages":[', 'utf8');
   const database = new DatabaseSync(path.join(fixture.dataDir, 'data', 'db', 'sessions.db'));
   database
@@ -670,7 +671,7 @@ test('a real Cline aggregate total is a complete cost with an empty call count',
 
 test('a real MCode rate estimate states the basis and prices only what the rate table covered', (t) => {
   const fixture = createMCodeFixture();
-  t.after(() => fs.rmSync(fixture.dataDir, { recursive: true, force: true }));
+  t.after(() => removeDirectory(fixture.dataDir));
 
   const priced = runJson(fixture.script, fixture.dataDir, ['--session', 'mcode-root', '--include-children'], fixture.environment);
   assert.equal(priced.result.status, 0, priced.result.stderr);
