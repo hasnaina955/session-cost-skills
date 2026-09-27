@@ -4,8 +4,29 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+Nothing yet. The next batch of changes lands here before it is cut into a release.
+
+## 0.5.0
+
+The trust release. Every change here makes a wrong number less likely to survive, and none of
+them changes what a correct report says. The theme is that this project's own test suite and
+runtime dependencies could produce or hide a wrong figure, and both are now pinned. Updating an
+installed skill also stops silently discarding state; see [docs/updating.md](docs/updating.md).
+
 ### Added
 
+- `scripts/update-skill.mjs` installs or updates an installed skill on Windows, macOS, and Linux.
+  It replaces a PowerShell `Copy-Item` instruction that left macOS and Linux with no supported
+  path, and it fixes two things a plain folder copy gets wrong. MCode mirrors provider rates into
+  `references/provider-rates.json` *inside* the skill directory, so an update discards every table
+  fetched with `--refresh-rates` and resets the refresh history while the next report quietly uses
+  the bundled rates - the script backs that file up and restores it. And files the new release no
+  longer ships survive a copy, leaving a stale generated copy beside the current CLI; the script
+  removes them. Read-only unless `--apply`, it verifies `VERSION` and the installed `--version`
+  afterwards, reports a `PROBLEM` line and a non-zero exit on failure, and is idempotent.
+  `--check` is a CI gate that fails unless the installed skill is exactly this release.
+  `docs/updating.md` documents the workflow, and `tests/update-skill.test.mjs` covers it -
+  including a test that plants a refreshed rate table and asserts it survives an update.
 - `docs/principles.md` lists the 16 rules this project does not trade, each linked to the test
   that enforces it. The CHANGELOG had been citing "non-negotiable rule 1" for two releases with no
   document defining the rules, so a contributor or agent could not follow rules they could not

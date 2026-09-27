@@ -1,6 +1,6 @@
 {
   "name": "session-cost-skills",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "private": true,
   "description": "Cline and MiniMax Code session-cost skills with shared reporting architecture",
   "type": "module",
@@ -27,6 +27,8 @@
     "check:release": "node scripts/build-release.mjs --check",
     "check:version": "node scripts/check-version.mjs",
     "rehearse:release": "node scripts/rehearse-release.mjs",
+    "skill:update": "node scripts/update-skill.mjs --apply",
+    "check:skill-update": "node scripts/update-skill.mjs --check --runtime cline",
     "sync:provider-driver": "node scripts/sync-provider-driver.mjs",
     "check:provider-driver": "node scripts/sync-provider-driver.mjs --check",
     "test": "node scripts/run-tests.mjs",
