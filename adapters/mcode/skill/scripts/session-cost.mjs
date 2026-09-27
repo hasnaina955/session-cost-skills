@@ -15,6 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeDashboard } from './lib/dashboard.mjs';
 import { now as nowMs, isoNow, utcDay } from './lib/clock.mjs';
+import { observeSchema, checkSchema, describeDrift } from './lib/schema-drift.mjs';
 import {
   bandForTimestamp,
   calculateTokenCost,
@@ -245,6 +246,19 @@ function finalize(agg) {
 
 // ---------------------------------------------------------------- ledger
 
+// The columns this adapter reads, declared once so a runtime that renames one fails loudly
+// instead of aggregating `undefined` as zero. Derived from the SELECTs and row accesses below;
+// a new column read here must be added here too, which is the point.
+const REQUIRED_MCODE_SCHEMA = {
+  local_runtime_sessions: [
+    'session_id', 'agent_name', 'title', 'parent_session_id', 'history_relative_dir',
+  ],
+  local_runtime_token_usage: [
+    'session_id', 'agent_name', 'turn_id', 'ts',
+    'input_tokens', 'output_tokens', 'reasoning_tokens', 'cache_read_tokens', 'cache_write_tokens',
+  ],
+};
+
 async function openLedger(dataDir) {
   const dbPath = path.join(dataDir, 'v2', 'sqlite', 'runtime-state.sqlite');
   if (!fs.existsSync(dbPath)) fail(`ledger not found at ${dbPath}`);
@@ -261,6 +275,10 @@ async function openLedger(dataDir) {
   try {
     const handle = new DatabaseSync(dbPath, { readOnly: true });
     handle.prepare('SELECT session_id FROM local_runtime_token_usage LIMIT 1').all();
+    // A renamed column does not throw; the aggregate would read it as zero. Fail by name.
+    const verdict = checkSchema(observeSchema(handle, Object.keys(REQUIRED_MCODE_SCHEMA)), REQUIRED_MCODE_SCHEMA);
+    const drift = describeDrift(verdict, { runtimeId: 'MiniMax Code' });
+    if (drift) fail(drift);
     return handle;
   } catch (error) {
     fail(`MCode ledger could not be read (${path.basename(dbPath)}): ${describeStorageError(error)}`);
@@ -1089,8 +1107,20 @@ function runSetup(configuration) {
   return result.ok ? 0 : 2;
 }
 
-function runDiagnostic(configuration) {
+async function runDiagnostic(configuration) {
   const table = loadRates();
+  // The storage block reports which ledger layout this run read. It is best-effort: `doctor`
+  // must still work when the ledger is absent or unreadable, because that is exactly when
+  // someone runs it. A hard failure is raised by the report path, not here.
+  let storage = null;
+  try {
+    const handle = await openLedger(dataDir);
+    try {
+      storage = checkSchema(observeSchema(handle, Object.keys(REQUIRED_MCODE_SCHEMA)), REQUIRED_MCODE_SCHEMA);
+    } finally {
+      handle.close();
+    }
+  } catch { /* doctor still reports configuration and providers without a ledger */ }
   const knownModels = Object.fromEntries(Object.entries(table.providers ?? {}).map(([id, provider]) => [id, Object.keys(provider.models ?? {})]));
   const configuredRecords = (configuration.config.providers ?? []).flatMap(profileRateRecords);
   for (const provider of configuration.config.providers ?? []) {
@@ -1112,7 +1142,7 @@ function runDiagnostic(configuration) {
     const explanation = opts.provider || opts.model
       ? explainModelMatch({ runtimeId: 'mcode', providerId: opts.provider, modelId: opts.model, configuration, knownModelIds: diagnosticModels, rateRecords: allRecords })
       : null;
-    report = { action: opts.diagnostic, ...doctorReport({ configuration, runtimeId: 'mcode', providerId: opts.provider, modelId: opts.model, knownModelIds: diagnosticModels, rateRecords: allRecords }), explanation };
+    report = { action: opts.diagnostic, ...doctorReport({ configuration, runtimeId: 'mcode', providerId: opts.provider, modelId: opts.model, knownModelIds: diagnosticModels, rateRecords: allRecords, storage }), explanation };
     if (explanation?.status === 'unknown' || explanation?.status === 'ambiguous') status = 2;
   }
   console.log(opts.json ? JSON.stringify(report, null, 2) : renderDiagnostics(report));
@@ -1133,7 +1163,7 @@ async function main() {
   });
   if (handleConfigAction(effectiveConfiguration)) return 0;
   if (opts.setup) return runSetup(effectiveConfiguration);
-  if (opts.diagnostic) return runDiagnostic(effectiveConfiguration);
+  if (opts.diagnostic) return await runDiagnostic(effectiveConfiguration);
   if (!opts.provider && effectiveConfiguration.config.runtimeDefaults.provider) opts.provider = effectiveConfiguration.config.runtimeDefaults.provider;
   if (!opts.model && effectiveConfiguration.config.runtimeDefaults.model) opts.model = effectiveConfiguration.config.runtimeDefaults.model;
   if (!opts.includeChildrenExplicit && effectiveConfiguration.config.runtimeDefaults.includeChildren === true) opts.includeChildren = true;
