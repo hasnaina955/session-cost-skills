@@ -305,3 +305,87 @@ export function createMCodeFixture() {
     sessionIds: ['mcode-root', 'mcode-child', 'mcode-grandchild', 'mcode-other', 'mcode-partial', 'mcode-truncated', 'mcode-unpriced'],
   };
 }
+
+/**
+ * A seeded pseudo-random generator (mulberry32). Written out longhand because this project
+ * ships zero dependencies (principle 12) and a random ledger that cannot be replayed is a
+ * random ledger nobody can debug. The seed is printed on failure and accepted through
+ * `INVARIANT_SEED`, so a case that fails once can be replayed exactly.
+ */
+export function seededRandom(seed) {
+  let state = seed >>> 0;
+  return function next() {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const PRICED_MODELS = [
+  { model: 'fixture-command-model', provider: 'commandcode' },
+  { model: 'fixture-step-model', provider: 'stepfun' },
+];
+const UNPRICED_MODEL = { model: 'unknown-model', provider: 'commandcode' };
+
+/**
+ * Build a random MCode ledger on top of the real fixture: N sessions, each with a random
+ * number of calls, a random mix of priced and unpriced models, random token counts, and
+ * timestamps spread over a window. Reuses the fixture's own rate table and ledger schema, so
+ * the CLI under test is exercised exactly as it is in production.
+ *
+ * `includeUnpriced` is a parameter rather than a constant because the invariants differ for a
+ * fully priceable ledger and one with an unpriced call, and both need covering.
+ */
+export function createRandomMCodeFixture(seed, { sessions = 4, includeUnpriced = false } = {}) {
+  const random = seededRandom(seed);
+  const fixture = createMCodeFixture();
+  const pick = (values) => values[Math.floor(random() * values.length)];
+  const integer = (min, max) => min + Math.floor(random() * (max - min + 1));
+  const base = Date.parse('2026-06-15T12:00:00.000Z');
+
+  const built = [];
+  for (let index = 0; index < sessions; index += 1) {
+    const sessionId = `random-${index}`;
+    const callCount = integer(1, 5);
+    const messages = [];
+    for (let call = 0; call < callCount; call += 1) {
+      const choice = includeUnpriced && random() < 0.3 ? UNPRICED_MODEL : pick(PRICED_MODELS);
+      const ts = base + index * 60_000 + call * 1_000;
+      messages.push({
+        role: 'assistant',
+        timestamp: ts,
+        model: choice.model,
+        provider: `custom_provider:${choice.provider}`,
+        usage: {
+          input_tokens: integer(1, 400),
+          output_tokens: integer(1, 90),
+          cache_read_tokens: integer(0, 300),
+          cache_write_tokens: integer(0, 200),
+        },
+      });
+    }
+    built.push({
+      sessionId,
+      history: writeMCodeSession(fixture.dataDir, sessionId, 'commandcode', messages[0].model, messages),
+      startedAt: new Date(base + index * 60_000).toISOString(),
+      rows: messages.map((message, call) => [
+        100_000 + index * 100 + call, sessionId, 'random', `${sessionId}-${call}`,
+        message.timestamp,
+        message.usage.input_tokens, message.usage.output_tokens, 0,
+        message.usage.cache_read_tokens, message.usage.cache_write_tokens,
+      ]),
+    });
+  }
+
+  const database = new DatabaseSync(path.join(fixture.dataDir, 'v2', 'sqlite', 'runtime-state.sqlite'));
+  const insertSession = database.prepare('INSERT INTO local_runtime_sessions VALUES (?, ?, ?, ?, ?)');
+  const insertUsage = database.prepare('INSERT INTO local_runtime_token_usage VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+  for (const entry of built) {
+    insertSession.run(entry.sessionId, `random-${entry.sessionId}`, `Random ${entry.sessionId}`, null, entry.history);
+    for (const row of entry.rows) insertUsage.run(...row);
+  }
+  database.close();
+  return { ...fixture, sessionIds: [...fixture.sessionIds, ...built.map((entry) => entry.sessionId)] };
+}
