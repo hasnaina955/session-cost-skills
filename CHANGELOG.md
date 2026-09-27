@@ -12,6 +12,16 @@ All notable changes to this project are documented here.
   find. Two rules cannot be test-enforced and say so: no forecasting, and the free-software
   guarantee. `check:docs` now fails if the document cites a `tests/` file that does not exist, so
   a rule cannot claim enforcement it does not have.
+- `tests/invariants.test.mjs` checks seven accounting properties over randomly generated ledgers
+  rather than fixed ones: the total is exactly the sum of per-model, per-session, and per-component
+  costs; an unpriced call never becomes a `0` total; token totals reconcile under each runtime's
+  own input semantics; per-model rows sum to the ledger read directly in SQL; `--include-children`
+  counts each descendant once; the text, CSV, and JSON reports agree; and reordering ledger rows
+  changes no figure. Every wrong-money bug in this project's history produced a plausible number
+  rather than an error, and a spot assertion on one fixture misses that class. The ledger-anchored
+  test is the one that matters: it caught an injected cache-write double-count that the
+  self-consistent reconciliations all missed, because every side of those equalities came from the
+  same accumulator. Ledgers are seeded and replayable via `INVARIANT_SEED=<n>`.
 - `SESSION_COST_NOW` pins the reported clock: `generatedAt`, snapshot `capturedAt`, and the UTC
   day boundary `--today` uses. With the clock pinned, two runs of the same command produce
   byte-identical output, which is what makes rendered output testable at all. An invalid value
