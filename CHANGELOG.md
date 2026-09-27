@@ -6,6 +6,19 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- `shared/charts.mjs` renders bar, stacked-bar, and sparkline charts as inline SVG **strings**, built
+  in Node at report time rather than drawn in the browser. That is a constraint, not a limitation:
+  no script means the dashboard works with JavaScript disabled and prints to PDF, the existing
+  strict CSP needs no new allowance, and a chart becomes a pure function that can be asserted by
+  comparing strings instead of by screenshot. The module never computes money - it draws figures
+  the accounting already produced, so a chart cannot disagree with the report beside it. An unknown
+  value is drawn hatched and labelled "unavailable" rather than as a zero-height bar, because a
+  chart that renders "we do not know" as nothing is the silent-zero failure in a new place, and a
+  priced zero stays visibly different from an unpriced one. Every chart carries a title, a
+  description, and the figure as text, so no number exists only inside a graphic. A sparkline
+  refuses to draw a trend from fewer than three points, and a flat series is drawn flat instead of
+  being given an invented shape.
+
 - `shared/timeline.mjs` builds a bounded, per-call timeline for a report: the time-ordered events a
   cost-over-time chart, a cache-rate trend, or a "where did the money go" view needs. A report
   exposes `calls` as a count, which is enough to say what a session cost and not enough to draw it.
