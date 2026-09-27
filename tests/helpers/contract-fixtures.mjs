@@ -24,9 +24,20 @@ export function runJson(script, dataDir, args = [], environment = {}) {
   return { result, output };
 }
 
-function isoOffset({ days = 0, hours = 0 }) {
-  return new Date(Date.now() + days * 86_400_000 + hours * 3_600_000).toISOString();
+function isoOffset({ days = 0, hours = 0 }, base) {
+  return new Date((base ?? Date.now()) + days * 86_400_000 + hours * 3_600_000).toISOString();
 }
+
+/**
+ * The base instant a fixture's session timestamps are built from.
+ *
+ * Defaults to the real clock, so ordinary tests keep the relative-date behaviour they assert on
+ * (`--today` selecting what started today, and so on). A test that compares rendered output
+ * verbatim passes a fixed epoch instead, because a golden file that embeds "2 days ago" stops
+ * matching the moment the day changes - the same expiry that made `rate-provenance` flip from
+ * pass to fail on consecutive days, and the reason WP-1.1 introduced `SESSION_COST_NOW`.
+ */
+export const FIXTURE_EPOCH = '2026-06-15T12:00:00.000Z';
 
 function writeMessages(directory, sessionId, messages) {
   const target = path.join(directory, 'data', 'sessions', `${sessionId}.json`);
@@ -34,13 +45,13 @@ function writeMessages(directory, sessionId, messages) {
   return target;
 }
 
-export function createClineFixture() {
+export function createClineFixture({ base } = {}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-cost-cline-contract-'));
   fs.mkdirSync(path.join(dataDir, 'data', 'db'), { recursive: true });
   fs.mkdirSync(path.join(dataDir, 'data', 'logs'), { recursive: true });
   fs.mkdirSync(path.join(dataDir, 'data', 'sessions'), { recursive: true });
 
-  const rootStarted = isoOffset({ days: -2 });
+  const rootStarted = isoOffset({ days: -2 }, base);
   const todayStarted = new Date().toISOString();
   const otherStarted = todayStarted;
   const partialStarted = todayStarted;
@@ -122,12 +133,12 @@ export function createClineFixture() {
     provider, model, messages_path, metadata_json, prompt, is_subagent
   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   const rows = [
-    ['cline-root', null, 101, 'completed', rootStarted, isoOffset({ hours: -47 }), rootStarted, 'commandcode', 'root-model', rootMessages, JSON.stringify({ title: 'Root contract fixture' }), 'root', 0],
-    ['cline-child', 'cline-root', 102, 'completed', rootStarted, isoOffset({ hours: -46 }), rootStarted, 'cline', 'child-model', childMessages, JSON.stringify({ title: 'Child contract fixture' }), 'child', 1],
-    ['cline-grandchild', 'cline-child', 103, 'completed', rootStarted, isoOffset({ hours: -45 }), rootStarted, 'cline', 'grandchild-model', grandchildMessages, JSON.stringify({ title: 'Grandchild contract fixture' }), 'grandchild', 1],
-    ['cline-other', null, 104, 'completed', otherStarted, isoOffset({ hours: -2 }), otherStarted, 'other-provider', 'other-model', otherMessages, JSON.stringify({ title: 'Other contract fixture' }), 'other', 0],
-    ['cline-partial', null, 105, 'completed', partialStarted, isoOffset({ minutes: -30 }), partialStarted, 'partial-provider', 'priced-model', partialMessages, JSON.stringify({ title: 'Partial contract fixture' }), 'partial', 0],
-    ['cline-truncated', null, 106, 'completed', isoOffset({ days: -4 }), isoOffset({ days: -4 }), isoOffset({ days: -4 }), 'unknown', 'unknown', badMessages, JSON.stringify({ schemaVersion: 99, title: 'Truncated fixture' }), 'truncated', 0],
+    ['cline-root', null, 101, 'completed', rootStarted, isoOffset({ hours: -47 }, base), rootStarted, 'commandcode', 'root-model', rootMessages, JSON.stringify({ title: 'Root contract fixture' }), 'root', 0],
+    ['cline-child', 'cline-root', 102, 'completed', rootStarted, isoOffset({ hours: -46 }, base), rootStarted, 'cline', 'child-model', childMessages, JSON.stringify({ title: 'Child contract fixture' }), 'child', 1],
+    ['cline-grandchild', 'cline-child', 103, 'completed', rootStarted, isoOffset({ hours: -45 }, base), rootStarted, 'cline', 'grandchild-model', grandchildMessages, JSON.stringify({ title: 'Grandchild contract fixture' }), 'grandchild', 1],
+    ['cline-other', null, 104, 'completed', otherStarted, isoOffset({ hours: -2 }, base), otherStarted, 'other-provider', 'other-model', otherMessages, JSON.stringify({ title: 'Other contract fixture' }), 'other', 0],
+    ['cline-partial', null, 105, 'completed', partialStarted, isoOffset({ minutes: -30 }, base), partialStarted, 'partial-provider', 'priced-model', partialMessages, JSON.stringify({ title: 'Partial contract fixture' }), 'partial', 0],
+    ['cline-truncated', null, 106, 'completed', isoOffset({ days: -4 }, base), isoOffset({ days: -4 }, base), isoOffset({ days: -4 }, base), 'unknown', 'unknown', badMessages, JSON.stringify({ schemaVersion: 99, title: 'Truncated fixture' }), 'truncated', 0],
   ];
   for (const row of rows) insert.run(...row);
   database.close();
@@ -211,11 +222,11 @@ function testRateTable() {
   };
 }
 
-export function createMCodeFixture() {
+export function createMCodeFixture({ base } = {}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-cost-mcode-contract-'));
   fs.mkdirSync(path.join(dataDir, 'v2', 'sqlite'), { recursive: true });
-  const rootTs = Date.parse(isoOffset({ days: -2 }));
-  const todayTs = Date.now();
+  const rootTs = Date.parse(isoOffset({ days: -2 }, base));
+  const todayTs = base ?? Date.now();
   const otherTs = todayTs;
   const partialTs = todayTs;
   const message = (timestamp, model, provider) => ({
@@ -242,7 +253,7 @@ export function createMCodeFixture() {
     // session is unpriceable. Dated outside "today" so it cannot disturb the --today
     // selection assertions, which pin the exact set of sessions started that day.
     unpriced: writeMCodeSession(dataDir, 'mcode-unpriced', 'commandcode', 'unknown-model', [
-      message(Date.parse(isoOffset({ days: -3 })) + 1_000, 'unknown-model', 'commandcode'),
+      message(Date.parse(isoOffset({ days: -3 }, base)) + 1_000, 'unknown-model', 'commandcode'),
     ]),
   };
 
@@ -288,8 +299,8 @@ export function createMCodeFixture() {
     [5, 'mcode-other', 'other', 'other-1', otherTs + 1_000, 50, 5, 0, 0, 0],
     [6, 'mcode-partial', 'partial', 'partial-1', partialTs + 1_000, 50, 5, 0, 0, 0],
     [7, 'mcode-partial', 'partial', 'partial-2', partialTs + 2_000, 50, 5, 0, 0, 0],
-    [8, 'mcode-truncated', 'truncated', 'truncated-1', Date.parse(isoOffset({ days: -4 })), 10, 1, 0, 0, 0],
-    [9, 'mcode-unpriced', 'unpriced', 'unpriced-1', Date.parse(isoOffset({ days: -3 })), 400, 40, 0, 900, 0],
+    [8, 'mcode-truncated', 'truncated', 'truncated-1', Date.parse(isoOffset({ days: -4 }, base)), 10, 1, 0, 0, 0],
+    [9, 'mcode-unpriced', 'unpriced', 'unpriced-1', Date.parse(isoOffset({ days: -3 }, base)), 400, 40, 0, 900, 0],
   ].forEach((row) => insertUsage.run(...row));
   database.close();
 

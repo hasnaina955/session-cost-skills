@@ -1,0 +1,35 @@
+Session cost — mcode-partial
+partial · 2 models · custom_provider:commandcode
+Task: Partial contract fixture
+Window: 2026-06-15 12:00 UTC → 2026-06-15 12:00 UTC · 2 LLM call(s)
+Snapshot: 2026-06-15 18:00 UTC (session idle)
+Selection: explicit (mcode-partial)
+Selection candidates: mcode-partial
+
+TOTAL COST $0.000060 for 0.0001 M tokens — $0.545455/M all-in (priced calls only)
+
+What was used, and what it cost
+| Token type             | Tokens (M) | Share of prompt | Rate $/M |      Cost |
+| ---------------------- | ---------- | --------------- | -------- | --------- |
+| Fresh input (uncached) |     0.0001 |          100.0% |        — | $0.000050 |
+| Cached prompt read     |     0.0000 |            0.0% |        — | $0.000000 |
+| Cache write            |     0.0000 |            0.0% |        — | $0.000000 |
+| Output                 |     0.0000 |               — |        — | $0.000010 |
+| Total                  |     0.0001 |               — |        — | $0.000060 |
+
+Rates actually billed
+  fixture-command-model — flat $1.00 in / $0.10 cache read / $2.00 out / $0.25 cache write per 1M  (1 call(s), $0.000060)
+    driver: commandcode@3.0.0 (sha256:<FINGERPRINT>)
+    effective cards: 2026-01-01T00:00:00.000Z..open flat context 0-unbounded
+    rate fingerprints: sha256:<FINGERPRINT>, sha256:<FINGERPRINT>, sha256:<FINGERPRINT>, sha256:<FINGERPRINT>
+  unknown-model — no complete effective rate for 1 call(s), 0.0001 M tokens; missing cacheRead, cacheWrite, input, output
+  band split: 0 off-peak · 0 peak · 2 flat
+  ! 1 call(s) / 0.0001 M tokens are unpriced and are NOT in the total above.
+
+By model
+| Provider    | Model                 | Calls | Tokens (M) | Cache rate |      Cost |
+| ----------- | --------------------- | ----- | ---------- | ---------- | --------- |
+| commandcode | fixture-command-model |     1 |     0.0001 |       0.0% | $0.000060 |
+| commandcode | unknown-model         |     1 |     0.0001 |       0.0% |  unpriced |
+
+Rates for commandcode mirrored 2026-01-01T00:00:00.000Z from https://commandcode.ai/docs/resources/pricing-limits

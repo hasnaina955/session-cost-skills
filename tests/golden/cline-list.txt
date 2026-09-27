@@ -1,0 +1,6 @@
+cline-other  Usage billed    0.0003 M     1 calls  Other contract fixture
+cline-partial  Partial cost    0.0007 M     2 calls  Partial contract fixture
+cline-root  Usage billed    0.0016 M     2 calls  Root contract fixture
+cline-truncated  No calls        0.0000 M     0 calls  Truncated fixture
+
+Duplicate-suppressed child selections: cline-child, cline-grandchild

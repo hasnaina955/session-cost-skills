@@ -1,0 +1,48 @@
+Session cost — mcode-root
+root · 2 models · commandcode + stepfun · includes 2 sub-agent session(s)
+Task: Root contract fixture
+Window: 2026-06-13 12:00 UTC → 2026-06-13 12:00 UTC · 4 LLM call(s)
+Snapshot: 2026-06-15 18:00 UTC (session idle)
+Selection: explicit (mcode-root)
+Selection candidates: mcode-root
+
+TOTAL COST $0.000460 for 0.0005 M tokens — $0.931174/M all-in
+
+What was used, and what it cost
+| Token type             | Tokens (M) | Share of prompt | Rate $/M |      Cost |
+| ---------------------- | ---------- | --------------- | -------- | --------- |
+| Fresh input (uncached) |     0.0003 |           69.3% |  $1.0000 | $0.000320 |
+| Cached prompt read     |     0.0001 |           13.0% |  $0.0667 | $0.000004 |
+| Cache write            |     0.0001 |           17.7% |  $0.7073 | $0.000058 |
+| Output                 |     0.0000 |               — |  $2.4375 | $0.000078 |
+| Total                  |     0.0005 |               — |        — | $0.000460 |
+Cache rate 13.0% of prompt — cached prompt was billed at 1/15th the fresh rate,
+which is why the all-in $0.931174/M sits far below the sticker input rate.
+(Reasoning 0.0000 M is inside the output row, never added twice.)
+
+Rates actually billed
+  commandcode · fixture-command-model — flat $1.00 in / $0.10 cache read / $2.00 out / $0.25 cache write per 1M  (3 call(s), $0.000154)
+    driver: commandcode@3.0.0 (sha256:<FINGERPRINT>)
+    effective cards: 2026-01-01T00:00:00.000Z..open flat context 0-unbounded
+    rate fingerprints: sha256:<FINGERPRINT>, sha256:<FINGERPRINT>, sha256:<FINGERPRINT>, sha256:<FINGERPRINT>
+  stepfun · fixture-step-model — flat $1.00 in / $0.05 cache read / $2.70 out / $1.00 cache write per 1M  (1 call(s), $0.000306)
+    driver: stepfun@2.0.0 (sha256:<FINGERPRINT>)
+    effective cards: 2026-01-01T00:00:00.000Z..open flat context 0-unbounded
+    rate fingerprints: sha256:<FINGERPRINT>, sha256:<FINGERPRINT>, sha256:<FINGERPRINT>, sha256:<FINGERPRINT>
+  band split: 0 off-peak · 0 peak · 4 flat
+
+By model
+| Provider    | Model                 | Calls | Tokens (M) | Cache rate |      Cost |
+| ----------- | --------------------- | ----- | ---------- | ---------- | --------- |
+| commandcode | fixture-command-model |     3 |     0.0002 |      11.6% | $0.000154 |
+| stepfun     | fixture-step-model    |     1 |     0.0003 |      13.8% | $0.000306 |
+
+By session
+| Session          | Role   | Calls | Tokens (M) | Cache rate |      Cost |
+| ---------------- | ------ | ----- | ---------- | ---------- | --------- |
+| mcode-root       | target |     2 |     0.0005 |      13.6% | $0.000436 |
+| mcode-child      | child  |     1 |     0.0000 |       0.0% | $0.000012 |
+| mcode-grandchild | child  |     1 |     0.0000 |       0.0% | $0.000012 |
+
+Rates for commandcode mirrored 2026-01-01T00:00:00.000Z from https://commandcode.ai/docs/resources/pricing-limits
+Rates for stepfun mirrored 2026-01-01T00:00:00.000Z from https://platform.stepfun.ai/docs/en/guides/pricing/details.md
