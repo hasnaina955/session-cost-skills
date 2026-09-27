@@ -1,0 +1,3 @@
+sessionId,parentSessionId,role,status,startedAt,endedAt,title,calls,pricedCalls,unpricedCalls,inputTokens,outputTokens,cacheReadTokens,cacheWriteTokens,totalTokens,costUsd,knownCostUsd,costBasis,coverage
+mcode-root,,root,completed,2026-06-13T12:00:01.000Z,2026-06-13T12:00:02.000Z,Root contract fixture,2,2,0,300,30,60,80,470,0.0004355,0.0004355,provider-rate-estimate,complete
+

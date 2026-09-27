@@ -1,0 +1,27 @@
+Session cost — mcode-unpriced
+unpriced · unknown-model · custom_provider:commandcode
+Task: Unpriced contract fixture
+Window: 2026-06-12 12:00 UTC → 2026-06-12 12:00 UTC · 1 LLM call(s)
+Snapshot: 2026-06-15 18:00 UTC (session idle)
+Selection: explicit (mcode-unpriced)
+Selection candidates: mcode-unpriced
+
+COST UNAVAILABLE — 0.0013 M tokens, but none of the models in this session
+are in the mirrored rate tables, so no cost can be computed (see "Rates actually billed").
+
+What was used, and what it cost
+| Token type             | Tokens (M) | Share of prompt | Rate $/M | Cost |
+| ---------------------- | ---------- | --------------- | -------- | ---- |
+| Fresh input (uncached) |     0.0004 |           30.8% |        — |    — |
+| Cached prompt read     |     0.0009 |           69.2% |        — |    — |
+| Cache write            |     0.0000 |            0.0% |        — |    — |
+| Output                 |     0.0000 |               — |        — |    — |
+| Total                  |     0.0013 |               — |        — |    — |
+Cache rate 69.2% of prompt.
+
+Rates actually billed
+  unknown-model — no complete effective rate for 1 call(s), 0.0013 M tokens; missing cacheRead, cacheWrite, input, output
+  band split: 0 off-peak · 0 peak · 1 flat
+Note: the model was inferred for 1 of 1 call(s) from the nearest recorded call — the ledger does not store a model per call.
+
+Rates for commandcode mirrored 2026-01-01T00:00:00.000Z from https://commandcode.ai/docs/resources/pricing-limits

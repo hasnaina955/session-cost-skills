@@ -1,0 +1,30 @@
+Session Cost — Cline
+Session: cline-root
+Title: Root contract fixture
+Status: completed (final)
+Usage scope: included-sessions
+Provider driver: commandcode@3.0.0 (sha256:<FINGERPRINT>)
+Selection: explicit (cline-root)
+Calls: 4 across 4 model(s)
+Billing: Usage billed — 4/4 calls contain a positive recorded cost.
+
+Token totals:
+  Total: 1,980 (0.0020 M)
+  Input: 1,800 (0.0018 M, includes cache)
+  Fresh input: 1,425 (0.0014 M)
+  Cached read: 300 (0.0003 M)
+  Cache write: 75 (0.0001 M)
+  Output: 180 (0.0002 M)
+Cache-hit rate: 16.7%
+Recorded cost: $0.180000 (complete)
+Cost coverage: complete
+
+By model:
+  cline/root-model: 1 calls, 0.0011 M tokens, $0.100000
+  cline/switched-model: 1 calls, 0.0006 M tokens, $0.050000
+  cline/child-model: 1 calls, 0.0002 M tokens, $0.020000
+  cline/grandchild-model: 1 calls, 0.0001 M tokens, $0.010000
+
+Included subagent sessions: 2
+  + cline-child — Child contract fixture
+  + cline-grandchild — Grandchild contract fixture

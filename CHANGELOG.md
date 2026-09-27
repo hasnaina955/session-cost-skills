@@ -4,7 +4,22 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
-Nothing yet. The next batch of changes lands here before it is cut into a release.
+### Added
+
+- `tests/golden.test.mjs` checks the rendered output of ten scenarios - both runtimes, a single
+  session, subagents included, a session list, CSV, rate coverage, and the two unknown-cost paths
+  that exit 2 - against checked-in files, byte for byte. Every other assertion in the suite checks
+  that a *value* is right; none of them notices that a table lost its borders, a column drifted, a
+  line disappeared, or the wording softened from "not recorded" to something vaguer. Those are
+  regressions a user sees and a value assertion cannot, and they are what the Phase 3 visual work
+  risks while it is in flight. A failure prints the first differing line with its number.
+- `createClineFixture` and `createMCodeFixture` accept an optional `base` instant, and
+  `FIXTURE_EPOCH` is a fixed constant. They previously built every session timestamp from
+  `Date.now()`, which is why a golden file would have embedded a date that is two days old every
+  morning - the same expiry that made `rate-provenance` flip from pass to fail on consecutive days.
+  The default is still the real clock, so tests asserting relative-date behaviour are unchanged;
+  the golden scenarios pin both the data and `SESSION_COST_NOW`, and a test asserts both pins
+  rather than trusting them.
 
 ## 0.5.0
 

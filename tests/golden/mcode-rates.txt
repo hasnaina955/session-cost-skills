@@ -1,0 +1,11 @@
+MCode rate coverage
+Parser: v3
+Refreshed: 2026-01-01T00:00:00.000Z
+Published table complete: yes
+commandcode: 1/1 complete model(s); input complete, output complete, cacheRead complete, cacheWrite complete
+  4 effective rate record(s) from 2026-01-01T00:00:00.000Z
+  source https://commandcode.ai/docs/resources/pricing-limits, fetched 2026-01-01T00:00:00.000Z
+stepfun: 1/1 complete model(s); input complete, output complete, cacheRead complete, cacheWrite complete
+  4 effective rate record(s) from 2026-01-01T00:00:00.000Z
+  source https://platform.stepfun.ai/docs/en/guides/pricing/details.md, fetched 2026-01-01T00:00:00.000Z
+Free models: none

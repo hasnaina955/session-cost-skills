@@ -1,0 +1,30 @@
+Session Cost — Cline
+Session: cline-root
+Title: Root contract fixture
+Status: completed (final)
+Usage scope: root-only
+Warning: 2 descendant session(s) were excluded
+Provider driver: commandcode@3.0.0 (sha256:<FINGERPRINT>)
+Selection: explicit (cline-root)
+Calls: 2 across 2 model(s)
+Billing: Usage billed — 2/2 calls contain a positive recorded cost.
+
+Token totals:
+  Total: 1,650 (0.0016 M)
+  Input: 1,500 (0.0015 M, includes cache)
+  Fresh input: 1,125 (0.0011 M)
+  Cached read: 300 (0.0003 M)
+  Cache write: 75 (0.0001 M)
+  Output: 150 (0.0001 M)
+Cache-hit rate: 20.0%
+Recorded cost: $0.150000 (complete)
+Cost coverage: complete
+
+By model:
+  cline/root-model: 1 calls, 0.0011 M tokens, $0.100000
+  cline/switched-model: 1 calls, 0.0006 M tokens, $0.050000
+
+Excluded subagent sessions: 2
+  - cline-child
+  - cline-grandchild
+Use --include-children for an end-to-end task total.

@@ -1,0 +1,12 @@
+recent sessions (newest first)
+
+| Session         |         Cost | Cache | Tokens (M) | Calls | Model                         | Task                       |
+| --------------- | ------------ | ----- | ---------- | ----- | ----------------------------- | -------------------------- |
+| mcode-partial   |   $0.000060* |  0.0% |     0.0001 |     2 | fixture-command-model +1 more | Partial contract fixture   |
+| mcode-other     |    $0.000060 |  0.0% |     0.0001 |     1 | fixture-command-model         | Other contract fixture     |
+| mcode-root      |    $0.000436 | 13.6% |     0.0005 |     2 | fixture-command-model +1 more | Root contract fixture      |
+| mcode-unpriced  | rate unknown | 69.2% |     0.0013 |     1 | unknown-model                 | Unpriced contract fixture  |
+| mcode-truncated |    $0.000012 |  0.0% |     0.0000 |     1 | fixture-command-model         | Truncated contract fixture |
+
+* partial: priced calls only — that session also has unpriced calls (see the per-session report).
+Duplicate-suppressed child selections: mcode-grandchild, mcode-child
