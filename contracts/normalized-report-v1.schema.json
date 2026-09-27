@@ -19,87 +19,299 @@
     "warnings"
   ],
   "properties": {
-    "schemaVersion": { "const": 1 },
-    "contractVersion": { "const": "1.2.0" },
-    "generatedAt": { "type": "string", "format": "date-time" },
-    "runtime": { "$ref": "#/$defs/runtime" },
-    "snapshot": { "$ref": "#/$defs/snapshot" },
-    "selection": { "$ref": "#/$defs/selection" },
-    "usage": { "$ref": "#/$defs/usage" },
-    "billing": { "$ref": "#/$defs/billing" },
-    "coverage": { "$ref": "#/$defs/coverage" },
-    "sessionGraph": { "$ref": "#/$defs/sessionGraph" },
-    "provenance": { "$ref": "#/$defs/provenance" },
+    "schemaVersion": {
+      "const": 1
+    },
+    "contractVersion": {
+      "const": "1.2.0"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "runtime": {
+      "$ref": "#/$defs/runtime"
+    },
+    "snapshot": {
+      "$ref": "#/$defs/snapshot"
+    },
+    "selection": {
+      "$ref": "#/$defs/selection"
+    },
+    "usage": {
+      "$ref": "#/$defs/usage"
+    },
+    "billing": {
+      "$ref": "#/$defs/billing"
+    },
+    "coverage": {
+      "$ref": "#/$defs/coverage"
+    },
+    "sessionGraph": {
+      "$ref": "#/$defs/sessionGraph"
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance"
+    },
     "warnings": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "uniqueItems": true
     },
     "session": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "additionalProperties": true
     },
     "models": {
       "type": "array",
-      "items": { "type": "object", "additionalProperties": true }
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
     },
-    "configuration": { "type": ["object", "null"], "additionalProperties": true },
-    "providerDriver": { "type": ["object", "null"], "additionalProperties": true },
-    "providerDrivers": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "configuration": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "providerDriver": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "providerDrivers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
     "rateProvenance": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["provider", "model", "component", "effectiveFrom", "effectiveThrough", "context", "timeBand", "source", "fingerprint"],
+        "required": [
+          "provider",
+          "model",
+          "component",
+          "effectiveFrom",
+          "effectiveThrough",
+          "context",
+          "timeBand",
+          "source",
+          "fingerprint"
+        ],
         "properties": {
-          "provider": { "type": "string", "minLength": 1 },
-          "model": { "type": "string", "minLength": 1 },
-          "component": { "enum": ["input", "output", "cacheRead", "cacheWrite"] },
-          "effectiveFrom": { "type": "string", "format": "date-time" },
-          "effectiveThrough": { "type": ["string", "null"] },
-          "context": { "type": "object", "additionalProperties": true },
-          "timeBand": { "enum": ["flat", "peak", "offPeak"] },
-          "source": { "type": "object", "additionalProperties": true },
-          "fingerprint": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+          "provider": {
+            "type": "string",
+            "minLength": 1
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "component": {
+            "enum": [
+              "input",
+              "output",
+              "cacheRead",
+              "cacheWrite"
+            ]
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effectiveThrough": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "context": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "timeBand": {
+            "enum": [
+              "flat",
+              "peak",
+              "offPeak"
+            ]
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          }
         },
         "additionalProperties": false
       }
+    },
+    "timeline": {
+      "type": "array",
+      "description": "Time-ordered per-call events. Emitted for machine-readable output only. Beyond a fixed limit the entries are time buckets and timelineMeta.bucketed is true. costUsd is null for a call that could not be priced, never 0.",
+      "items": {
+        "type": "object",
+        "required": [
+          "t",
+          "costUsd"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "t": {
+            "type": "string",
+            "description": "ISO-8601 instant of the call."
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "input": {
+            "type": "number"
+          },
+          "output": {
+            "type": "number"
+          },
+          "cacheRead": {
+            "type": "number"
+          },
+          "cacheWrite": {
+            "type": "number"
+          },
+          "costUsd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Null when this call could not be priced."
+          }
+        }
+      }
+    },
+    "timelineMeta": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "How to read timeline. Present only when the timeline was bucketed or truncated.",
+      "additionalProperties": true
     }
   },
   "$defs": {
     "runtime": {
       "type": "object",
-      "required": ["id", "costBasis", "storageSource"],
+      "required": [
+        "id",
+        "costBasis",
+        "storageSource"
+      ],
       "properties": {
-        "id": { "enum": ["cline", "mcode"] },
-        "costBasis": { "enum": ["runtime-recorded", "provider-rate-estimate"] },
-        "storageSource": { "type": "string", "minLength": 1 }
+        "id": {
+          "enum": [
+            "cline",
+            "mcode"
+          ]
+        },
+        "costBasis": {
+          "enum": [
+            "runtime-recorded",
+            "provider-rate-estimate"
+          ]
+        },
+        "storageSource": {
+          "type": "string",
+          "minLength": 1
+        }
       },
       "additionalProperties": false
     },
     "snapshot": {
       "type": "object",
-      "required": ["capturedAt", "active", "state"],
+      "required": [
+        "capturedAt",
+        "active",
+        "state"
+      ],
       "properties": {
-        "capturedAt": { "type": "string", "format": "date-time" },
-        "active": { "type": "boolean" },
-        "state": { "type": "string", "minLength": 1 },
-        "lastLedgerActivityAt": { "type": ["string", "null"] }
+        "capturedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lastLedgerActivityAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       },
       "additionalProperties": false
     },
     "selection": {
       "type": "object",
-      "required": ["method", "requestedId", "candidateIds", "warning"],
+      "required": [
+        "method",
+        "requestedId",
+        "candidateIds",
+        "warning"
+      ],
       "properties": {
-        "method": { "type": "string", "minLength": 1 },
-        "requestedId": { "type": ["string", "null"] },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestedId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "candidateIds": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "uniqueItems": true
         },
-        "warning": { "type": ["string", "null"] }
+        "warning": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       },
       "additionalProperties": false
     },
@@ -116,13 +328,35 @@
         "semantics"
       ],
       "properties": {
-        "totalTokens": { "type": "number", "minimum": 0 },
-        "inputTokens": { "type": "number", "minimum": 0 },
-        "freshInputTokens": { "type": "number", "minimum": 0 },
-        "cacheReadTokens": { "type": "number", "minimum": 0 },
-        "cacheWriteTokens": { "type": "number", "minimum": 0 },
-        "outputTokens": { "type": "number", "minimum": 0 },
-        "cacheHitRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "totalTokens": {
+          "type": "number",
+          "minimum": 0
+        },
+        "inputTokens": {
+          "type": "number",
+          "minimum": 0
+        },
+        "freshInputTokens": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cacheReadTokens": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cacheWriteTokens": {
+          "type": "number",
+          "minimum": 0
+        },
+        "outputTokens": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cacheHitRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
         "semantics": {
           "type": "object",
           "required": [
@@ -132,10 +366,25 @@
             "reasoningIncludedInOutput"
           ],
           "properties": {
-            "inputTokenMeaning": { "enum": ["includes-cache", "excludes-cache"] },
-            "cacheReadTokensSeparate": { "const": true },
-            "cacheWriteTokensSeparate": { "const": true },
-            "reasoningIncludedInOutput": { "enum": [true, false, "not-reported"] }
+            "inputTokenMeaning": {
+              "enum": [
+                "includes-cache",
+                "excludes-cache"
+              ]
+            },
+            "cacheReadTokensSeparate": {
+              "const": true
+            },
+            "cacheWriteTokensSeparate": {
+              "const": true
+            },
+            "reasoningIncludedInOutput": {
+              "enum": [
+                true,
+                false,
+                "not-reported"
+              ]
+            }
           },
           "additionalProperties": false
         }
@@ -155,27 +404,102 @@
         "classification"
       ],
       "properties": {
-        "basis": { "enum": ["runtime-recorded", "provider-rate-estimate"] },
-        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
-        "amountUsd": { "type": ["number", "null"], "minimum": 0 },
-        "recordedCostUsd": { "type": ["number", "null"], "minimum": 0 },
-        "estimatedCostUsd": { "type": ["number", "null"], "minimum": 0 },
-        "rateKnown": { "type": "boolean" },
-        "coverage": { "enum": ["complete", "partial", "unavailable", "no-calls", "not-recorded", "unknown"] },
-        "classification": { "type": "string", "minLength": 1 },
-        "label": { "type": ["string", "null"] },
-        "evidence": { "type": ["string", "null"] }
+        "basis": {
+          "enum": [
+            "runtime-recorded",
+            "provider-rate-estimate"
+          ]
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "amountUsd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "recordedCostUsd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "estimatedCostUsd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "rateKnown": {
+          "type": "boolean"
+        },
+        "coverage": {
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "no-calls",
+            "not-recorded",
+            "unknown"
+          ]
+        },
+        "classification": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidence": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       },
       "additionalProperties": false
     },
     "coverage": {
       "type": "object",
-      "required": ["status", "calls", "totalTokens", "unknownReasons"],
+      "required": [
+        "status",
+        "calls",
+        "totalTokens",
+        "unknownReasons"
+      ],
       "properties": {
-        "status": { "enum": ["complete", "partial", "unavailable", "no-calls", "not-recorded", "unknown"] },
-        "calls": { "type": "number", "minimum": 0 },
-        "totalTokens": { "type": "number", "minimum": 0 },
-        "unknownReasons": { "type": "array", "items": { "type": "string" } }
+        "status": {
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "no-calls",
+            "not-recorded",
+            "unknown"
+          ]
+        },
+        "calls": {
+          "type": "number",
+          "minimum": 0
+        },
+        "totalTokens": {
+          "type": "number",
+          "minimum": 0
+        },
+        "unknownReasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       },
       "additionalProperties": false
     },
@@ -188,26 +512,50 @@
         "duplicateSuppressedSessionIds"
       ],
       "properties": {
-        "rootSessionIds": { "$ref": "#/$defs/sessionIds" },
-        "includedSessionIds": { "$ref": "#/$defs/sessionIds" },
-        "excludedSessionIds": { "$ref": "#/$defs/sessionIds" },
-        "duplicateSuppressedSessionIds": { "$ref": "#/$defs/sessionIds" }
+        "rootSessionIds": {
+          "$ref": "#/$defs/sessionIds"
+        },
+        "includedSessionIds": {
+          "$ref": "#/$defs/sessionIds"
+        },
+        "excludedSessionIds": {
+          "$ref": "#/$defs/sessionIds"
+        },
+        "duplicateSuppressedSessionIds": {
+          "$ref": "#/$defs/sessionIds"
+        }
       },
       "additionalProperties": false
     },
     "sessionIds": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "uniqueItems": true
     },
     "provenance": {
       "type": "object",
-      "required": ["kind", "source", "rateSources"],
+      "required": [
+        "kind",
+        "source",
+        "rateSources"
+      ],
       "properties": {
-        "kind": { "type": "string", "minLength": 1 },
-        "source": { "type": "string", "minLength": 1 },
-        "rateSources": { "$ref": "#/$defs/sessionIds" },
-        "callCountKnown": { "type": "boolean" }
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rateSources": {
+          "$ref": "#/$defs/sessionIds"
+        },
+        "callCountKnown": {
+          "type": "boolean"
+        }
       },
       "additionalProperties": false
     }

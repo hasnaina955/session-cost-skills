@@ -15,6 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeDashboard } from './lib/dashboard.mjs';
 import { now as nowMs, isoNow, utcDay } from './lib/clock.mjs';
+import { createTimeline } from './lib/timeline.mjs';
 import { observeSchema, checkSchema, describeDrift } from './lib/schema-drift.mjs';
 import {
   bandForTimestamp,
@@ -415,12 +416,36 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
     return { modelId, provider, inferred, rateInfo, rate: rateInfo.rate ?? null, contextTokens };
   };
 
+  // Emitted for machine-readable output only. A text report has nowhere to put 2,000 events, and
+  // adding them there would change every golden file for no reader. This is not a user-facing
+  // flag on purpose: a flag only MCode honoured would be a footgun, and `--json` is already the
+  // contract for "give me the data".
+  const timeline = (opts.json || opts.dashboard) ? createTimeline() : null;
+
   for (const row of rows) {
     const pricer = pricers.get(row.session_id);
     const { modelId, provider, inferred, rateInfo, rate, contextTokens } = priceRow(pricer, row);
     if (inferred) inferredRows += 1;
 
+    // UNPRICED_ZERO_RATE prices an unknown model at zero, so `rate` being absent is the signal
+    // that this call has no cost. The timeline must say null there rather than the zero the
+    // accumulator is using to keep the arithmetic total.
+    const isPriced = rate != null;
     accumulate(agg, row, rate ?? UNPRICED_ZERO_RATE);
+    if (timeline) {
+      const costs = isPriced ? calculateTokenCost(row, rate, bandForTimestamp(row.ts, rate)) : null;
+      timeline.add({
+        t: row.ts,
+        sessionId: row.session_id,
+        model: modelId ?? null,
+        provider: normalizeProvider(provider),
+        input: Number(row.input_tokens) || 0,
+        output: Number(row.output_tokens) || 0,
+        cacheRead: Number(row.cache_read_tokens) || 0,
+        cacheWrite: Number(row.cache_write_tokens) || 0,
+        costUsd: costs ? (costs.input + costs.output + costs.cacheRead + costs.cacheWrite) : null,
+      });
+    }
 
     const pkey = normalizeProvider(provider);
     const key = `${pkey}::${modelId ?? '(unknown)'}`;
@@ -611,6 +636,9 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
     providersUsed,
     inferredModelRows: inferredRows,
     snapshotAt,
+    // Only present when the timeline was requested; a report that does not need it does not
+    // carry 2,000 events through a JSON round trip.
+    ...(timeline ? timeline.finalize() : {}),
     ledgerLastCallAt: lastTs,
     sessionActive: lastTs !== null && snapshotAt - lastTs < LIVE_WINDOW_MS,
     ratesRefreshedAt: table._meta?.refreshedAt ?? null,
