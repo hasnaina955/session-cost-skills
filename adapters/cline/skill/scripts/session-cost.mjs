@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { fetchClineAccount, resolveClineCredential, summarizeClineAccount } from './lib/cline-account.mjs';
+import { now as nowMs, isoNow, utcDay } from './lib/clock.mjs';
 import { writeDashboard } from './lib/dashboard.mjs';
 import {
   SCHEMA_VERSION,
@@ -364,7 +365,7 @@ function reportFor(row, all, graph, includeChildren, selection = null) {
 
   return normalizeClineReport({
     schemaVersion: SCHEMA_VERSION,
-    generatedAt: new Date().toISOString(),
+    generatedAt: isoNow(),
     snapshot: reportStatus(row),
     session: {
       id: row.session_id,
@@ -402,7 +403,7 @@ function reportFor(row, all, graph, includeChildren, selection = null) {
 function reportStatus(row) {
   const active = ['idle', 'running', 'pending'].includes(String(row.status ?? '').toLowerCase());
   return {
-    capturedAt: new Date().toISOString(),
+    capturedAt: isoNow(),
     active,
     state: active ? 'snapshot' : 'final',
     lastLedgerActivityAt: row.updated_at ?? row.ended_at ?? row.started_at ?? null,
@@ -498,7 +499,7 @@ function filterRows(rows) {
 function selectedRows(all) {
   const filtered = filterRows(all);
   if (opts.mode === 'today') {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = utcDay();
     return filtered.filter((row) => String(row.started_at).slice(0, 10) === today);
   }
   if (opts.session) return all.filter((row) => row.session_id === opts.session);
@@ -515,8 +516,8 @@ function aggregateReports(reports, label, duplicateSuppressedSessionIds = []) {
   const providerDrivers = [...new Map(reports.flatMap((report) => report.providerDriver ? [[report.providerDriver.id, report.providerDriver]] : [])).values()];
   return normalizeClineReport({
     schemaVersion: SCHEMA_VERSION,
-    generatedAt: new Date().toISOString(),
-    snapshot: { capturedAt: new Date().toISOString(), active: reports.some((report) => report.snapshot.active), state: 'aggregate' },
+    generatedAt: isoNow(),
+    snapshot: { capturedAt: isoNow(), active: reports.some((report) => report.snapshot.active), state: 'aggregate' },
     session: { id: null, title: label, status: 'aggregate', startedAt: reports.at(-1)?.session.startedAt ?? null, endedAt: reports[0]?.session.endedAt ?? null },
     providerDrivers,
     configuration: effectiveConfiguration,
@@ -613,14 +614,14 @@ function renderAccount(summary) {
 async function runAccount(dataDir) {
   const credential = accountCredential(dataDir);
   const days = Number.isFinite(opts.accountDays) && opts.accountDays > 0 ? Math.floor(opts.accountDays) : 45;
-  const now = Date.now();
+  const now = nowMs();
   const since = now - days * 24 * 60 * 60 * 1000;
   const account = await fetchClineAccount({ apiKey: credential.apiKey, userId: opts.accountUserId || credential.userId || null, since, now });
   const summary = summarizeClineAccount(account, new Date(now));
   summary.historyDays = days;
   const output = {
     schemaVersion: SCHEMA_VERSION,
-    generatedAt: new Date().toISOString(),
+    generatedAt: isoNow(),
     account: summary,
     live: true,
     credentialSource: credential.source,
@@ -704,7 +705,7 @@ try {
         candidateIds: topLevel.includedRootIds,
       }));
     if (opts.json) {
-      console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'cline', kind: 'report-list', generatedAt: new Date().toISOString(), sessions: recent, duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds }, replacer, 2));
+      console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'cline', kind: 'report-list', generatedAt: isoNow(), sessions: recent, duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds }, replacer, 2));
     } else if (opts.rollup) {
       console.log(renderRollup(recent, opts.rollup));
     } else if (opts.top) {
@@ -729,14 +730,14 @@ try {
         candidateIds: topLevel.includedRootIds,
       }));
     if (reports.length < 2) die('--compare requires at least two matching sessions');
-    const output = { schemaVersion: SCHEMA_VERSION, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'cline', kind: 'report-comparison', generatedAt: new Date().toISOString(), comparison: { older: reports[1], newer: reports[0] }, duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds };
+    const output = { schemaVersion: SCHEMA_VERSION, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'cline', kind: 'report-comparison', generatedAt: isoNow(), comparison: { older: reports[1], newer: reports[0] }, duplicateSuppressedSessionIds: topLevel.duplicateSuppressedSessionIds };
     if (opts.json) console.log(JSON.stringify(output, replacer, 2));
     else console.log(`${renderCompare(reports[1], reports[0])}${topLevel.duplicateSuppressedSessionIds.length ? `\nDuplicate-suppressed child selections: ${topLevel.duplicateSuppressedSessionIds.join(', ')}` : ''}`);
   } else if (opts.mode === 'last' || opts.mode === 'today' || opts.from || opts.to || opts.provider || opts.model) {
     let rows = candidates;
     if (opts.mode === 'last') rows = rows.filter((row) => row.status !== 'running').sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at)).slice(0, 1);
     if (opts.mode === 'today') {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = utcDay();
       rows = rows.filter((row) => String(row.started_at).slice(0, 10) === today);
     }
     if (!rows.length) die('no sessions match the requested filters');
@@ -785,7 +786,7 @@ try {
         outPath: opts.out ?? path.join(dataDir, 'data', 'reports', 'session-cost', 'session-dashboard.html'),
         title: 'Cline Session Cost Dashboard',
       });
-      if (opts.json) console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'cline', kind: 'dashboard', generatedAt: new Date().toISOString(), dashboardPath: outputPath, report }, replacer, 2));
+      if (opts.json) console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'cline', kind: 'dashboard', generatedAt: isoNow(), dashboardPath: outputPath, report }, replacer, 2));
       else console.log(`Dashboard written: ${outputPath}`);
     } else if (opts.insights) {
       // Measured history only. Insights never forecasts and never replaces the report.

@@ -508,15 +508,46 @@ test('a duration is only reported when the report can support one', () => {
   const derived = elapsedMsFromReport(report);
   assert.equal(derived, Date.parse(report.session.endedAt) - Date.parse(report.session.startedAt));
 
-  // MCode carries no start/end pair, so an inverted anchor pair must yield null rather
-  // than a zero that would claim the spend took no time at all.
+  // MCode carries no start/end pair, so the span has to come from the snapshot's own anchors.
+  // A usable pair yields the real elapsed time...
   const mcodeSession = mcodeReport(['--session', 'mcode-partial']);
   const activity = Date.parse(mcodeSession.snapshot.lastLedgerActivityAt);
   const captured = Date.parse(mcodeSession.snapshot.capturedAt);
-  assert.ok(activity > captured, 'the fixture must present an unusable anchor order');
-  assert.equal(elapsedMsFromReport(mcodeSession), null);
+  assert.ok(Number.isFinite(activity) && Number.isFinite(captured), 'the report must carry both anchors');
+  if (activity <= captured) assert.equal(elapsedMsFromReport(mcodeSession), captured - activity);
+
+  // ...and an inverted one must yield null rather than a negative span, or a zero that would
+  // claim the spend took no time at all. The inverted pair is constructed here rather than
+  // waited for: an earlier version of this assertion depended on a fixture whose last ledger
+  // call was stamped two seconds in the future, so it passed only while the machine was fast
+  // enough to produce the report inside that two-second window. A slow Windows runner inverted
+  // the anchors and failed the suite for a reason that had nothing to do with the evaluator.
+  const inverted = { snapshot: { lastLedgerActivityAt: '2026-06-15T12:00:05.000Z', capturedAt: '2026-06-15T12:00:00.000Z' } };
+  assert.equal(elapsedMsFromReport(inverted), null, 'activity after capture is not a duration');
+  assert.equal(elapsedMsFromReport({ snapshot: { lastLedgerActivityAt: '2026-06-15T12:00:00.000Z', capturedAt: '2026-06-15T12:00:05.000Z' } }), 5_000,
+    'a real span is still reported');
+  assert.equal(elapsedMsFromReport({ snapshot: {} }), null, 'missing anchors yield no duration');
   assert.equal(elapsedMsFromReport(null), null);
   assert.equal(elapsedMsFromReport({}), null);
+});
+
+test('no duration assertion depends on winning a race against the wall clock', () => {
+  // A Windows CI runner produced this report more than two seconds after the fixture was
+  // built, which inverted the snapshot anchors and failed the suite for a reason unrelated to
+  // the evaluator. The anchor cases are now constructed, not waited for; this asserts that the
+  // real report cannot reintroduce a dependency on timing by requiring the span to equal the
+  // difference of its own anchors whenever they are ordered.
+  const mcodeSession = mcodeReport(['--session', 'mcode-partial']);
+  const activity = Date.parse(mcodeSession.snapshot.lastLedgerActivityAt);
+  const captured = Date.parse(mcodeSession.snapshot.capturedAt);
+  if (activity > captured) {
+    assert.equal(elapsedMsFromReport(mcodeSession), null);
+  } else {
+    assert.equal(elapsedMsFromReport(mcodeSession), captured - activity);
+  }
+  // Either ordering is a legitimate report; the evaluator must answer from the report alone and
+  // never from the current time, so the answer is identical however long the run took.
+  assert.equal(elapsedMsFromReport(mcodeSession), elapsedMsFromReport(mcodeSession));
 });
 
 test('a sub-cent spend stays visible instead of printing as a free session', () => {

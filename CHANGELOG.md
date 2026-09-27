@@ -4,6 +4,23 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Added
+
+- `docs/principles.md` lists the 16 rules this project does not trade, each linked to the test
+  that enforces it. The CHANGELOG had been citing "non-negotiable rule 1" for two releases with no
+  document defining the rules, so a contributor or agent could not follow rules they could not
+  find. Two rules cannot be test-enforced and say so: no forecasting, and the free-software
+  guarantee. `check:docs` now fails if the document cites a `tests/` file that does not exist, so
+  a rule cannot claim enforcement it does not have.
+- `SESSION_COST_NOW` pins the reported clock: `generatedAt`, snapshot `capturedAt`, and the UTC
+  day boundary `--today` uses. With the clock pinned, two runs of the same command produce
+  byte-identical output, which is what makes rendered output testable at all. An invalid value
+  fails with one readable line naming the variable rather than silently falling back to the real
+  clock, because a silent fallback is the failure the hook exists to prevent. This is a test and
+  diagnostics hook, not a user setting. The `--watch` poll loop and the live view's "last ledger
+  activity Ns ago" line keep the real clock, since elapsed time against a pinned clock means
+  nothing. See `docs/configuration.md`.
+
 ### Fixed
 
 - The MCode contract fixture could be priced by the bundled rate table, which made one contract
@@ -20,6 +37,18 @@ All notable changes to this project are documented here.
   failure rather than a surprise the day after a rate refresh moves the boundary. Every other
   `step-5-preview` reference is untouched: those tests deliberately exercise the real StepFun
   parser and the published catalog.
+- Every reported timestamp in both adapters read the real clock directly, so output depended on
+  the day the report was produced. That is the condition that let the fixture bug above pass on one
+  day and fail on the next, and it also blocked the snapshot tests that visual work needs. All
+  reporting paths now take the clock from `shared/clock.mjs`, and
+  `tests/clock-determinism.test.mjs` fails the build if a reporting path reads the real clock
+  without a preceding `// clock: real-time` comment, so the next one has to be a written-down
+  choice rather than an oversight. `shared/budget.mjs` keeps its bare `Date.now()` default: that
+  module is contractually import-free so that no dependency can be pulled in, and it already
+  accepts the clock as an argument.
+- The README quoted `session-cost 0.3.0` in its `--version` example, two releases behind the
+  published 0.4.1. `check:docs` now asserts the quoted version against `package.json`, so it
+  cannot drift again.
 
 ## 0.4.1
 

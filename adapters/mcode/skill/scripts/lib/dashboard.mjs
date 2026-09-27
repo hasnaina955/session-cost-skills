@@ -1,5 +1,6 @@
 // Canonical dashboard renderer. `npm run check:dashboard` verifies that each
 // independently installable adapter contains an exact generated copy.
+import { isoNow } from './clock.mjs';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -550,7 +551,7 @@ export function renderDashboard(data, { title = 'Session Cost Dashboard' } = {})
     ? `Account ${account.userId}`
     : (data?.session?.id ?? data?.sessionId ?? 'Session report');
   const snapshot = data?.snapshot ?? {};
-  const generatedAt = data?.generatedAt ?? new Date().toISOString();
+  const generatedAt = data?.generatedAt ?? isoNow();
 
 
   return `<!doctype html>

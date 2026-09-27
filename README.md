@@ -59,7 +59,7 @@ node "$env:USERPROFILE\.cline\skills\session-cost\scripts\session-cost.mjs" --ve
 ```
 
 ```text
-session-cost 0.3.0 (cline adapter)
+session-cost 0.4.1 (cline adapter)
 report contract: 1.2.0
 node: 24.21.0 (requires >= 22.15.0)
 ```
@@ -141,6 +141,7 @@ A Gumroad product may be offered for voluntary support, compatibility assistance
 - [Model matching](docs/model-matching.md)
 - [Migration](docs/migration.md)
 - [Normalized report contract](contracts/README.md)
+- [Principles](docs/principles.md)
 - [Roadmap execution plan](docs/roadmap-plan.md)
 - [MCode porting plan](docs/porting-plan.md)
 - [Optional support and troubleshooting](SUPPORT.md)
