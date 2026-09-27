@@ -40,17 +40,21 @@ The source is split into two installable skills:
 - `adapters/cline/skill/` → `%USERPROFILE%\.cline\skills\session-cost\`
 - `adapters/mcode/skill/` → `%USERPROFILE%\.minimax\skills\session-cost\`
 
-To install or update, copy the folder contents over the target:
+To install or update, use the update script. It is cross-platform, verifies the result, and
+preserves MCode's refreshed rates, which a plain folder copy silently destroys:
 
-```powershell
-Copy-Item -Recurse -Force .\adapters\mcode\skill\* "$env:USERPROFILE\.minimax\skills\session-cost\"
+```bash
+node scripts/update-skill.mjs            # report what would change; writes nothing
+node scripts/update-skill.mjs --apply    # install or update both adapters
 ```
 
-Keep the two installed copies separate. They share the public skill name but use different
-runtime ledgers and token semantics.
+Full instructions, including installing a published archive and using it as a CI gate, are in
+[docs/updating.md](docs/updating.md). Keep the two installed copies separate. They share the
+public skill name but use different runtime ledgers and token semantics.
 
-MCode stores refreshed provider rates inside the skill folder, so an update overwrites
-them. See [docs/migration.md](docs/migration.md) for the two lines that preserve them.
+MCode stores refreshed provider rates inside the skill folder, so a plain copy overwrites
+them; the update script backs that file up and restores it. See
+[docs/migration.md](docs/migration.md) for the manual equivalent.
 
 Each installed skill reports its own version:
 
@@ -59,7 +63,7 @@ node "$env:USERPROFILE\.cline\skills\session-cost\scripts\session-cost.mjs" --ve
 ```
 
 ```text
-session-cost 0.4.1 (cline adapter)
+session-cost 0.5.0 (cline adapter)
 report contract: 1.2.0
 node: 24.21.0 (requires >= 22.15.0)
 ```
@@ -140,6 +144,7 @@ A Gumroad product may be offered for voluntary support, compatibility assistance
 - [Provider drivers](docs/provider-drivers.md)
 - [Model matching](docs/model-matching.md)
 - [Migration](docs/migration.md)
+- [Updating an installed skill](docs/updating.md)
 - [Normalized report contract](contracts/README.md)
 - [Principles](docs/principles.md)
 - [Roadmap execution plan](docs/roadmap-plan.md)
