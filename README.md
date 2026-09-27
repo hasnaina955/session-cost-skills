@@ -141,6 +141,7 @@ A Gumroad product may be offered for voluntary support, compatibility assistance
 - [Model matching](docs/model-matching.md)
 - [Migration](docs/migration.md)
 - [Normalized report contract](contracts/README.md)
+- [Roadmap execution plan](docs/roadmap-plan.md)
 - [MCode porting plan](docs/porting-plan.md)
 - [Optional support and troubleshooting](SUPPORT.md)
 - [Release, version, and package contract](docs/release.md)

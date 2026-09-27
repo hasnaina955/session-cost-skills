@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { readRateTable } from '../adapters/mcode/skill/scripts/lib/rates.mjs';
 import { clineScript, mcodeScript, createClineFixture, createMCodeFixture, runJson } from './helpers/contract-fixtures.mjs';
 
 const FINGERPRINT = /^sha256:[a-f0-9]{64}$/;
@@ -59,4 +62,36 @@ test('omitting the fixture rate table is a different scenario, not a provenance 
   assert.notEqual(report.coverage.status, 'complete', 'the fixture model is absent from the bundled table');
   assert.equal((report.rateProvenance ?? []).length, 0, 'an unpriced model must carry no rate provenance');
   assert.equal(report.billing.amountUsd, null, 'an unpriced session reports no cost rather than zero');
+});
+
+test('no MCode fixture model can be priced by the bundled rate table', () => {
+  // The guard for the trap above. Any test that runs the CLI without SESSION_COST_RATES_PATH is
+  // priced by the *bundled* table, so a fixture model name that the live catalog also publishes
+  // quietly turns a hermetic test into a wall-clock one: the fixture's session dates are relative
+  // to now, so they eventually cross the bundled record's `effectiveFrom` and the test flips from
+  // pass to fail with no code change in between. That is exactly how naming a fixture model
+  // `step-5-preview` left this file green on 2026-09-26 and red on 2026-09-27, on one commit.
+  // Asserting the overlap is absent makes the next collision a test failure rather than a
+  // surprise discovered the day after a rate refresh moves the boundary.
+  const bundled = readRateTable(new URL('../adapters/mcode/skill/references/provider-rates.json', import.meta.url));
+  const bundledModels = new Set(
+    Object.values(bundled.providers).flatMap((provider) => Object.keys(provider.models ?? {})),
+  );
+  assert.ok(bundledModels.size > 0, 'the bundled table publishes no models, so this guard would check nothing');
+
+  const fixture = createMCodeFixture();
+  const fixtureModels = new Set();
+  const sessionsRoot = path.join(fixture.dataDir, 'v2', 'sessions');
+  for (const entry of fs.readdirSync(sessionsRoot)) {
+    fixtureModels.add(JSON.parse(fs.readFileSync(path.join(sessionsRoot, entry, 'llm-call.json'), 'utf8')).model);
+  }
+  const fixtureTable = JSON.parse(fs.readFileSync(fixture.ratesPath, 'utf8'));
+  for (const provider of Object.values(fixtureTable.providers)) {
+    for (const model of Object.keys(provider.models ?? {})) fixtureModels.add(model);
+  }
+  assert.ok(fixtureModels.size > 0, 'the fixture declares no models, so this guard would check nothing');
+
+  const collisions = [...fixtureModels].filter((model) => bundledModels.has(model)).sort();
+  assert.deepEqual(collisions, [],
+    `fixture models the bundled table can price, which makes a fixture test wall-clock dependent: ${collisions.join(', ')}`);
 });

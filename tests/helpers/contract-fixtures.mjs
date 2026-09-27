@@ -170,9 +170,15 @@ function testRateTable() {
       sourceAmounts: { input: '1', output: '2', cacheRead: '0.1', cacheWrite: '0.25' },
     },
   }, { refreshedAt });
+  // Every model name in this fixture is deliberately synthetic. A test that runs the CLI
+  // without SESSION_COST_RATES_PATH falls back to the *bundled* table, and a real model name
+  // here would silently become priceable the moment a refresh published a record effective
+  // from a timestamp older than the fixture's relative session dates. That is not
+  // hypothetical: naming this model `step-5-preview` made one contract test pass on
+  // 2026-09-26 and fail on 2026-09-27, with no code change in between.
   const stepfun = prepareProviderRates('stepfun', {
-    'step-5-preview': {
-      name: 'step-5-preview',
+    'fixture-step-model': {
+      name: 'fixture-step-model',
       provider: 'stepfun',
       category: 'fixture',
       input: 1,
@@ -222,7 +228,7 @@ export function createMCodeFixture() {
   const history = {
     root: writeMCodeSession(dataDir, 'mcode-root', 'commandcode', 'fixture-command-model', [
       message(rootTs + 1_000, 'fixture-command-model', 'commandcode'),
-      message(rootTs + 2_000, 'step-5-preview', 'stepfun'),
+      message(rootTs + 2_000, 'fixture-step-model', 'stepfun'),
     ]),
     child: writeMCodeSession(dataDir, 'mcode-child', 'commandcode', 'fixture-command-model', [message(rootTs + 3_000, 'fixture-command-model', 'commandcode')]),
     grandchild: writeMCodeSession(dataDir, 'mcode-grandchild', 'commandcode', 'fixture-command-model', [message(rootTs + 4_000, 'fixture-command-model', 'commandcode')]),
