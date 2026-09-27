@@ -1,3 +1,4 @@
+import { removeDirectory } from './helpers/temp-dir.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -187,7 +188,7 @@ test('generic provider profiles validate against the configuration contract', ()
 
 test('MCode prices a custom compatible endpoint from project configuration without network access', (t) => {
   const fixture = createMCodeFixture();
-  t.after(() => fs.rmSync(fixture.dataDir, { recursive: true, force: true }));
+  t.after(() => removeDirectory(fixture.dataDir));
   const sessionsRoot = path.join(fixture.dataDir, 'v2', 'sessions');
   for (const entry of fs.readdirSync(sessionsRoot)) {
     for (const name of ['llm-call.json', 'messages.jsonl']) {

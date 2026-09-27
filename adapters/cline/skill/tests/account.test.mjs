@@ -1,3 +1,4 @@
+import { removeDirectory } from '../../../../tests/helpers/temp-dir.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -21,7 +22,7 @@ test('credential resolver prefers a non-expired providers.json OAuth token', () 
   assert.equal(credential.apiKey, 'oauth-token');
   assert.equal(credential.userId, 'usr-oauth');
   assert.equal(credential.source, 'providers.json:cline');
-  fs.rmSync(dataDir, { recursive: true, force: true });
+  removeDirectory(dataDir);
 });
 
 test('credential resolver skips expired OAuth and falls back to the legacy api key', () => {
@@ -34,7 +35,7 @@ test('credential resolver skips expired OAuth and falls back to the legacy api k
   const credential = resolveClineCredential({ dataDir, environment: {}, now: Date.now() });
   assert.equal(credential.apiKey, 'legacy-token');
   assert.equal(credential.source, 'secrets.json');
-  fs.rmSync(dataDir, { recursive: true, force: true });
+  removeDirectory(dataDir);
 });
 
 

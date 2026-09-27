@@ -1,3 +1,4 @@
+import { removeDirectory } from '../../../../tests/helpers/temp-dir.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -318,7 +319,7 @@ test('CommandCode duplicate IDs fail and context tiers select by call context', 
 
 test('expiring promotions are represented and do not reprice later calls', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'mcode-rate-promotion-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.after(() => removeDirectory(directory));
   const ratesPath = path.join(directory, 'provider-rates.json');
   const promotionModel = {
     name: 'Current Model',
@@ -369,7 +370,7 @@ test('rate table loading rejects parser-version drift', () => {
 
 test('refresh validates both providers and atomically publishes a complete table', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'mcode-rates-refresh-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.after(() => removeDirectory(directory));
   const ratesPath = path.join(directory, 'provider-rates.json');
   fs.writeFileSync(ratesPath, JSON.stringify(validTable(), null, 2) + '\n', 'utf8');
 
@@ -393,7 +394,7 @@ test('refresh validates both providers and atomically publishes a complete table
 
 test('refresh preserves immutable history and selects rates by call timestamp', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'mcode-rate-history-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.after(() => removeDirectory(directory));
   const ratesPath = path.join(directory, 'provider-rates.json');
   fs.writeFileSync(ratesPath, JSON.stringify(validTable(), null, 2) + '\n', 'utf8');
 
@@ -436,7 +437,7 @@ test('refresh preserves immutable history and selects rates by call timestamp', 
 
 test('an incomplete refresh fails loudly and preserves the last valid table byte-for-byte', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'mcode-rates-invalid-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.after(() => removeDirectory(directory));
   const ratesPath = path.join(directory, 'provider-rates.json');
   const previous = JSON.stringify(validTable(), null, 2) + '\n';
   fs.writeFileSync(ratesPath, previous, 'utf8');
@@ -464,7 +465,7 @@ test('an incomplete refresh fails loudly and preserves the last valid table byte
 
 test('MCode CLI reports a nonzero CommandCode cache-write cost end to end', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'mcode-cache-write-cli-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.after(() => removeDirectory(directory));
   const sqliteDirectory = path.join(directory, 'v2', 'sqlite');
   const historyDirectory = path.join(directory, 'v2', 'sessions', 'session-1');
   fs.mkdirSync(sqliteDirectory, { recursive: true });

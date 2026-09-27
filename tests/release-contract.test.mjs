@@ -1,3 +1,4 @@
+import { removeDirectory } from './helpers/temp-dir.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -137,5 +138,5 @@ test('release archives match the published checksums and never carry local data'
     assert.equal(sha256(data), `sha256:${digest}`, `${name} does not match its published checksum`);
     assert.ok(name.includes(packageJson.version), `${name} does not carry the release version`);
   }
-  fs.rmSync(out, { recursive: true, force: true });
+  removeDirectory(out);
 });

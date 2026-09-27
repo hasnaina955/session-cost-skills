@@ -19,9 +19,10 @@ supported:
   # '22.15' is the floor declared in package.json "engines" and printed by
   # `--version`; 24 is the current release.
   node: ['22.15', '24']
-  # bun job: the full suite under Bun, ubuntu-latest only. Bun on Windows fails
-  # 11 tests on temp-directory cleanup (EBUSY while a SQLite handle is open),
-  # which POSIX permits and Windows refuses; see the comment in ci.yml.
+  # bun job: the full suite under Bun on ubuntu-latest and windows-latest.
+  # Windows previously failed 11 tests on temp-directory cleanup (EBUSY while a
+  # SQLite handle is still open, which POSIX permits and Windows refuses);
+  # cleanup now goes through tests/helpers/temp-dir.mjs, which retries.
   # release job: rehearsal on Ubuntu and Windows, because extraction is done
   # in-process and there is no external `unzip` dependency. Archives are
   # uploaded from Ubuntu.

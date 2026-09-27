@@ -1,8 +1,9 @@
+import { removeDirectory } from './helpers/temp-dir.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { createClineFixture, createMCodeFixture, clineScript, mcodeScript, runJson } from './helpers/contract-fixtures.mjs';
+import { clineScript, createClineFixture, createMCodeFixture, mcodeScript, runJson } from './helpers/contract-fixtures.mjs';
 
 function updateStatuses(dataDir, statuses) {
   const database = new DatabaseSync(`${dataDir}/data/db/sessions.db`);
@@ -13,7 +14,7 @@ function updateStatuses(dataDir, statuses) {
 
 test('Cline CLI rejects unknown and ambiguous explicit selection', (t) => {
   const fixture = createClineFixture();
-  t.after(() => fs.rmSync(fixture.dataDir, { recursive: true, force: true }));
+  t.after(() => removeDirectory(fixture.dataDir));
 
   const unknown = runJson(clineScript, fixture.dataDir, ['--session', 'missing-session']);
   assert.equal(unknown.result.status, 2);
@@ -31,7 +32,7 @@ test('Cline CLI rejects unknown and ambiguous explicit selection', (t) => {
 
 test('Cline CLI prefers a unique active root and renders fallback warnings', (t) => {
   const fixture = createClineFixture();
-  t.after(() => fs.rmSync(fixture.dataDir, { recursive: true, force: true }));
+  t.after(() => removeDirectory(fixture.dataDir));
   updateStatuses(fixture.dataDir, [['cline-root', 'pending'], ['cline-other', 'completed']]);
   const active = runJson(clineScript, fixture.dataDir, []);
   assert.equal(active.result.status, 0, active.result.stderr);
@@ -42,7 +43,7 @@ test('Cline CLI prefers a unique active root and renders fallback warnings', (t)
 
 test('MCode CLI rejects unknown IDs and distinguishes known zero-call sessions', (t) => {
   const fixture = createMCodeFixture();
-  t.after(() => fs.rmSync(fixture.dataDir, { recursive: true, force: true }));
+  t.after(() => removeDirectory(fixture.dataDir));
   const database = new DatabaseSync(`${fixture.dataDir}/v2/sqlite/runtime-state.sqlite`);
   database.prepare('INSERT INTO local_runtime_sessions VALUES (?, ?, ?, ?, ?)').run('mvs_zero', 'zero', 'Known zero call', null, 'zero');
   database.close();
@@ -61,7 +62,7 @@ test('MCode CLI rejects unknown IDs and distinguishes known zero-call sessions',
 
 test('MCode CLI refuses to guess between parallel active roots', (t) => {
   const fixture = createMCodeFixture();
-  t.after(() => fs.rmSync(fixture.dataDir, { recursive: true, force: true }));
+  t.after(() => removeDirectory(fixture.dataDir));
   const database = new DatabaseSync(`${fixture.dataDir}/v2/sqlite/runtime-state.sqlite`);
   const now = Date.now();
   database.prepare('INSERT INTO local_runtime_token_usage VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(90, 'mcode-other', 'other', 'active-a', now, 1, 1, 0, 0, 0);

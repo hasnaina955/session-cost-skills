@@ -50,6 +50,13 @@ All notable changes to this project are documented here.
   published 0.4.1. `check:docs` now asserts the quoted version against `package.json`, so it
   cannot drift again.
 
+- Bun now runs on Windows in CI as well as Ubuntu. Windows previously failed 11 tests with
+  `EBUSY: resource busy or locked, rm '<tmpdir>'`: the fixtures deleted a temp directory while
+  its SQLite handle was still open, which POSIX permits and Windows refuses. Every directory
+  cleanup now goes through `removeDirectory` in `tests/helpers/temp-dir.mjs`, which retries, and
+  `tests/temp-cleanup-contract.test.mjs` fails if a new test deletes a directory with a bare
+  `fs.rmSync`, so the failure cannot return quietly.
+
 ## 0.4.1
 
 ### Fixed
