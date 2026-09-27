@@ -14,8 +14,14 @@ All notable changes to this project are documented here.
   buckets rather than an unbounded array in a file that is written to disk and embedded in a
   dashboard. A bucket containing any unpriced call is `null` for the whole bucket, because summing
   the priced calls and dropping the unpriced one would make it look cheaper than the truth. The
-  contract is extended in `contracts/normalized-report-v1.schema.json`; no adapter emits it yet,
-  which is the next step.
+  contract is extended in `contracts/normalized-report-v1.schema.json`.
+- MCode `--json` reports now carry that timeline. It is emitted from the same loop that prices each
+  call, so an entry and the total it rolls up to cannot disagree, and the suite asserts the
+  rollup against `billing.amountUsd` for both a fully priced and a partially priced session. A
+  partial session's timeline is `null` in total, not the sum of the calls that happened to price.
+  This follows `--json` rather than a new flag on purpose: a flag only one adapter honoured would
+  be a footgun, and `--json` is already the contract for "give me the data". A text report carries
+  no timeline, so the golden corpus stays readable.
 - `tests/golden.test.mjs` checks the rendered output of ten scenarios - both runtimes, a single
   session, subagents included, a session list, CSV, rate coverage, and the two unknown-cost paths
   that exit 2 - against checked-in files, byte for byte. Every other assertion in the suite checks

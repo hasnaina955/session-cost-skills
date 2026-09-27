@@ -101,3 +101,48 @@ test('the default limit is a number a report can actually carry', () => {
   const { timeline: entries } = timeline.finalize();
   assert.ok(entries.length <= DEFAULT_TIMELINE_LIMIT + 1, `timeline grew to ${entries.length}`);
 });
+
+// --- End to end: a real MCode report must carry a timeline that agrees with its own total ---
+
+test('a real MCode report emits a timeline that rolls up to its own total', async () => {
+  const { mcodeScript, createMCodeFixture, runJson } = await import('./helpers/contract-fixtures.mjs');
+  const { timelineTotalUsd: total } = await import('../shared/timeline.mjs');
+  const fixture = createMCodeFixture();
+  const report = runJson(mcodeScript, fixture.dataDir, ['--session', 'mcode-root', '--include-children', '--json'],
+    { ...fixture.environment, SESSION_COST_NOW: '2026-06-15T18:00:00.000Z' }).output;
+
+  assert.ok(Array.isArray(report.timeline) && report.timeline.length > 0, 'a --json report must carry a timeline');
+  assert.equal(report.calls, report.timeline.length, 'one entry per call');
+  const summed = total(report.timeline);
+  assert.ok(Math.abs(summed - report.billing.amountUsd) < 1e-9,
+    `timeline total ${summed} != report total ${report.billing.amountUsd}`);
+  // Every entry names the model and provider a chart groups by.
+  for (const entry of report.timeline) {
+    assert.ok(entry.model, 'an entry must name its model');
+    assert.ok(Number.isFinite(Date.parse(entry.t)), 'an entry must carry a usable instant');
+  }
+});
+
+test('a partially priced report is unknown in the timeline too, never a smaller number', async () => {
+  const { mcodeScript, createMCodeFixture, runJson } = await import('./helpers/contract-fixtures.mjs');
+  const { timelineTotalUsd: total } = await import('../shared/timeline.mjs');
+  const fixture = createMCodeFixture();
+  const report = runJson(mcodeScript, fixture.dataDir, ['--session', 'mcode-partial', '--json'],
+    { ...fixture.environment, SESSION_COST_NOW: '2026-06-15T18:00:00.000Z' }).output;
+
+  assert.notEqual(report.billing.coverage, 'complete');
+  assert.equal(report.billing.amountUsd, null, 'a partial report states no total');
+  // The unpriced call is null in the timeline, so the rollup is null rather than the sum of the
+  // calls that happened to price. A chart drawn from that sum would under-report.
+  assert.equal(total(report.timeline), null, 'a partial timeline must not sum to a number');
+  assert.ok(report.timeline.some((entry) => entry.costUsd === null), 'the unpriced call must be visible as null');
+});
+
+test('a text report carries no timeline, so the golden corpus stays readable', async () => {
+  const { mcodeScript, createMCodeFixture, runCli } = await import('./helpers/contract-fixtures.mjs');
+  const fixture = createMCodeFixture();
+  const result = runCli(mcodeScript, fixture.dataDir, ['--session', 'mcode-root'],
+    { ...fixture.environment, SESSION_COST_NOW: '2026-06-15T18:00:00.000Z' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /costUsd/, 'a text report has nowhere to put per-call events');
+});
