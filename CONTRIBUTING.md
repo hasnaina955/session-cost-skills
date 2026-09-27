@@ -51,6 +51,22 @@ Each adapter keeps its own generated copy so it remains independently installabl
 
 Do not copy Cline's input-token formula into MCode code. The two runtimes use different cache semantics.
 
+## The reported clock
+
+Every timestamp the tool reports — `generatedAt`, snapshot `capturedAt`, and the UTC day
+boundary `--today` uses — comes from `shared/clock.mjs`, never from a bare `Date.now()` or
+`new Date()`. `tests/clock-determinism.test.mjs` fails the build if a reporting path reads the
+real clock without a preceding `// clock: real-time` comment.
+
+The two permitted exceptions are the clock module's own fallback and `shared/budget.mjs`, which
+is contractually import-free and takes the clock as an argument instead. Both are listed in that
+test's `EXEMPT` set with the reason.
+
+Set `SESSION_COST_NOW` to an ISO-8601 timestamp to pin the reported clock. With it pinned, two
+runs of the same command produce byte-identical output, which is what makes rendered output
+testable. An invalid value fails loudly rather than falling back to the real clock. See
+[docs/configuration.md](docs/configuration.md).
+
 ## Reporting bugs
 
 Include runtime version, Node version, command, redacted error output, and expected behavior. Never include API keys, OAuth tokens, `secrets.json`, session databases, or private transcripts.

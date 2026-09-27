@@ -218,6 +218,29 @@ duplicate or empty profile `id`; a profile missing `driverId`, `match.providerId
 `effectiveFrom`, or all four components; an imported record without a model, a valid
 `component`, or a non-negative `amount`; and a duplicate `runtime:provider:runtimeModel`.
 
+## Pinning the reported clock (diagnostics and tests)
+
+`SESSION_COST_NOW` pins every timestamp the tool *reports*: `generatedAt`, snapshot
+`capturedAt`, and the UTC day boundary `--today` uses. It accepts any ISO-8601 timestamp.
+
+```powershell
+$env:SESSION_COST_NOW = '2026-06-15T12:00:00.000Z'
+node $SessionCost --today --json
+```
+
+This is a test and diagnostics hook, not a user setting. Its purpose is determinism: with the
+clock pinned, two runs of the same command produce byte-identical output, which is what makes
+rendered output testable. It was added because a test once passed on one day and failed on the
+next with no code change, when a fixture's relative session dates crossed a rate record's
+`effectiveFrom` between the two runs.
+
+Two deliberate exceptions, both of which measure elapsed real time and cannot mean anything
+against a pinned clock: the `--watch` poll loop, and the "last ledger activity Ns ago" line in
+the live view.
+
+An invalid value fails with one readable line naming `SESSION_COST_NOW`. It never falls back to
+the real clock, because a silent fallback is the failure this hook exists to prevent.
+
 ## Older config shapes
 
 `migrateConfig` accepts three shapes and rejects everything else:

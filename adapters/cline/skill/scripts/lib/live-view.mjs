@@ -150,6 +150,7 @@ export function renderLiveFrame(rawReport, { previous = null, stale = false, sta
   const session = `${safe(view?.sessionId, 22)} · ${safe(view?.title)}`;
   const badge = stale ? 'STALE' : view?.active ? 'RUNNING' : 'IDLE';
   out.push(line(`${session.slice(0, WIDTH - 12).padEnd(WIDTH - 12)}  ${badge}`));
+  // clock: real-time — an elapsed-since reading is only meaningful against the real clock.
   const last = view?.lastActivity
     ? `last ledger activity ${Math.max(0, Math.round((Date.now() - Date.parse(view.lastActivity)) / 1000))}s ago`
     : 'no ledger activity recorded';

@@ -1,8 +1,9 @@
+import { isoNow as isoNowClock } from './clock.mjs';
 export const REPORT_CONTRACT_VERSION = '1.2.0';
 
 const unique = (values) => [...new Set((values ?? []).filter((value) => value != null).map(String))];
 const finiteOrNull = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
-const isoNow = () => new Date().toISOString();
+const isoNow = () => isoNowClock();
 
 function normalizeSnapshot(report) {
   const capturedAt = report.snapshot?.capturedAt ?? report.generatedAt ?? isoNow();

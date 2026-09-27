@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeDashboard } from './lib/dashboard.mjs';
+import { now as nowMs, isoNow, utcDay } from './lib/clock.mjs';
 import {
   bandForTimestamp,
   calculateTokenCost,
@@ -541,7 +542,7 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
     };
   });
   const lastTs = rows.length ? Number(rows[rows.length - 1].ts) : null;
-  const snapshotAt = Date.now();
+  const snapshotAt = nowMs();
 
   const providerDrivers = [...new Map(models
     .filter((model) => model.providerDriver)
@@ -835,7 +836,7 @@ function resolveMCodeSession(db, rows, graph, { explicitId, environment = proces
   const roots = rows
     .filter((row) => !graph.byId.get(row.session_id)?.parentId)
     .sort((left, right) => Number(right.last_ts) - Number(left.last_ts));
-  const active = roots.filter((row) => Date.now() - Number(row.last_ts) < LIVE_WINDOW_MS);
+  const active = roots.filter((row) => nowMs() - Number(row.last_ts) < LIVE_WINDOW_MS);
   if (active.length === 1) {
     return { row: active[0], method: 'unique-active-root', requestedId: null, candidateIds: [active[0].session_id] };
   }
@@ -874,11 +875,11 @@ function matchesFilters(db, dataDir, row) {
   return true;
 }
 function enhanceReport(report, selection = null) {
-  const snapshotAt = Number(report.snapshotAt) || Date.now();
+  const snapshotAt = Number(report.snapshotAt) || nowMs();
   const ledgerLastCallAt = Number(report.ledgerLastCallAt);
   const enhanced = {
     schemaVersion: 1,
-    generatedAt: new Date().toISOString(),
+    generatedAt: isoNow(),
     snapshot: {
       active: Boolean(report.sessionActive),
       capturedAt: new Date(snapshotAt).toISOString(),
@@ -1147,7 +1148,7 @@ async function main() {
   if (opts.rates) {
     const output = {
       schemaVersion: 1,
-      generatedAt: new Date().toISOString(),
+      generatedAt: isoNow(),
       configuration: publicConfigResult(effectiveConfiguration),
       rates: {
         refreshedAt: table._meta?.refreshedAt ?? null,
@@ -1204,7 +1205,7 @@ async function main() {
           contractVersion: REPORT_CONTRACT_VERSION,
           runtime: 'mcode',
           kind: 'report-list',
-          generatedAt: new Date().toISOString(),
+          generatedAt: isoNow(),
           sessions: reports.map((report) => enhanceReport(report, {
             method: 'list',
             requestedId: null,
@@ -1255,7 +1256,7 @@ async function main() {
           contractVersion: REPORT_CONTRACT_VERSION,
           runtime: 'mcode',
           kind: 'report-comparison',
-          generatedAt: new Date().toISOString(),
+          generatedAt: isoNow(),
           comparison: {
             older: enhanceReport(reports[1], { method: 'compare', requestedId: null, candidateIds: topLevel.includedRootIds }),
             newer: enhanceReport(reports[0], { method: 'compare', requestedId: null, candidateIds: topLevel.includedRootIds }),
@@ -1273,9 +1274,9 @@ async function main() {
 
     if (opts.mode === 'last' || opts.mode === 'today' || opts.from || opts.to || opts.provider || opts.model) {
       let rows = candidates;
-      if (opts.mode === 'last') rows = rows.filter((row) => Date.now() - Number(row.last_ts) >= LIVE_WINDOW_MS).slice(0, 1);
+      if (opts.mode === 'last') rows = rows.filter((row) => nowMs() - Number(row.last_ts) >= LIVE_WINDOW_MS).slice(0, 1);
       if (opts.mode === 'today') {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = utcDay();
         rows = rows.filter((row) => new Date(Number(row.first_ts)).toISOString().slice(0, 10) === today);
       }
       if (!rows.length) fail('no sessions match the requested filters');
@@ -1319,7 +1320,7 @@ async function main() {
 
     if (opts.dashboard) {
       const outputPath = writeDashboard(enhanceReport(report, selection), { outPath: opts.out ?? path.join(dataDir, 'reports', 'session-cost', 'session-dashboard.html'), title: 'MCode Session Cost Dashboard' });
-      if (opts.json) console.log(JSON.stringify({ schemaVersion: 1, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'mcode', kind: 'dashboard', generatedAt: new Date().toISOString(), dashboardPath: outputPath, report: enhanceReport(report, selection) }, null, 2));
+      if (opts.json) console.log(JSON.stringify({ schemaVersion: 1, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'mcode', kind: 'dashboard', generatedAt: isoNow(), dashboardPath: outputPath, report: enhanceReport(report, selection) }, null, 2));
       else console.log(`Dashboard written: ${outputPath}`);
     } else if (opts.insights) {
       // Measured history only. Insights never forecasts and never replaces the report.
