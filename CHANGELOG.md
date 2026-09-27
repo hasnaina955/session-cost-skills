@@ -4,7 +4,22 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
-Nothing yet. The next batch of changes lands here before it is cut into a release.
+### Fixed
+
+- The MCode contract fixture could be priced by the bundled rate table, which made one contract
+  test a function of the wall clock rather than of the code. `tests/rate-provenance.test.mjs`
+  deliberately runs the CLI *without* `SESSION_COST_RATES_PATH` to prove that a session the
+  fixture cannot price reports no provenance and a `null` cost rather than `$0.0000`. Its session
+  dates are relative to now, and the fixture's stepfun model was named `step-5-preview`, which
+  the bundled catalog also publishes. Bundled records with no explicit effective date inherit the
+  provider's `fetchedAt`, so that model became priceable the moment the fixture's `now - 2d`
+  window crossed the table's `2026-09-25T09:01Z` refresh: `tests/rate-provenance.test.mjs` passed
+  on 2026-09-26 and failed on 2026-09-27 on one unchanged commit, and the 0.4.1 CI run of that
+  commit is still green today. The fixture's model names are now synthetic, and a new test
+  asserts that no fixture model is a key in the bundled table, so the next collision is a test
+  failure rather than a surprise the day after a rate refresh moves the boundary. Every other
+  `step-5-preview` reference is untouched: those tests deliberately exercise the real StepFun
+  parser and the published catalog.
 
 ## 0.4.1
 

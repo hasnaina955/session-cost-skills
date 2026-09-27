@@ -211,7 +211,7 @@ test('MCode prices a custom compatible endpoint from project configuration witho
       region: 'test-region',
       currency: 'EUR',
       pricingMode: 'manual',
-      rateCards: ['vendor-model', 'step-5-preview'].map((model) => ({
+      rateCards: ['vendor-model', 'fixture-step-model'].map((model) => ({
         model,
         effectiveFrom: '2026-01-01T00:00:00.000Z',
         input: 1,
@@ -222,7 +222,7 @@ test('MCode prices a custom compatible endpoint from project configuration witho
     }],
     models: [
       { runtime: 'mcode', provider: 'custom-provider', runtimeModel: 'fixture-command-model', rateModel: 'vendor-model' },
-      { runtime: 'mcode', provider: 'custom-provider', runtimeModel: 'step-5-preview', rateModel: 'step-5-preview' },
+      { runtime: 'mcode', provider: 'custom-provider', runtimeModel: 'fixture-step-model', rateModel: 'fixture-step-model' },
     ],
   }, null, 2));
 
