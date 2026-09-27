@@ -60,10 +60,19 @@ All notable changes to this project are documented here.
   published 0.4.1. `check:docs` now asserts the quoted version against `package.json`, so it
   cannot drift again.
 
+- A renamed column in a runtime's own storage no longer reads as zero. A `SELECT` against a
+  missing column does not throw: the row carries `undefined` and the aggregate treats it as
+  nothing, so a session reports a smaller bill with complete coverage instead of an error - the
+  silent-zero failure this project treats as its worst bug class, arriving through storage
+  rather than through pricing. Each adapter now declares the columns it reads, compares them
+  against `PRAGMA table_info` before computing any figure, and fails with one line naming the
+  table and column. An *extra* column is reported as `newer` rather than treated as a failure,
+  because a runtime that grows a column is normal. `doctor` carries a `storage` block with the
+  observed schema and a stable fingerprint, so a report says which layout it read.
 - Bun now runs on Windows in CI as well as Ubuntu. Windows previously failed 11 tests with
   `EBUSY: resource busy or locked, rm '<tmpdir>'`: the fixtures deleted a temp directory while
-  its SQLite handle was still open, which POSIX permits and Windows refuses. Every directory
-  cleanup now goes through `removeDirectory` in `tests/helpers/temp-dir.mjs`, which retries, and
+  its SQLite handle was still open, which POSIX permits and Windows refuses. Directory cleanup
+  now goes through `removeDirectory` in `tests/helpers/temp-dir.mjs`, which retries, and
   `tests/temp-cleanup-contract.test.mjs` fails if a new test deletes a directory with a bare
   `fs.rmSync`, so the failure cannot return quietly.
 

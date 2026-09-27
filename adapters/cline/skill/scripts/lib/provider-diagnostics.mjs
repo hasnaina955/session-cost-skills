@@ -155,7 +155,7 @@ export function explainModelMatch({
 }
 
 
-export function doctorReport({ configuration, runtimeId, providerId = null, modelId = null, knownModelIds = [], rateRecords = [] }) {
+export function doctorReport({ configuration, runtimeId, providerId = null, modelId = null, knownModelIds = [], rateRecords = [], storage = null }) {
   const providers = discoverProviderManifests(configuration, runtimeId).map((manifest) => ({
     id: manifest.id,
     version: manifest.version,
@@ -174,6 +174,10 @@ export function doctorReport({ configuration, runtimeId, providerId = null, mode
   return {
     schemaVersion: 1,
     runtime: runtimeId,
+    // The observed ledger schema and its fingerprint, so a report says exactly which storage
+    // layout it read. A `newer` status means the runtime added columns this version does not
+    // read; that is reported, not treated as a failure.
+    storage,
     configuration: configuration ? { sources: configuration.sources, profileSources: configuration.profileSources, selected: configuration.selected } : null,
     providers,
     explanation,
@@ -213,6 +217,7 @@ export function renderDiagnostics(report) {
     `runtime: ${report.runtime}`,
     `configuration sources: ${Object.keys(report.configuration?.sources ?? {}).join(', ') || 'none'}`,
     `providers: ${report.providers.length}`,
+    ...(report.storage ? [`storage schema: ${report.storage.status} (${report.storage.fingerprint})`] : []),
     ...report.warnings,
   ].join('\n');
 }

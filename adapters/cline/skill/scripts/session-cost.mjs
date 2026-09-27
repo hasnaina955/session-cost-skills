@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { fetchClineAccount, resolveClineCredential, summarizeClineAccount } from './lib/cline-account.mjs';
 import { now as nowMs, isoNow, utcDay } from './lib/clock.mjs';
+import { observeSchema, checkSchema, describeDrift } from './lib/schema-drift.mjs';
 import { writeDashboard } from './lib/dashboard.mjs';
 import {
   SCHEMA_VERSION,
@@ -684,11 +685,26 @@ try {
 } catch (error) {
   die(`Cline session database could not be read (${path.basename(dbPath)}): ${describeStorageError(error)}`);
 }
+// The columns this adapter reads from Cline's session database. Cline selects `*`, so a renamed
+// column arrives as `undefined` on the row and the aggregate treats it as zero rather than
+// failing. Declaring the columns turns that silent zero into a named error. Keep in sync with
+// the row accesses below.
+const REQUIRED_CLINE_SCHEMA = {
+  sessions: [
+    'session_id', 'parent_session_id', 'pid', 'status',
+    'started_at', 'ended_at', 'updated_at',
+    'provider', 'model', 'messages_path', 'metadata_json', 'prompt', 'is_subagent',
+  ],
+};
+
 try {
   // A database that parses but has no `sessions` table must fail rather than read as
   // an empty ledger, which would be indistinguishable from a real "no sessions" result.
   const all = db.prepare('SELECT * FROM sessions').all();
   if (!all.length) die('Cline session database contains no sessions');
+  const verdict = checkSchema(observeSchema(db, Object.keys(REQUIRED_CLINE_SCHEMA)), REQUIRED_CLINE_SCHEMA);
+  const drift = describeDrift(verdict, { runtimeId: 'Cline' });
+  if (drift) die(drift);
   const config = loadConfig(dataDir);
   const candidates = filterRows(all);
   const graph = createSessionGraph(all);
