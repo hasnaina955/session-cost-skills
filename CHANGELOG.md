@@ -76,6 +76,18 @@ All notable changes to this project are documented here.
   `tests/temp-cleanup-contract.test.mjs` fails if a new test deletes a directory with a bare
   `fs.rmSync`, so the failure cannot return quietly.
 
+- `tests/fuzz.test.mjs` fuzzes the untrusted-input surfaces with seeded, replayable mutations
+  (`FUZZ_SEED=<n>`): a session log torn mid-write, a truncated Cline message file, hostile provider
+  pricing pages, and unusable token counts. The invariant is that nothing throws uncaught, nothing
+  prints a stack trace or a local path, and nothing exits 0 with unparseable JSON. The in-process
+  parser targets run 2,000 mutations each; the two that spawn a real CLI run 100, because a
+  suite nobody runs catches nothing. Three findings are recorded in the file as comments rather
+  than papered over: `messages.jsonl` is not MCode's money path (the SQLite ledger is, which
+  changed what the test could honestly claim), `bandForTimestamp` throws on an unparseable
+  timestamp so banded rates cannot silently misprice, and `calculateTokenCost` coerces unusable
+  token counts - tracked as #67 and pinned by a `KNOWN GAP` test rather than fixed inside a
+  test-only change.
+
 ## 0.4.1
 
 ### Fixed
