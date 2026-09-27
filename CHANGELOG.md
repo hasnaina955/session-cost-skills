@@ -6,6 +6,16 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- `shared/timeline.mjs` builds a bounded, per-call timeline for a report: the time-ordered events a
+  cost-over-time chart, a cache-rate trend, or a "where did the money go" view needs. A report
+  exposes `calls` as a count, which is enough to say what a session cost and not enough to draw it.
+  Entries are appended by the same code path that prices the call, so a timeline entry and the
+  total it rolls up to cannot disagree, and past a limit the timeline becomes fixed-width time
+  buckets rather than an unbounded array in a file that is written to disk and embedded in a
+  dashboard. A bucket containing any unpriced call is `null` for the whole bucket, because summing
+  the priced calls and dropping the unpriced one would make it look cheaper than the truth. The
+  contract is extended in `contracts/normalized-report-v1.schema.json`; no adapter emits it yet,
+  which is the next step.
 - `tests/golden.test.mjs` checks the rendered output of ten scenarios - both runtimes, a single
   session, subagents included, a session list, CSV, rate coverage, and the two unknown-cost paths
   that exit 2 - against checked-in files, byte for byte. Every other assertion in the suite checks
