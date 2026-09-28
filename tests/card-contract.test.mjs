@@ -1,0 +1,80 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { renderCard } from '../shared/card.mjs';
+import { mcodeScript, createMCodeFixture, runJson } from './helpers/contract-fixtures.mjs';
+
+const PINNED = '2026-06-15T18:00:00.000Z';
+
+function report(sessionId = 'mcode-root') {
+  const fixture = createMCodeFixture();
+  return runJson(mcodeScript, fixture.dataDir, ['--session', sessionId, '--include-children', '--json'],
+    { ...fixture.environment, SESSION_COST_NOW: PINNED }).output;
+}
+
+test('a card is a self-contained, well-formed SVG carrying the figures', () => {
+  const svg = renderCard(report(), { generatedAt: '2026-06-15 18:00 UTC' });
+  assert.ok(svg.startsWith('<svg') && svg.endsWith('</svg>'), 'a card is one svg element');
+  assert.match(svg, /xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
+  assert.match(svg, /viewBox="0 0 1200 630"/, 'the Open Graph share size');
+  assert.match(svg, /<title>/, 'a card needs a title for a screen reader and a file listing');
+  assert.match(svg, /<desc>[^<]*\$0\.0005/, 'the description states the total');
+  assert.match(svg, /494 tokens/, 'the description states the token count');
+  assert.doesNotMatch(svg, /<script|<image|href=/i);
+  assert.doesNotMatch(svg, /https?:\/\/(?!www\.w3\.org)/, 'nothing may be referenced');
+});
+
+test('a card leaks no session title, id, or path by default', () => {
+  // The card is the artefact most likely to leave this machine, so identifiers are opt-in.
+  // A cost summary does not need the name of the session to be useful.
+  const source = report();
+  const svg = renderCard(source);
+  assert.ok(!svg.includes('Root contract fixture'), 'a session title must not appear');
+  assert.ok(!svg.includes('mcode-root'), 'a session id must not appear');
+  assert.match(svg, /no session data leaves this machine/, 'and it says so');
+});
+
+test('a title appears only when explicitly asked for', () => {
+  const svg = renderCard(report(), { includeTitle: true });
+  assert.ok(svg.includes('Root contract fixture'), 'includeTitle is how a title gets in');
+});
+
+test('markup in a title cannot escape the SVG', () => {
+  const source = { ...report(), title: '</text><script>alert(1)</script>' };
+  for (const includeTitle of [false, true]) {
+    const svg = renderCard(source, { includeTitle });
+    assert.doesNotMatch(svg, /<script>/, 'a title must never become a script element');
+  }
+});
+
+test('a card for a session with nothing priced says so rather than showing a zero', () => {
+  // The silent-zero failure, in the most shareable format this project has. A card showing
+  // $0.00 for a session nobody could price is the worst artefact it can produce, because it is
+  // the one designed to be passed on.
+  const svg = renderCard(report('mcode-unpriced'));
+  assert.doesNotMatch(svg, /\$0\.00(?![\d])/, 'no zero cost may stand in for an unknown one');
+  assert.match(svg, /unavailable/, 'the card states the cost is unavailable');
+  assert.match(svg, /no priced calls|partial coverage/i);
+  assert.match(svg, /could not be priced/, 'an unpriced model is disclosed, even when nothing priced');
+});
+
+test('a partially priced card discloses the gap', () => {
+  const svg = renderCard(report('mcode-partial'));
+  assert.match(svg, /partial coverage/i);
+  assert.doesNotMatch(svg, /\$0\.00(?![\d])/);
+});
+
+test('the plain variant carries a light background and no unresolved custom property', () => {
+  const dark = renderCard(report());
+  const plain = renderCard(report(), { plain: true });
+  assert.match(plain, /fill="#ffffff"/, 'a plain card is for pasting into a document');
+  assert.doesNotMatch(plain, /var\(--/, 'and does not depend on a CSS variable that will not resolve');
+  assert.notEqual(dark, plain);
+});
+
+test('a card is small enough to send and deterministic', () => {
+  const source = report();
+  const first = renderCard(source, { generatedAt: 'fixed' });
+  const second = renderCard(source, { generatedAt: 'fixed' });
+  assert.equal(first, second, 'the same report must produce the same card');
+  assert.ok(first.length < 20_000, `a card should stay small, got ${first.length} bytes`);
+});

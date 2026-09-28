@@ -33,7 +33,16 @@ export function escapeXml(value) {
     .replaceAll("'", '&apos;');
 }
 
-const PALETTE = ['var(--accent)', 'var(--accent-2)', 'var(--warning)', 'var(--danger)', 'var(--muted)'];
+/**
+ * The series palette.
+ *
+ * Two forms of the same five colours, because the two consumers need different ones: charts
+ * embedded in the dashboard inherit the page's CSS custom properties and must follow the active
+ * theme, while a standalone card carries its own background and so needs literal colours. Keeping
+ * them side by side here means the two lists cannot drift apart.
+ */
+export const PALETTE = ['var(--accent)', 'var(--accent-2)', 'var(--warning)', 'var(--danger)', 'var(--muted)'];
+export const PALETTE_HINT = ['#6ee7b7', '#79a9ff', '#f5c56b', '#ff8198', '#91a3bf'];
 
 /** A pattern for values that are not known, so "unpriced" is visible rather than absent. */
 const UNKNOWN_PATTERN_DEFS = `<pattern id="sc-unknown" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
