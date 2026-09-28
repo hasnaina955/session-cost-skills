@@ -4,6 +4,37 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Added
+
+- `tests/conformance/run-conformance.mjs`: the adapter conformance kit, which is issue #21's
+  "an adapter must pass the shared usage, selection, session-graph and cost-domain contracts before
+  it is accepted" turned from a review question into one command. It runs nine scenarios against any
+  adapter - contract validity, explicit and current selection, ambiguity refusal, child inclusion
+  exactly once, unknown cost staying unknown, a torn final record, the three output formats
+  agreeing, and the total being the sum of its parts. Both existing adapters pass it, and a new
+  adapter's acceptance test is one line calling `assertConformance`, which is the state WP-2.4
+  called done when.
+
+  It is deliberately not a value oracle. It does not know what a session should cost, because no
+  runtime's numbers are another's; it knows the things that must hold for any runtime whose numbers
+  can be trusted at all, and each of those is a way to produce a plausible number instead of an
+  error.
+
+  Writing it found two things the other tests did not. The two runtimes do not agree on the report
+  shape - Cline normalizes to `session.id`, MCode carries `sessionId` at the top level - so the kit
+  reads both rather than assuming one, and it sums `sessions[].metrics.cost`, the one per-session
+  field they share, so the total is checked against figures it did not accumulate itself. And
+  Cline has no session whose cost is wholly unknown, because it records a cost per call; its
+  rule-1 case is a partially priced session, where the disclosed amount is a lower bound and the CSV
+  charge cell must stay empty. That is the sharper test, and the kit now states rule 1 as the CSV
+  contract actually implements it - the charge is written only when the ledger disclosed the whole
+  of it, with a known zero as the one exception that may legitimately read `0`.
+
+  `docs/adapter-authoring.md` documents the adapter interface, the step contract, the exit codes,
+  the fixture contract, and the three rules the Cline port had to learn the hard way. It also says
+  plainly that `open`, `close`, `listSessions`, `resolveCurrent`, `buildReport` and `aggregate` are
+  not to be implemented yet, because nothing calls them.
+
 ### Changed
 
 - Cline runs on the shared kernel, the second runtime to do so. `adapters/cline/skill/scripts/session-cost.mjs`
