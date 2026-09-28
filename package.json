@@ -41,6 +41,8 @@
     "check:release": "node scripts/build-release.mjs --check",
     "check:version": "node scripts/check-version.mjs",
     "rehearse:release": "node scripts/rehearse-release.mjs",
+    "bench": "node scripts/bench.mjs",
+    "bench:quick": "node scripts/bench.mjs --quick",
     "skill:update": "node scripts/update-skill.mjs --apply",
     "check:skill-update": "node scripts/update-skill.mjs --check --runtime cline",
     "sync:provider-driver": "node scripts/sync-provider-driver.mjs",
