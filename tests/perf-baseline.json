@@ -1,0 +1,15 @@
+{
+  "shape": {
+    "sessions": 500,
+    "callsPerSession": 20,
+    "note": "quick shape"
+  },
+  "node": "v24.21.0",
+  "platform": "linux",
+  "timings": {
+    "single session": 74,
+    "--list 20 (cold)": 165,
+    "--list 20 (warm)": 161,
+    "--list 20 --rollup daily": 166
+  }
+}

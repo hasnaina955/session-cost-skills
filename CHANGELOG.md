@@ -226,6 +226,17 @@ All notable changes to this project are documented here.
   cost stays `unavailable` or `null`, never a zero, and a partial total is labelled rather than
   shown as a small number. Both `SKILL.md` files now steer the common case to `--brief` first.
 
+- `scripts/bench.mjs` measures the database-driven operations against a synthetic ledger and
+  fails if any of them regress. `--list 20` on a 10,000-session / 500,000-call ledger took
+  **eleven seconds** when it was first measured, because it builds a full `buildReport` per
+  session instead of reading one grouped query - and `shared/rollup-cache.mjs`, a per-session
+  aggregate cache invalidated by the ledger's own file fingerprint, exists for exactly that and
+  was never wired in. That is why the benchmark's cold and warm runs come out the same speed.
+  The bench is a regression gate, not a machine benchmark: an operation fails when it is much
+  slower than a recorded baseline for the same shape, refreshed deliberately with
+  `--write-baseline`, never automatically. The absolute-speed finding is filed as #87; the cache
+  wiring is a separate change because it touches the money path.
+
 - `shared/charts.mjs` renders bar, stacked-bar, and sparkline charts as inline SVG **strings**, built
   in Node at report time rather than drawn in the browser. That is a constraint, not a limitation:
   no script means the dashboard works with JavaScript disabled and prints to PDF, the existing

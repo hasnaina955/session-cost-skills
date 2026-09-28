@@ -52,6 +52,8 @@ Full instructions, including installing a published archive and using it as a CI
 [docs/updating.md](docs/updating.md). Keep the two installed copies separate. They share the
 public skill name but use different runtime ledgers and token semantics.
 
+`npm run bench` measures the database-driven operations against a synthetic ledger and fails if any of them regress. `--list 20` on a 10,000-session ledger took eleven seconds when first measured, because it built a full report per session - `shared/rollup-cache.mjs` is designed for exactly that and was never wired in (#87).
+
 MCode stores refreshed provider rates inside the skill folder, so a plain copy overwrites
 them; the update script backs that file up and restores it. See
 [docs/migration.md](docs/migration.md) for the manual equivalent.
