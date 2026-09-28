@@ -165,6 +165,44 @@ test('an adapter that cannot be driven is refused before any output', async () =
   assert.deepEqual(out, []);
 });
 
+test('an extra mode replaces the report but not the steps before it', async () => {
+  // The regression this pins: dispatching an extra mode straight after loadConfig skipped
+  // configAction, setup, diagnostic and applyDefaults, so `--account --init-config` stopped
+  // writing the config file and went to the network instead. Every earlier step must still run
+  // and must still be able to end the run.
+  const order = [];
+  let accountRan = false;
+  // id must be `cline`, because --account is a Cline-only flag and the kernel parses per runtime.
+  // An `mcode` adapter here would fail at parse with "unknown argument", which is a correct
+  // rejection but not the thing under test.
+  const adapter = kernelAdapter({
+    id: 'cline',
+    extraModes: { account: () => { order.push('account'); accountRan = true; return 0; } },
+    loadConfig: () => { order.push('loadConfig'); },
+    applyDefaults: () => { order.push('applyDefaults'); },
+    run: () => { order.push('run'); return 0; },
+  });
+
+  // No conflicting flag: the extra mode runs, and the report does not.
+  const { io } = capture();
+  assert.equal(await runCli(adapter, ['--account'], io), 0);
+  assert.deepEqual(order, ['loadConfig', 'applyDefaults', 'account']);
+  assert.equal(accountRan, true);
+
+  // A config action still wins, exactly as it did before the port.
+  order.length = 0;
+  const stopping = kernelAdapter({
+    id: 'cline',
+    extraModes: { account: () => { order.push('account'); return 0; } },
+    loadConfig: () => { order.push('loadConfig'); },
+    configAction: () => { order.push('configAction'); return 0; },
+    run: () => { order.push('run'); return 0; },
+  });
+  const second = capture();
+  assert.equal(await runCli(stopping, ['--account'], second.io), 0);
+  assert.deepEqual(order, ['loadConfig', 'configAction'], 'the config action must run, and the extra mode must not');
+});
+
 test('an adapter with no run step reports an incomplete answer, never a silent zero', async () => {
   // Every earlier step is optional, so a runtime with no setup wizard is normal. Reaching the end
   // of a parsed argv with no run step is not: returning 0 there would tell a caller a session cost

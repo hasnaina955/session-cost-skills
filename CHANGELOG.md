@@ -25,6 +25,18 @@ All notable changes to this project are documented here.
   mode runs after the configuration is loaded and instead of the report, so `--session-config`
   still applies to it and no invocation can produce both documents.
 
+  Review found that last claim was wrong on the first attempt and the shipped version is corrected:
+  the extra mode was dispatched straight after `loadConfig`, which silently skipped `configAction`,
+  `setup`, `diagnostic` and `applyDefaults`. `--account --init-config` therefore stopped writing the
+  config file and went to the network instead - verified by running the pre-port and post-port
+  builds side by side, since both still exited 2 and only the side effect differed. An extra mode now
+  replaces the report step alone, and a test pins the ordering.
+
+  Two wiring bugs in the same code are also fixed. The adapter's `aggregate` member called a
+  three-argument function with one, which would have left the aggregate's title and selection method
+  undefined. And `runOnce` re-implemented the database-open guards inline while the adapter's own
+  `open` member existed unused, so those guards now exist once.
+
 - MCode runs on the shared kernel. `adapters/mcode/skill/scripts/session-cost.mjs` went from 1,444
   lines to 12: it imports the adapter and calls `runCli`. The runtime-specific half moved, intact,
   to `adapters/mcode/skill/scripts/lib/runtime.mjs` (1,502 lines) - the ledger reads, the pricer,

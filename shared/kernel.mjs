@@ -158,29 +158,37 @@ export async function runCli(adapter, argv, { env = process.env, stdout = consol
     }
     context.opts = parsed.options;
 
-    // Every earlier step is optional, so a runtime with no setup wizard and no diagnostics is
-    // normal. `run` is not: an adapter that reaches the end of a parsed argv with nothing to do
-    // has no report to show, and returning 0 there would tell a caller a session cost $0.00 with
-    // no output at all. That is precisely the "unknown drawn as zero" failure this project exists
-    // to avoid, so it is an incomplete answer (2), not a success.
-    if (typeof adapter.run !== 'function') fail(`the ${adapter.id} adapter defines no run step, so there is nothing to report`);
-
-    // An extra mode replaces the report rather than running alongside it. It is dispatched after
-    // loadConfig so a runtime whose extra mode still needs the effective configuration gets it, and
-    // before the report so there is no code path on which both produce figures for one invocation.
+    // An extra mode replaces the *report* step, not the steps before it. That distinction is the
+    // whole bug this comment exists to prevent: dispatching an extra mode straight after loadConfig
+    // silently skipped configAction, setup, diagnostic and applyDefaults, so `--account --init-config`
+    // stopped writing the config file and went to the network instead. Every earlier step still has
+    // to run and still gets to end the run, exactly as it does for a normal report.
     const extraMode = selectedExtraMode(adapter, context.opts);
-    if (extraMode) {
-      const loaded = await runToStep(adapter, context, 'loadConfig');
-      if (typeof loaded === 'number') return loaded;
-      const result = await adapter.extraModes[extraMode](context);
-      if (typeof result === 'number') return result;
-      // An extra mode that returns nothing has produced its own output and is done. Falling through
-      // to the report here would print a second, unrelated document after the first.
-      return 0;
+    if (!extraMode && typeof adapter.run !== 'function') {
+      // A runtime with no setup wizard and no diagnostics is normal; one with nothing to report is
+      // not. Reaching the end of a parsed argv with no step that produces output would tell a caller
+      // a session cost $0.00 while printing nothing, which is the "unknown drawn as zero" failure
+      // this project exists to avoid. An incomplete answer (2), not a success.
+      fail(`the ${adapter.id} adapter defines no run step, so there is nothing to report`);
     }
 
-    const handled = await runToStep(adapter, context, 'run');
-    return typeof handled === 'number' ? handled : 0;
+    for (const step of RUN_STEPS) {
+      if (step === 'run') {
+        // The one place the two diverge. Every earlier step has already run and had its chance to
+        // return an exit code.
+        if (extraMode) {
+          const result = await adapter.extraModes[extraMode](context);
+          return typeof result === 'number' ? result : 0;
+        }
+        const result = await adapter.run(context);
+        return typeof result === 'number' ? result : 0;
+      }
+      const handler = adapter[step];
+      if (handler === undefined) continue;
+      const result = await handler(context);
+      if (typeof result === 'number') return result;
+    }
+    return 0;
   } catch (error) {
     if (error instanceof KernelError) {
       stderr(`session-cost: ${error.message}`);

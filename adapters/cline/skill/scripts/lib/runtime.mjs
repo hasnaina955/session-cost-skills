@@ -712,21 +712,11 @@ function dataDirFor() {
 async function runOnce() {
 const dataDir = dataDirFor();
 {
-const dbPath = path.join(dataDir, 'data', 'db', 'sessions.db');
-if (!fs.existsSync(dbPath)) die(`Cline session database not found: ${dbPath}`);
-// A truncated, locked, or non-SQLite file throws from the driver. Report it as a
-// readable condition naming the file, not as an uncaught stack trace quoting the
-// full local path, and never as an empty successful report.
-let db;
-try {
-  db = new DatabaseSync(dbPath, { readOnly: true });
-  // node:sqlite opens lazily, so a truncated or non-SQLite file only fails on the
-  // first statement. Probe the schema here, inside the guard, so the user gets one
-  // readable line instead of an uncaught driver stack trace quoting the install path.
-  db.prepare('SELECT session_id FROM sessions LIMIT 1').all();
-} catch (error) {
-  die(`Cline session database could not be read (${path.basename(dbPath)}): ${describeStorageError(error)}`);
-}
+// Opened through the adapter's own `open` member rather than a second inline copy, so the
+// "missing file" and "unreadable file" guards exist once. They carry the reason they exist: a
+// missing file must be named rather than reported as an empty session list, and node:sqlite opens
+// lazily so a truncated file only fails on the first statement.
+let db = openClineDatabase(dataDir);
 // The columns this adapter reads from Cline's session database. Cline selects `*`, so a renamed
 // column arrives as `undefined` on the row and the aggregate treats it as zero rather than
 // failing. Declaring the columns turns that silent zero into a named error. Keep in sync with
@@ -998,7 +988,7 @@ const clineAdapter = {
   listSessions: () => [],
   resolveCurrent: () => ({ sessionId: null, method: 'unique-active', requestedId: null, candidateIds: [] }),
   buildReport: () => ({}),
-  aggregate: (reports) => aggregateReports(reports),
+  aggregate: (reports) => aggregateReports(reports, 'aggregate'),
 
   extraModes: {
     account: (context) => runAccount(context.dataDir),
