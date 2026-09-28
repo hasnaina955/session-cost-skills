@@ -18,6 +18,8 @@ What was used, and what it cost
 | Total                  |     0.0005 |               — |        — | $0.000436 |
 Cache rate 13.6% of prompt — cached prompt was billed at 1/15th the fresh rate,
 which is why the all-in $0.926596/M sits far below the sticker input rate.
+
+  █████████████████▓▓▓▒▒▒▒░░░░  fresh input: 300  cached read: 60  cache write: 80  output: 30
 (Reasoning 0.0000 M is inside the output row, never added twice.)
 
 Rates actually billed
@@ -34,10 +36,10 @@ Rates actually billed
 Note: 2 sub-agent session(s) below this one are NOT included. Add --include-children for the end-to-end task total.
 
 By model
-| Provider    | Model                 | Calls | Tokens (M) | Cache rate |      Cost |
-| ----------- | --------------------- | ----- | ---------- | ---------- | --------- |
-| commandcode | fixture-command-model |     1 |     0.0002 |      13.3% | $0.000130 |
-| stepfun     | fixture-step-model    |     1 |     0.0003 |      13.8% | $0.000306 |
+| Provider    | Model                 | Calls | Tokens (M) | Cache rate | Share        |      Cost |
+| ----------- | --------------------- | ----- | ---------- | ---------- | ------------ | --------- |
+| commandcode | fixture-command-model |     1 |     0.0002 |      13.3% | █████        | $0.000130 |
+| stepfun     | fixture-step-model    |     1 |     0.0003 |      13.8% | ████████████ | $0.000306 |
 
 Rates for commandcode mirrored 2026-01-01T00:00:00.000Z from https://commandcode.ai/docs/resources/pricing-limits
 Rates for stepfun mirrored 2026-01-01T00:00:00.000Z from https://platform.stepfun.ai/docs/en/guides/pricing/details.md

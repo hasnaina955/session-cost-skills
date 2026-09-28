@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { fetchClineAccount, resolveClineCredential, summarizeClineAccount } from './lib/cline-account.mjs';
 import { now as nowMs, isoNow, utcDay } from './lib/clock.mjs';
+import { bar } from './lib/term-bars.mjs';
 import { observeSchema, checkSchema, describeDrift } from './lib/schema-drift.mjs';
 import { writeDashboard } from './lib/dashboard.mjs';
 import {
@@ -448,9 +449,19 @@ function render(report) {
     '',
     'By model:',
   ];
-  for (const model of [...t.models.values()].sort((a, b) => b.calls - a.calls)) {
+  // A bar makes the dominant model obvious without reading every figure. The cost label stays at
+  // the end of the line, and a model whose cost is not recorded is labelled rather than drawn as
+  // an empty bar, which would read as a model that cost nothing.
+  const ordered = [...t.models.values()].sort((a, b) => b.calls - a.calls);
+  // The bar is only drawn when the model actually has a cost to place on it. `costState` already
+  // knows the difference between "no calls", "not recorded", and a real figure, so the bar asks
+  // it rather than re-deriving the rule and risking a disagreement with the label beside it.
+  const priced = (m) => m.callCountKnown !== false && m.calls > 0 && m.unpricedCalls !== m.calls;
+  const modelMax = Math.max(...ordered.filter(priced).map((m) => Number(m.cost) || 0), 0);
+  for (const model of ordered) {
     const state = costState(model);
-    lines.push(`  ${model.provider}/${model.model}: ${integer(model.calls)} calls, ${millions(model.inputTokens + model.outputTokens)} tokens, ${state.label}`);
+    const share = priced(model) ? bar(model.cost, modelMax, { width: 12 }) : 'unrecorded';
+    lines.push(`  ${model.provider}/${model.model}: ${integer(model.calls)} calls, ${millions(model.inputTokens + model.outputTokens)} tokens, ${share} ${state.label}`);
   }
   if (report.includedChildren) {
     lines.push('', `Included subagent sessions: ${childRows.length}`);

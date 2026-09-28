@@ -17,6 +17,8 @@ What was used, and what it cost
 | Output                 |     0.0000 |               — |        — | $0.000010 |
 | Total                  |     0.0001 |               — |        — | $0.000060 |
 
+  █████████████████████████░░░  fresh input: 100  cached read: 0  cache write: 0  output: 10
+
 Rates actually billed
   fixture-command-model — flat $1.00 in / $0.10 cache read / $2.00 out / $0.25 cache write per 1M  (1 call(s), $0.000060)
     driver: commandcode@3.0.0 (sha256:<FINGERPRINT>)
@@ -27,9 +29,9 @@ Rates actually billed
   ! 1 call(s) / 0.0001 M tokens are unpriced and are NOT in the total above.
 
 By model
-| Provider    | Model                 | Calls | Tokens (M) | Cache rate |      Cost |
-| ----------- | --------------------- | ----- | ---------- | ---------- | --------- |
-| commandcode | fixture-command-model |     1 |     0.0001 |       0.0% | $0.000060 |
-| commandcode | unknown-model         |     1 |     0.0001 |       0.0% |  unpriced |
+| Provider    | Model                 | Calls | Tokens (M) | Cache rate | Share        |      Cost |
+| ----------- | --------------------- | ----- | ---------- | ---------- | ------------ | --------- |
+| commandcode | fixture-command-model |     1 |     0.0001 |       0.0% | ████████████ | $0.000060 |
+| commandcode | unknown-model         |     1 |     0.0001 |       0.0% | unpriced     |  unpriced |
 
 Rates for commandcode mirrored 2026-01-01T00:00:00.000Z from https://commandcode.ai/docs/resources/pricing-limits

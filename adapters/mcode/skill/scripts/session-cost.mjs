@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { writeDashboard } from './lib/dashboard.mjs';
 import { now as nowMs, isoNow, utcDay } from './lib/clock.mjs';
 import { createTimeline } from './lib/timeline.mjs';
+import { bar, compositionBar } from './lib/term-bars.mjs';
 import { observeSchema, checkSchema, describeDrift } from './lib/schema-drift.mjs';
 import {
   bandForTimestamp,
@@ -754,6 +755,19 @@ function renderText(rep, selection = null) {
   } else if (rep.cacheRate > 0) {
     L.push(`Cache rate ${(rep.cacheRate * 100).toFixed(1)}% of prompt.`);
   }
+
+  // Where the tokens went, in one line. Each segment is a distinct glyph as well as a distinct
+  // position, so the bar reads without colour, and every figure is repeated in the legend.
+  const mix = compositionBar([
+    { label: 'fresh input', value: rep.inputTokens },
+    { label: 'cached read', value: rep.cacheReadTokens },
+    { label: 'cache write', value: rep.cacheWriteTokens },
+    { label: 'output', value: rep.outputTokens },
+  ], { width: 28 });
+  if (mix.bar.trim() !== '') {
+    L.push('');
+    L.push(`  ${mix.bar}  ${mix.legend}`);
+  }
   if (rep.reasoningTokens) {
     L.push(`(Reasoning ${M(rep.reasoningTokens)} M is inside the output row, never added twice.)`);
   }
@@ -798,10 +812,22 @@ function renderText(rep, selection = null) {
   if (rep.multiModel) {
     L.push('');
     L.push('By model');
+    // A bar answers "which of these dominates?" at a glance, which is the question a cost report
+    // is usually asked. The cost figure stays in its own column: the bar is decoration, never the
+    // only copy of a value, and an unpriced model is marked rather than drawn as an empty bar.
+    const modelMax = Math.max(...rep.models.map((m) => (m.rateKnown ? Number(m.totalCost) || 0 : 0)), 0);
     L.push(...renderTable(
-      ['Provider', 'Model', 'Calls', 'Tokens (M)', 'Cache rate', 'Cost'],
-      rep.models.map((m) => [m.providerKey ?? '—', m.modelId, String(m.calls), M(m.totalTokens), `${(m.cacheRate * 100).toFixed(1)}%`, m.rateKnown ? USD(m.totalCost) : 'unpriced']),
-      ['l', 'l', 'r', 'r', 'r', 'r'],
+      ['Provider', 'Model', 'Calls', 'Tokens (M)', 'Cache rate', 'Share', 'Cost'],
+      rep.models.map((m) => [
+        m.providerKey ?? '—',
+        m.modelId,
+        String(m.calls),
+        M(m.totalTokens),
+        `${(m.cacheRate * 100).toFixed(1)}%`,
+        m.rateKnown ? bar(m.totalCost, modelMax, { width: 12 }) : 'unpriced',
+        m.rateKnown ? USD(m.totalCost) : 'unpriced',
+      ]),
+      ['l', 'l', 'r', 'r', 'r', 'l', 'r'],
     ));
   }
   if (rep.billedSessions.length > 1) {

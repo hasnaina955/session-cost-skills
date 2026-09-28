@@ -21,8 +21,8 @@ Recorded cost: $0.150000 (complete)
 Cost coverage: complete
 
 By model:
-  cline/root-model: 1 calls, 0.0011 M tokens, $0.100000
-  cline/switched-model: 1 calls, 0.0006 M tokens, $0.050000
+  cline/root-model: 1 calls, 0.0011 M tokens, ████████████ $0.100000
+  cline/switched-model: 1 calls, 0.0006 M tokens, ██████       $0.050000
 
 Excluded subagent sessions: 2
   - cline-child
