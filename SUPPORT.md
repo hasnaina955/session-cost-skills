@@ -57,6 +57,11 @@ Get-FileHash .\session-cost-cline-v0.3.0.zip -Algorithm SHA256
 Confirm what you installed with `--version`. The release version contract, archive contents,
 and the full release process are documented in [docs/release.md](docs/release.md).
 
+For a single customer-facing document that covers installation, configuration, the privacy and
+network disclosures, credential handling, the accounting differences between the two runtimes, and
+troubleshooting, see [docs/session-cost-support-pack.html](docs/session-cost-support-pack.html). It
+is the document to send when someone is already installed and asks how the numbers are produced.
+
 ## Optional paid support
 
 Paid support may cover installation, compatibility investigation, confirmed bug triage, runtime migration guidance, or sponsored development. It does not remove MIT rights, relicense the code, rebrand the public project, or withhold functionality already available in the repository.
