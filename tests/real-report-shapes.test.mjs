@@ -280,12 +280,22 @@ test('every flag the schema accepts is actually acted on by both CLIs', async ()
   //
   // This asserts the cheap, decisive thing: each declared option is referenced by the
   // adapter that claims to support it.
+  //
+  // The search covers the whole skill scripts directory rather than one named file, because
+  // the option flow no longer lives in a single entry point: MCode moved its runtime into
+  // lib/runtime.mjs when it was ported onto the kernel, and the entry point became a
+  // twelve-line caller. Pinning this to session-cost.mjs would have made the test fail on a
+  // layout change while saying nothing about whether the flag is still read.
   const { RUNTIME_FLAGS } = await import('../shared/cli-args.mjs');
   for (const runtime of ['cline', 'mcode']) {
-    const source = fs.readFileSync(path.join(root, 'adapters', runtime, 'skill', 'scripts', 'session-cost.mjs'), 'utf8');
+    const scriptsDir = path.join(root, 'adapters', runtime, 'skill', 'scripts');
+    const sources = fs.readdirSync(scriptsDir, { recursive: true })
+      .filter((file) => String(file).endsWith('.mjs'))
+      .map((file) => fs.readFileSync(path.join(scriptsDir, String(file)), 'utf8'))
+      .join('\n');
     for (const [flag, spec] of Object.entries(RUNTIME_FLAGS[runtime])) {
       if (['help', 'version', 'dataDir', 'out'].includes(flag)) continue; // handled before or outside the option flow
-      assert.ok(source.includes(`opts.${spec.key}`),
+      assert.ok(sources.includes(`opts.${spec.key}`),
         `${runtime}: --${flag} is in the schema but the CLI never reads opts.${spec.key}`);
     }
   }

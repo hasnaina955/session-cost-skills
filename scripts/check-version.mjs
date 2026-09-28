@@ -39,15 +39,37 @@ assert.ok(
 // Every adapter CLI must expose the installed version. The flag itself is defined in
 // the shared argument schema, so assert the CLI routes through that schema rather than
 // grepping for a literal that legitimately moves when the parser is refactored.
+//
+// The search spans the whole scripts directory rather than the entry point alone. MCode moved
+// its runtime into lib/runtime.mjs when it was ported onto the kernel, leaving a twelve-line
+// entry point, so a check pinned to that one file would have reported a missing version banner
+// for a CLI that prints it correctly. What matters is that the runtime reports its own id and
+// parses against its own schema, wherever those lines now live.
 const schema = read('shared/cli-args.mjs');
 for (const runtime of RUNTIMES) {
-  const cli = read(`adapters/${runtime}/skill/scripts/session-cost.mjs`);
+  const scriptsDir = path.join(root, 'adapters', runtime, 'skill', 'scripts');
+  const cli = fs.readdirSync(scriptsDir, { recursive: true })
+    .filter((file) => String(file).endsWith('.mjs'))
+    .map((file) => read(path.join('adapters', runtime, 'skill', 'scripts', String(file))))
+    .join('\n');
   assert.ok(cli.includes(`versionBanner('${runtime}')`), `the ${runtime} CLI must report its own runtime id`);
   assert.ok(cli.includes('parseCliArgs'), `the ${runtime} CLI must parse arguments through the shared schema`);
   assert.ok(cli.includes(`runtimeId: '${runtime}'`), `the ${runtime} CLI must parse against its own runtime schema`);
-  const helpIndex = cli.search(/--data-dir/);
-  assert.ok(helpIndex > -1, `the ${runtime} CLI must document --data-dir`);
-  assert.ok(cli.slice(helpIndex, helpIndex + 400).includes('--version'), `the ${runtime} help text must document --version`);
+  // The help text is one block in the adapter, and several shared modules mention --data-dir as a
+  // flag definition. Searching the concatenated sources for the first match therefore finds a
+  // parser table, not the usage line, so the pairing is asserted against the help text alone:
+  // a runtime that stops documenting a flag is a support problem, and a parser entry is not
+  // documentation.
+  //
+  // The help text is located by the usage sentence each runtime opens it with, because the two are
+  // not stored the same way: MCode holds it in a HELP_TEXT constant (it has to, since the adapter
+  // returns it to the kernel) while Cline still prints a literal from printHelp. Both contain that
+  // sentence, so both are found without either being rewritten first.
+  const usageStart = cli.search(/session-cost — token usage and/);
+  assert.ok(usageStart > -1, `the ${runtime} CLI must print a usage banner`);
+  const helpText = cli.slice(usageStart, usageStart + 4000);
+  assert.ok(helpText.includes('--data-dir'), `the ${runtime} CLI must document --data-dir`);
+  assert.ok(helpText.includes('--version'), `the ${runtime} help text must document --version`);
 }
 for (const flag of ['version: {', 'help: {']) {
   assert.ok(schema.includes(flag), `the shared argument schema must define ${flag.replace(':', '')}`);
