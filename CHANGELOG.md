@@ -6,6 +6,22 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- `docs/session-cost-support-pack.html`: the one customer-facing document to send when someone is
+  already installed and asks where the numbers come from. It covers the exact install paths, the
+  config layers, what each operation reads and writes, where the network is used, how Cline
+  credentials resolve, the accounting that differs between the two runtimes, and troubleshooting.
+  It is registered in `check:docs`, and its version, Node floor, Bun support, child-session, and
+  config-key claims are asserted against `package.json`, `engines.node`, and the session-config
+  schema rather than trusted. That matters because the pack was written against 0.2.0 and had
+  drifted on every one of those points while staying quietly readable: it promised a 22.13 floor
+  the project had raised to 22.15, told Windows users Bun was supported when CI only tests it on
+  Ubuntu, claimed MCode stopped at direct children when both adapters have since included all
+  descendants, and showed three configuration keys that are not in the schema - instructions that
+  would have produced a file the CLI then rejected. A document that is confidently wrong is worse
+  than a missing one, so the checks now fail on the drift rather than on its absence. Registering
+  it also caught a stale bundle folder name on its first run, the same class
+  of error `check:docs` already guards in the selling guide.
+
 - `docs/roadmap-plan.md` now opens with a status table recording what has shipped, what is still
   ahead, and the two findings deliberately left as issues rather than quietly fixed:
   `calculateTokenCost` coerces unusable token counts into a finite `0` (#67), and

@@ -11,6 +11,7 @@ const documents = [
   'LICENSE',
   'CHANGELOG.md',
   'docs/gumroad-selling-guide.html',
+  'docs/session-cost-support-pack.html',
   'docs/principles.md',
   'adapters/cline/USAGE.md',
   'adapters/cline/skill/SKILL.md',
@@ -69,5 +70,50 @@ assert.ok(
 );
 
 assert.match(sources.get('CONTRIBUTING.md'), /\[docs\/principles\.md\]\(docs\/principles\.md\)/, 'CONTRIBUTING links the principles');
+
+// The support pack is the document a customer is pointed at when something is already installed and
+// already paid for, so a stale figure in it is worse than no document. Its version, its Node floor,
+// and its support promise are asserted here against the sources of truth rather than trusted: the
+// pack was written against 0.2.0 and kept claiming that version, a 22.13 floor, MCode direct-children
+// only, and Bun on Windows, all of which were true when written and none of which is true now.
+const pack = sources.get('docs/session-cost-support-pack.html');
+const supportFloor = pkg.engines.node.replace(/^>=/, '');
+assert.ok(
+  pack.includes(`Repository version: <strong>${pkg.version}</strong>`),
+  `support pack states a version that does not match package.json (${pkg.version})`,
+);
+assert.ok(
+  pack.includes(`Session Cost Skills ${pkg.version}`),
+  `support pack footer states a version that does not match package.json (${pkg.version})`,
+);
+assert.ok(
+  pack.includes(`Node.js ${supportFloor} or newer`),
+  `support pack states a Node floor that does not match engines.node (${pkg.engines.node})`,
+);
+assert.doesNotMatch(
+  pack,
+  /MCode 0\.\d+\.\d+ includes direct children|includes direct child sessions only/i,
+  'support pack still claims MCode stops at direct children; both adapters include all descendants',
+);
+// Bun is CI-tested on Ubuntu only. Advertising it on Windows invites a support ticket about the
+// 11 EBUSY failures that the CI comment already documents as expected.
+assert.doesNotMatch(
+  pack,
+  /Bun (?:1\.\d+\.\d+ or newer is optional|CI-tested for adapter tests)/i,
+  'support pack advertises Bun without the Ubuntu-only limitation',
+);
+assert.match(pack, /Ubuntu only/i, 'support pack must state that Bun is CI-tested on Ubuntu only');
+// The four config keys are required by the schema; a pack showing an invented key teaches a
+// customer to write a file the CLI then rejects.
+for (const key of ['schemaVersion', 'runtimeDefaults', 'providers', 'models']) {
+  assert.ok(pack.includes(`"${key}"`), `support pack omits the required config key ${key}`);
+}
+for (const key of ['standingSummary', 'warnOnCacheRateBelow', 'defaultFormat']) {
+  assert.doesNotMatch(
+    pack,
+    new RegExp(`"${key}"`),
+    `support pack shows config key ${key}, which is not in the session-config schema`,
+  );
+}
 
 console.log(`Documentation terms, encoding, install paths, and contacts verified (${documents.length} files).`);
