@@ -35,6 +35,20 @@ All notable changes to this project are documented here.
   `█` as mojibake. Cline's bar asks the same `costState` helper its label uses, so the two cannot
   disagree about whether a model has a cost.
 
+- `shared/contrast.mjs` computes WCAG contrast ratios, and `tests/theme-contrast.test.mjs`
+  audits the dashboard's actual dark and light palettes against them. The audit found that the
+  light theme never declared `--danger` at all, so every danger-coloured chart mark in light mode
+  resolved to nothing; it now declares a value at 6:1. The page also honours
+  `prefers-color-scheme`, so a reader whose system asks for light no longer sees a dark page flash
+  before the script decides. The test asserts the maths against the two WCAG anchors first, so a
+  failure means a colour rather than a broken helper.
+- `shared/card.mjs` renders a 1200x630 standalone SVG summary: the total, the token mix, the cache
+  rate, the top models, and the coverage verdict. SVG rather than PNG, so there is no encoder, no
+  dependency, and the file renders anywhere. **Privacy by default** - no session title, id, or
+  path appears unless the caller asks, because a card is the artefact most likely to leave the
+  machine and a cost summary does not need a session name to be useful. A card for a session
+  nothing could be priced says `unavailable` and names the unpriced models; it never shows $0.00.
+
 - `shared/charts.mjs` renders bar, stacked-bar, and sparkline charts as inline SVG **strings**, built
   in Node at report time rather than drawn in the browser. That is a constraint, not a limitation:
   no script means the dashboard works with JavaScript disabled and prints to PDF, the existing
