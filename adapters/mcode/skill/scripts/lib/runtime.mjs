@@ -41,6 +41,7 @@ import { counterfactualCost, renderCounterfactualText } from './counterfactual.m
 import { createLiveSurface, nextInterval, renderLiveFrame } from './live-view.mjs';
 import { buildProviderProfile, renderSetupText } from './setup.mjs';
 import { compareToBaseline, renderInsightsText } from './insights.mjs';
+import { renderBriefText, briefJson } from './brief.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RATES_PATH = process.env.SESSION_COST_RATES_PATH
@@ -112,6 +113,7 @@ const HELP_TEXT = `session-cost — token usage and provider-rate cost of a Mini
   --top <n>               with --list, rank sessions by cost, most expensive first
   --explain               show the arithmetic behind the reported cost
   --csv                   emit CSV, one row per session
+  --brief                 a short answer: the cost, tokens, cache rate, and one caveat
   --budget <amount>       warn and exit non-zero when a session passes this amount
   --counterfactual <m>     estimate what this session would cost on model <m>
   --setup                  guided custom-provider setup; prints a paste-ready config
@@ -1479,6 +1481,10 @@ async function main(context) {
       })));
     } else if (opts.csv) {
       if (!quiet) console.log(renderCsv(enhanceReport(report, selection)));
+    }
+    else if (opts.brief) {
+      const enhanced = enhanceReport(report, selection);
+      console.log(opts.json ? JSON.stringify(briefJson(enhanced), null, 2) : renderBriefText(enhanced));
     }
     else if (opts.json) { if (!quiet) console.log(JSON.stringify(enhanceReport(report, selection), null, 2)); }
     else if (opts.explain) { if (!quiet) console.log(renderExplanation(enhanceReport(report, selection))); }

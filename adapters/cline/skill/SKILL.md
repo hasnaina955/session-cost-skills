@@ -31,8 +31,9 @@ Report what a Cline session consumed and what Cline recorded it as costing. Read
    model/provider diagnostics. Cline cost remains runtime-recorded; compatible provider drivers supply
    model and provider identity but do not replace recorded cost with an API estimate.
 
-5. Read the report's **Snapshot**, **Token totals**, **Recorded cost**, **Cost coverage**, and
-   **By model** lines before answering.
+5. When the question is more than "what did this cost", read the report's **Snapshot**, **Token
+   totals**, **Recorded cost**, **Cost coverage**, and **By model** lines before answering. For a
+   bare cost question, `--brief` is the whole answer.
 6. Return a compact block containing:
    - billing classification and its evidence;
    - recorded cost and whether it is complete, partial, included/free, or not recorded;

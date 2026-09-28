@@ -22,11 +22,14 @@ matching rules — read it before changing the script or explaining an unexpecte
 
 ## Command modes
 
-Run the bundled script from the installed MCode skill:
+Run the bundled script from the installed MCode skill. Answer the common case - "what did this
+cost?" - with `--brief` first, which prints the cost, tokens, cache rate, top model, and any single
+caveat in a few lines. Reach for the full report only when the question needs detail.
 
 ```powershell
 $SessionCost = "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs"
 
+node $SessionCost --brief
 node $SessionCost
 node $SessionCost --last
 node $SessionCost --today
