@@ -94,6 +94,28 @@ export function parseKernelArgs(adapter, argv) {
 export const RUN_STEPS = STEP_HOOKS;
 
 /**
+ * The name of an extra mode the options select, if any.
+ *
+ * A runtime can offer a mode that is not a session report at all - Cline's `--account` reads the
+ * account API rather than the local ledger and produces a different document. Declaring it as an
+ * extraMode rather than branching inside the report step keeps that separation visible: there is
+ * no code path on which an account figure can reach `billing`, because the two never share a
+ * function. The roadmap's rule 3 depends on this, and a branch inside main() is exactly how it
+ * would be lost.
+ *
+ * Returns undefined when no extra mode was requested, so the caller can fall through to the report.
+ */
+export function selectedExtraMode(adapter, options) {
+  const modes = adapter.extraModes;
+  if (!modes || typeof modes !== 'object') return undefined;
+  for (const [name, handler] of Object.entries(modes)) {
+    if (typeof handler !== 'function') continue;
+    if (options[name] === true) return name;
+  }
+  return undefined;
+}
+
+/**
  * Run every step up to and including `stepName`.
  *
  * A step returning `undefined` means "nothing to do, carry on". A step returning a number is an
@@ -142,6 +164,20 @@ export async function runCli(adapter, argv, { env = process.env, stdout = consol
     // no output at all. That is precisely the "unknown drawn as zero" failure this project exists
     // to avoid, so it is an incomplete answer (2), not a success.
     if (typeof adapter.run !== 'function') fail(`the ${adapter.id} adapter defines no run step, so there is nothing to report`);
+
+    // An extra mode replaces the report rather than running alongside it. It is dispatched after
+    // loadConfig so a runtime whose extra mode still needs the effective configuration gets it, and
+    // before the report so there is no code path on which both produce figures for one invocation.
+    const extraMode = selectedExtraMode(adapter, context.opts);
+    if (extraMode) {
+      const loaded = await runToStep(adapter, context, 'loadConfig');
+      if (typeof loaded === 'number') return loaded;
+      const result = await adapter.extraModes[extraMode](context);
+      if (typeof result === 'number') return result;
+      // An extra mode that returns nothing has produced its own output and is done. Falling through
+      // to the report here would print a second, unrelated document after the first.
+      return 0;
+    }
 
     const handled = await runToStep(adapter, context, 'run');
     return typeof handled === 'number' ? handled : 0;

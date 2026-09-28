@@ -6,6 +6,25 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- Cline runs on the shared kernel, the second runtime to do so. `adapters/cline/skill/scripts/session-cost.mjs`
+  went from 898 lines to 9. The runtime-specific half moved intact to
+  `adapters/cline/skill/scripts/lib/runtime.mjs` (1,020 lines). As with MCode this was code motion
+  rather than a rewrite: all ten golden files are byte-identical to the baseline captured before
+  either port, and `--help` was diffed line by line against a stashed pre-port build.
+
+  Cline needed one thing MCode did not. Its `die()` called `process.exit(2)` from the inside of
+  the report path, which is untestable and unsafe on Windows, where exiting while a database
+  handle is open trips a libuv assertion. It now raises the kernel's `KernelError`, so the exit
+  code is the kernel's decision and no function below the adapter decides it. `--account` also
+  stopped being a branch inside the report and became an `extraModes` entry: it reads a different
+  source and produces a different document, and there is now no function through which an account
+  figure could reach `billing`. That is accounting rule 3 made structural instead of promised, and
+  a test asserts the report step does not mention `account` at all.
+
+  The kernel gained the extra-mode dispatch WP-2.3 assumed and which WP-2.1 had not built. An extra
+  mode runs after the configuration is loaded and instead of the report, so `--session-config`
+  still applies to it and no invocation can produce both documents.
+
 - MCode runs on the shared kernel. `adapters/mcode/skill/scripts/session-cost.mjs` went from 1,444
   lines to 12: it imports the adapter and calls `runCli`. The runtime-specific half moved, intact,
   to `adapters/mcode/skill/scripts/lib/runtime.mjs` (1,502 lines) - the ledger reads, the pricer,
