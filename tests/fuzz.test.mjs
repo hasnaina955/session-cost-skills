@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { seededRandom } from './helpers/contract-fixtures.mjs';
 import { parseCommandCodeRates, parseStepFunRates, calculateTokenCost } from '../adapters/mcode/skill/scripts/lib/rates.mjs';
-import { mcodeScript, clineScript, createMCodeFixture, createClineFixture, runCli } from './helpers/contract-fixtures.mjs';
+import { mcodeScript, clineScript, createMCodeFixture, createClineFixture, runCli, runJson } from './helpers/contract-fixtures.mjs';
 
 /**
  * Fuzzing the hostile-input surfaces.
@@ -137,37 +138,60 @@ test('a hostile pricing page yields no models rather than wrong ones', () => {
   }
 });
 
-test('KNOWN GAP: calculateTokenCost coerces unusable token counts instead of refusing them', () => {
-  // Found by the fuzzer, and pinned rather than quietly fixed here: changing pricing behaviour
-  // belongs in its own change with its own decision about what the values mean.
-  //
-  // Two unsafe coercions, both in the direction of a *smaller or absent* bill:
-  //
-  //   1. A negative count produces a negative cost component, which reduces a total.
-  //   2. An unparseable count ("NaN", "abc", "", " ") produces 0 - a finite, confident number
-  //      for a value that is not known. That is the silent-zero failure this project treats as
-  //      its worst class, arriving one layer below the report.
-  //   3. "Infinity" passes straight through as Infinity.
-  //
-  // Reachability today: the ledger columns are INTEGER, so the values arriving from SQLite are
-  // numbers or null, and a null count legitimately means zero tokens. So no current caller
-  // triggers this. The risk is the contract - a helper that answers 0 for a value it could not
-  // read is one refactor away from being fed a string, and nothing in the type stops it.
-  //
-  // The fix is a decision, not a patch: does an unusable count mean "no tokens" (0), or "not
-  // known" (null, which would make the whole session cost unknown)? The second is consistent
-  // with principle 1 and is what the rest of the report already does. When that is decided, this
-  // test is inverted and the coercion is removed.
+test('an unusable token count makes a cost component unknown, never a smaller number', () => {
+  // Issue #67. A count is usable when it is null - a call that recorded no tokens, which costs
+  // nothing - or a finite, non-negative number. Everything else was once coerced, and every
+  // coercion moved a bill *down*: a negative count subtracted, a non-numeric or empty value
+  // became a confident 0, and Infinity passed through as Infinity.
   const rate = { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 0.25 };
 
-  const negative = calculateTokenCost({ input_tokens: -1, output_tokens: 100 }, rate);
-  assert.ok(negative.input < 0, `expected the current negative behaviour, got ${String(negative.input)}`);
+  // A negative count subtracts from a total. That is the under-reporting direction.
+  assert.equal(calculateTokenCost({ input_tokens: -1, output_tokens: 100 }, rate).input, null);
 
-  for (const unusable of ['NaN', 'abc', '', ' ']) {
-    const cost = calculateTokenCost({ input_tokens: unusable, output_tokens: 100 }, rate);
-    assert.equal(cost.input, 0, `"${unusable}" currently reads as 0; invert this when it is fixed`);
+  // A field that is not a number at all is not "no tokens".
+  for (const unusable of ['abc', 'N/A', 'NaN', {}, []]) {
+    assert.equal(calculateTokenCost({ input_tokens: unusable, output_tokens: 100 }, rate).input, null,
+      `${JSON.stringify(unusable)} must not become a confident cost`);
   }
 
-  const infinite = calculateTokenCost({ input_tokens: 'Infinity', output_tokens: 100 }, rate);
-  assert.equal(infinite.input, Number.POSITIVE_INFINITY, 'Infinity currently passes through');
+  // Overflow is not a token total.
+  assert.equal(calculateTokenCost({ input_tokens: Infinity, output_tokens: 100 }, rate).input, null);
+  assert.equal(calculateTokenCost({ input_tokens: 'Infinity', output_tokens: 100 }, rate).input, null);
+
+  // The legitimate cases are untouched: null means "no tokens", and a real number is used.
+  assert.equal(calculateTokenCost({ input_tokens: null, output_tokens: 100 }, rate).input, 0);
+  assert.equal(calculateTokenCost({ input_tokens: 0, output_tokens: 100 }, rate).input, 0);
+  assert.ok(Math.abs(calculateTokenCost({ input_tokens: 500, output_tokens: 100 }, rate).input - 0.0005) < 1e-9);
+  // An unusable input does not poison the output component, which is independently computable.
+  const cost = calculateTokenCost({ input_tokens: 'abc', output_tokens: 100 }, rate);
+  assert.equal(cost.input, null);
+  assert.ok(Math.abs(cost.output - 0.0002) < 1e-9);
+});
+
+
+test('a negative token count degrades a session to partial coverage instead of understating it', () => {
+  // The whole reason #67 mattered. A negative count does not just misprice one call: if it
+  // slipped through, it would reduce a total, so the session would report *less than it spent*.
+  // The fix routes that call into the same "no cost" path a model with no rate takes, so the
+  // report names the gap instead of quietly shrinking.
+  const fixture = createMCodeFixture();
+  const dbPath = path.join(fixture.dataDir, 'v2', 'sqlite', 'runtime-state.sqlite');
+  const db = new DatabaseSync(dbPath);
+  db.exec("INSERT INTO local_runtime_token_usage VALUES (900001, 'mcode-root', 'root', 'neg-1', 1781524800000, -50, 20, 0, 0, 0)");
+  db.close();
+
+  const report = runJson(mcodeScript, fixture.dataDir, ['--session', 'mcode-root', '--json'],
+    { ...fixture.environment, SESSION_COST_NOW: '2026-06-15T18:00:00.000Z' }).output;
+  assert.equal(report.billing.coverage, 'partial',
+    'a negative count must make the session partial, not complete at a smaller total');
+  assert.equal(report.billing.amountUsd, null,
+    'a partial session states no total rather than a smaller one');
+  assert.ok(report.coverage.unknownReasons.some((reason) => reason.length > 0),
+    'the reason must be named');
+
+  // And the timeline, which is the other place a zero could masquerade, is null for that call.
+  if (report.timeline) {
+    assert.equal(report.timeline.some((entry) => entry.costUsd === null), true,
+      'the negative-cost call must be null in the timeline, not zero');
+  }
 });

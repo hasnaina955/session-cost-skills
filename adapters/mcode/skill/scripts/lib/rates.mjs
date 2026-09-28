@@ -669,14 +669,43 @@ export function ratesForBand(rate, band = 'flat') {
   return Object.fromEntries(REQUIRED_RATE_COMPONENTS.map((component) => [component, pick(component)]));
 }
 
+/**
+ * Whether a token count can be used to price a call.
+ *
+ * A count is usable when it is `null` or `undefined` - a call that recorded no tokens has a real,
+ * honest count of zero - or a finite, non-negative number. Everything else means the count was
+ * corrupted, not that it was small:
+ *
+ *   - a non-numeric value ('abc', 'N/A', '', {}, NaN) - the field did not hold a number at all;
+ *   - Infinity - arithmetic overflow, not a token total;
+ *   - a negative number - a count that subtracts, which would reduce the total it feeds.
+ *
+ * The earlier behaviour, `Number(value) || 0`, turned all of these into either 0 or a negative,
+ * so a corrupt field moved a bill *down*. That is the direction this project refuses, which is
+ * why the function below now refuses rather than coerces.
+ */
+export function tokenCountIsUsable(value) {
+  if (value === null || value === undefined) return true;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return false;
+  return value >= 0;
+}
+
 export function calculateTokenCost(tokens, rate, band = 'flat') {
   const components = ratesForBand(rate, band);
-  const count = (camel, snake) => Number(tokens[camel] ?? tokens[snake]) || 0;
+  // `Number(value) || 0` used to run here, and it did two dishonest things: NaN, a non-numeric
+  // string, or an empty value became a confident 0, and a negative or Infinity passed through
+  // unchanged. A count that is not usable makes its component unknown, never a smaller number.
+  const count = (camel, snake) => {
+    const raw = tokens[camel] ?? tokens[snake];
+    if (!tokenCountIsUsable(raw)) return null;
+    return Number(raw) || 0;
+  };
+  const component = (raw, rateAmount) => (raw === null ? null : (raw / 1_000_000) * rateAmount);
   return {
-    input: count('inputTokens', 'input_tokens') / 1_000_000 * components.input,
-    output: count('outputTokens', 'output_tokens') / 1_000_000 * components.output,
-    cacheRead: count('cacheReadTokens', 'cache_read_tokens') / 1_000_000 * components.cacheRead,
-    cacheWrite: count('cacheWriteTokens', 'cache_write_tokens') / 1_000_000 * components.cacheWrite,
+    input: component(count('inputTokens', 'input_tokens'), components.input),
+    output: component(count('outputTokens', 'output_tokens'), components.output),
+    cacheRead: component(count('cacheReadTokens', 'cache_read_tokens'), components.cacheRead),
+    cacheWrite: component(count('cacheWriteTokens', 'cache_write_tokens'), components.cacheWrite),
   };
 }
 
