@@ -18,6 +18,8 @@ What was used, and what it cost
 | Total                  |     0.0005 |               — |        — | $0.000460 |
 Cache rate 13.0% of prompt — cached prompt was billed at 1/15th the fresh rate,
 which is why the all-in $0.931174/M sits far below the sticker input rate.
+
+  ██████████████████▓▓▓▒▒▒▒░░░  fresh input: 320  cached read: 60  cache write: 82  output: 32
 (Reasoning 0.0000 M is inside the output row, never added twice.)
 
 Rates actually billed
@@ -32,10 +34,10 @@ Rates actually billed
   band split: 0 off-peak · 0 peak · 4 flat
 
 By model
-| Provider    | Model                 | Calls | Tokens (M) | Cache rate |      Cost |
-| ----------- | --------------------- | ----- | ---------- | ---------- | --------- |
-| commandcode | fixture-command-model |     3 |     0.0002 |      11.6% | $0.000154 |
-| stepfun     | fixture-step-model    |     1 |     0.0003 |      13.8% | $0.000306 |
+| Provider    | Model                 | Calls | Tokens (M) | Cache rate | Share        |      Cost |
+| ----------- | --------------------- | ----- | ---------- | ---------- | ------------ | --------- |
+| commandcode | fixture-command-model |     3 |     0.0002 |      11.6% | ██████       | $0.000154 |
+| stepfun     | fixture-step-model    |     1 |     0.0003 |      13.8% | ████████████ | $0.000306 |
 
 By session
 | Session          | Role   | Calls | Tokens (M) | Cache rate |      Cost |

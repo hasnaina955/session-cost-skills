@@ -19,6 +19,8 @@ What was used, and what it cost
 | Total                  |     0.0013 |               — |        — |    — |
 Cache rate 69.2% of prompt.
 
+  ████████▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░  fresh input: 400  cached read: 900  cache write: 0  output: 40
+
 Rates actually billed
   unknown-model — no complete effective rate for 1 call(s), 0.0013 M tokens; missing cacheRead, cacheWrite, input, output
   band split: 0 off-peak · 0 peak · 1 flat

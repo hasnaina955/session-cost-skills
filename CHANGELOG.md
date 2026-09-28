@@ -23,6 +23,18 @@ All notable changes to this project are documented here.
   whole point of drawing in Node is that the page still reads without it. A 2,000-call session
   produces a 99 KB file and the page says when a timeline has been bucketed.
 
+- The plain-text report gains bars: a one-line token mix (fresh input, cached read, cache write,
+  output) with a legend, and a per-model share bar in both adapters. A column of numbers makes a
+  reader do the arithmetic; a bar answers "which of these dominates?" at a glance, which is the
+  question a cost report is usually asked. The new `shared/term-bars.mjs` holds the rules, all of
+  which exist because the alternative was once a bug here: a bar is decoration and the figure is
+  repeated beside it, so no value is carried only by a length; an unknown value is never an empty
+  bar, because an empty bar and a zero bar are the same pixels; padding is measured in visible
+  characters, so colour and block glyphs cannot break alignment; and colour is off unless stdout
+  is a terminal and `NO_COLOR` is unset, with a `--plain` escape hatch for code pages that render
+  `█` as mojibake. Cline's bar asks the same `costState` helper its label uses, so the two cannot
+  disagree about whether a model has a cost.
+
 - `shared/charts.mjs` renders bar, stacked-bar, and sparkline charts as inline SVG **strings**, built
   in Node at report time rather than drawn in the browser. That is a constraint, not a limitation:
   no script means the dashboard works with JavaScript disabled and prints to PDF, the existing
