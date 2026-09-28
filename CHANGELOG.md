@@ -49,6 +49,18 @@ All notable changes to this project are documented here.
   machine and a cost summary does not need a session name to be useful. A card for a session
   nothing could be priced says `unavailable` and names the unpriced models; it never shows $0.00.
 
+- `shared/runtime-adapter.mjs` defines the interface a runtime adapter implements, and validates one
+  before any storage is opened. The two current entry points are 922 and 1,533 lines with six
+  functions written twice verbatim, so a third runtime added the current way is a third copy of all
+  of it - and the roadmap has six more runtimes queued, which multiplies the cost of every later fix.
+  The interface keeps parsing, selection, mode dispatch, rendering, and exit codes in the kernel,
+  and leaves an adapter holding only what is genuinely runtime-specific: where the ledger lives,
+  what a call record means, and how a session becomes a normalized report. An **unknown member is
+  refused** rather than ignored, because a typo like `buildReprot` is otherwise a method that is
+  never called and is discovered only when a report comes back empty. `costBasis` is part of the
+  required surface for the same reason principle 3 exists: "the runtime recorded this" and "we
+  calculated this" must never be merged.
+
 - `shared/charts.mjs` renders bar, stacked-bar, and sparkline charts as inline SVG **strings**, built
   in Node at report time rather than drawn in the browser. That is a constraint, not a limitation:
   no script means the dashboard works with JavaScript disabled and prints to PDF, the existing
