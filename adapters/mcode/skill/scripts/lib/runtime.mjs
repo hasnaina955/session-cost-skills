@@ -19,6 +19,7 @@ import { observeSchema, checkSchema, describeDrift } from './schema-drift.mjs';
 import {
   bandForTimestamp,
   calculateTokenCost,
+  tokenCountIsUsable,
   inspectRateTable,
   normalizeProvider,
   readRateTable as readValidatedRateTable,
@@ -385,9 +386,14 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
 
   const priceRow = (pricer, row) => {
     const { modelId, provider, inferred } = modelForRow(pricer, row);
-    const contextTokens = ['input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens']
-      .reduce((sum, field) => sum + (Number(row[field]) || 0), 0);
-    const rateInfo = modelId
+    const fields = ['input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens'];
+    // A corrupt token count - negative, non-finite, or not a number - makes this call's cost
+    // unknowable. Treating it as unpriced routes it into the same "no cost" path a model with no
+    // rate takes, so the session degrades to partial coverage instead of a smaller, confident
+    // total. Found because the fuzzer fed one through; pinned by tests.
+    const unusable = fields.some((field) => !tokenCountIsUsable(row[field]));
+    const contextTokens = fields.reduce((sum, field) => sum + (Number(row[field]) || 0), 0);
+    const rateInfo = modelId && !unusable
       ? pricer.rateFor(provider, modelId, { at: row.ts, contextTokens })
       : {
           key: null,
@@ -397,7 +403,8 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
           coverage: 'unavailable',
           missingComponents: ['input', 'output', 'cacheRead', 'cacheWrite'],
         };
-    return { modelId, provider, inferred, rateInfo, rate: rateInfo.rate ?? null, contextTokens };
+    const rate = unusable ? null : (rateInfo.rate ?? null);
+    return { modelId, provider, inferred, rateInfo, rate, contextTokens, unusableTokens: unusable };
   };
 
   // Emitted for machine-readable output only. A text report has nowhere to put 2,000 events, and

@@ -206,6 +206,17 @@ All notable changes to this project are documented here.
   required surface for the same reason principle 3 exists: "the runtime recorded this" and "we
   calculated this" must never be merged.
 
+- Issue #67 closed: an unusable token count can no longer move a bill down. A count is now
+  usable only if it is `null` (a call that recorded no tokens, which honestly costs nothing) or a
+  finite, non-negative number. The earlier `Number(value) || 0` coercion did two dishonest things
+  in the *under-reporting* direction this project refuses: a negative count subtracted from a
+  total, and a non-numeric or empty value became a confident `$0.00`. Both now route the call into
+  the same "no cost" path a model with no rate takes, so the session degrades to partial coverage
+  and names the gap instead of silently shrinking. The fuzzer found this by feeding `"NaN"` and
+  `-1` through; the fix is pinned by a unit test over the coercions and an end-to-end test that
+  plants a negative count in a real fixture and asserts the report goes partial rather than
+  understating. `tokenCountIsUsable` is exported for other readers.
+
 - `shared/charts.mjs` renders bar, stacked-bar, and sparkline charts as inline SVG **strings**, built
   in Node at report time rather than drawn in the browser. That is a constraint, not a limitation:
   no script means the dashboard works with JavaScript disabled and prints to PDF, the existing
