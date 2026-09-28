@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateAdapter, assertAdapter, withAdapter, COST_BASIS, REQUIRED_MEMBERS } from '../shared/runtime-adapter.mjs';
+import { validateAdapter, assertAdapter, withAdapter, COST_BASIS, REQUIRED_MEMBERS, KIT_MEMBERS } from '../shared/runtime-adapter.mjs';
 
 /** A complete, minimal adapter. Anything the kernel tests need is built on this. */
 export function fakeAdapter(overrides = {}) {
@@ -13,35 +13,44 @@ export function fakeAdapter(overrides = {}) {
     defaults: { mode: 'current' },
     versionBanner: () => 'session-cost 0.0.0 (fake adapter)',
     defaultDataDir: () => '/tmp/fake',
-    open: () => ({ closed: false }),
-    close: (handle) => { handle.closed = true; },
-    listSessions: () => [{ id: 's1', parentId: null, startedAt: '2026-06-15T12:00:00.000Z', title: 'One' }],
-    resolveCurrent: () => ({ sessionId: 's1', method: 'unique-active', requestedId: null, candidateIds: ['s1'] }),
-    buildReport: () => ({ runtime: 'fake', sessionId: 's1' }),
-    aggregate: (reports) => ({ runtime: 'fake', aggregated: reports.length }),
     ...overrides,
   };
 }
 
-test('a complete adapter validates, and the real ones declare every member', () => {
+/** A fake that also implements the storage/report members, for the handle tests. */
+function storageAdapter(overrides = {}) {
+  return {
+    ...fakeAdapter(),
+    open: () => ({ closed: false }),
+    close: (handle) => { handle.closed = true; },
+    ...overrides,
+  };
+}
+
+test('a complete adapter validates, and the required list is the one a run consumes', () => {
   assert.deepEqual(validateAdapter(fakeAdapter()), []);
   // The list is the contract, so a member cannot be added to the interface without it appearing
   // here - which would fail this test and force the question "does every adapter still satisfy it".
-  assert.ok(REQUIRED_MEMBERS.includes('buildReport'));
   assert.ok(REQUIRED_MEMBERS.includes('costBasis'));
+  assert.ok(REQUIRED_MEMBERS.includes('versionBanner'));
+  // The storage and report members are not required, because nothing invokes them yet. See
+  // KIT_MEMBERS: they are the contract WP-2.4's conformance kit will exercise.
+  for (const member of KIT_MEMBERS) {
+    assert.equal(REQUIRED_MEMBERS.includes(member), false, `${member} must not be required while nothing calls it`);
+  }
   assert.deepEqual(Object.keys(COST_BASIS).sort(), ['ESTIMATED', 'RECORDED']);
 });
 
 test('a missing member is named, and all of them are listed at once', () => {
   const broken = fakeAdapter();
-  delete broken.listSessions;
-  delete broken.aggregate;
+  delete broken.costBasis;
+  delete broken.versionBanner;
   const problems = validateAdapter(broken);
   assert.equal(problems.length, 2);
-  assert.ok(problems.some((problem) => problem.includes('listSessions')));
-  assert.ok(problems.some((problem) => problem.includes('aggregate')));
+  assert.ok(problems.some((problem) => problem.includes('costBasis')));
+  assert.ok(problems.some((problem) => problem.includes('versionBanner')));
   // One message naming both, so a new adapter is not fixed one error per run.
-  assert.throws(() => assertAdapter(broken), /not usable[\s\S]*listSessions[\s\S]*aggregate/);
+  assert.throws(() => assertAdapter(broken), /not usable[\s\S]*costBasis[\s\S]*versionBanner/);
 });
 
 test('an adapter with an unknown member is refused rather than silently ignored', () => {
@@ -60,7 +69,7 @@ test('the identity fields are checked, not assumed', () => {
   for (const basis of Object.values(COST_BASIS)) {
     assert.deepEqual(validateAdapter(fakeAdapter({ costBasis: basis })), [], `${basis} must be accepted`);
   }
-  assert.match(validateAdapter(fakeAdapter({ buildReport: 'nope' })).join(), /buildReport must be a function/);
+  assert.match(validateAdapter(fakeAdapter({ defaultDataDir: 'nope' })).join(), /defaultDataDir must be a function/);
   assert.match(validateAdapter(fakeAdapter({ extraModes: 7 })).join(), /extraModes must be an object/);
   assert.deepEqual(validateAdapter(fakeAdapter({ extraModes: { rates: () => null } })), [], 'a valid extraModes map is accepted');
 });
@@ -92,7 +101,9 @@ test('a close that itself fails neither masks the real error nor stops the relea
 });
 
 test('withAdapter returns the run result and awaits an async run', async () => {
-  const adapter = fakeAdapter();
+  // storageAdapter, not fakeAdapter: withAdapter calls open/close, and those are KIT_MEMBERS
+  // rather than part of the runnable interface, so a bare fake no longer supplies them.
+  const adapter = storageAdapter();
   const handle = { closed: false };
   adapter.open = async () => handle;
   const result = await withAdapter(adapter, {}, async (h) => `used ${h === handle}`);

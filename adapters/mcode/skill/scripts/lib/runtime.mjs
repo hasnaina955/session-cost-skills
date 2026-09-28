@@ -1571,12 +1571,11 @@ const mcodeAdapter = {
   helpLines: () => [HELP_TEXT],
 
   defaultDataDir: () => path.resolve(__dirname, '..', '..', '..', '..'),
-  open: async (options) => openLedger(options?.dataDir ?? dataDir),
-  close: (handle) => handle.close(),
-  listSessions: () => [],
-  resolveCurrent: () => ({ sessionId: null, method: 'unique-active', requestedId: null, candidateIds: [] }),
-  buildReport: () => ({}),
-  aggregate: (reports) => aggregateMcReports(reports),
+  // The storage and report members are deliberately absent. See KIT_MEMBERS in
+  // shared/runtime-adapter.mjs: nothing calls them yet, and shipping `() => []` to satisfy a
+  // checklist is how an adapter passes validation while doing nothing. WP-2.4's conformance kit
+  // is what makes them real. openLedger and aggregateMcReports are still used - by this adapter's
+  // own run step.
 
   loadConfig: (context) => {
     beginRun(context);

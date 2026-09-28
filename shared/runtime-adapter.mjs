@@ -32,18 +32,39 @@ export const COST_BASIS = Object.freeze({
 });
 
 /**
- * Every member an adapter must provide. Checked before the kernel runs anything.
+ * Every member an adapter must provide to be *runnable*. Checked before the kernel does anything.
  *
- * `defaults` and `versionBanner` are here because the kernel drives them, not because an adapter
- * finds them useful: the kernel parses through `shared/cli-args.mjs` and needs each runtime's
- * option defaults, and it answers `--version` on the runtime's behalf. An adapter that supplies
- * neither cannot be run, which is why they are required rather than optional. `helpLines` and the
- * rest stay optional so a minimal adapter is still expressible in a test.
+ * These are the members a run actually consumes: `id` and `defaults` because the kernel parses
+ * argv for the runtime, `versionBanner` because the kernel answers `--version` on its behalf, and
+ * `displayName` / `costBasis` / `defaultDataDir` because they are the facts about a runtime that
+ * the contract, the documentation and the report all state - `costBasis` in particular is what
+ * keeps "the runtime recorded this" and "we calculated this" from being merged.
+ *
+ * The storage and report members are deliberately NOT here. See KIT_MEMBERS.
  */
 export const REQUIRED_MEMBERS = Object.freeze([
-  'id', 'displayName', 'costBasis', 'defaultDataDir', 'open', 'close',
-  'listSessions', 'resolveCurrent', 'buildReport', 'aggregate',
-  'defaults', 'versionBanner',
+  'id', 'displayName', 'costBasis', 'defaultDataDir', 'defaults', 'versionBanner',
+]);
+
+/**
+ * The storage and report contract, which nothing enforces yet.
+ *
+ * WP-2.1 listed `open`, `close`, `listSessions`, `resolveCurrent`, `buildReport` and `aggregate`
+ * as required. The kernel never calls any of them: it dispatches the adapter's own `run` step and
+ * the adapter reads its own storage. Both adapters therefore satisfied the list with stubs -
+ * `listSessions: () => []`, `resolveCurrent: () => (null)`, `buildReport: () => ({})` - and
+ * `validateAdapter` passed, which is exactly the false confidence the interface exists to prevent.
+ * A required member that nothing invokes is a member an author implements wrongly with no signal.
+ *
+ * They move here rather than disappearing, because they are the right contract: they are what
+ * WP-2.4's conformance kit will exercise, so that "an adapter passes the shared usage, selection,
+ * session-graph and cost-domain contracts" (issue #21) is one runnable command rather than a
+ * review question. They become required again the moment something calls them, and
+ * `tests/adapters-on-kernel.test.mjs` fails if an adapter starts claiming to implement one in
+ * the meantime, so the gap stays a visible gap instead of a stub.
+ */
+export const KIT_MEMBERS = Object.freeze([
+  'open', 'close', 'listSessions', 'resolveCurrent', 'buildReport', 'aggregate',
 ]);
 
 /**

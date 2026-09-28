@@ -1,9 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateAdapter } from '../shared/runtime-adapter.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { validateAdapter, REQUIRED_MEMBERS, KIT_MEMBERS } from '../shared/runtime-adapter.mjs';
 import { selectedExtraMode } from '../shared/kernel.mjs';
 import clineAdapter from '../adapters/cline/skill/scripts/lib/runtime.mjs';
 import mcodeAdapter from '../adapters/mcode/skill/scripts/lib/runtime.mjs';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
  * Both adapters now run on the kernel, so these assertions are about the contract rather than about
@@ -14,6 +19,42 @@ import mcodeAdapter from '../adapters/mcode/skill/scripts/lib/runtime.mjs';
  * merge. Expressing it as an extraMode rather than a branch inside the report is what makes that
  * structural rather than a promise: there is no function both of them pass through.
  */
+
+test('no adapter claims a storage or report member, so the gap stays a gap and not a stub', () => {
+  // This is the guard against the review finding. WP-2.1 required open/close/listSessions/
+  // resolveCurrent/buildReport/aggregate, the kernel invoked none of them, and both adapters
+  // satisfied the list with `() => []` and `() => ({})`. validateAdapter passed, which is the exact
+  // false confidence the interface exists to prevent.
+  //
+  // They moved to KIT_MEMBERS when WP-2.3 landed. Until WP-2.4's conformance kit actually calls
+  // them, an adapter defining one would be claiming to do something nothing exercises. This test
+  // fails the moment that starts, so the reintroduction is a deliberate act with a reason attached
+  // rather than a stub added to make a checklist green.
+  for (const adapter of [clineAdapter, mcodeAdapter]) {
+    for (const member of KIT_MEMBERS) {
+      assert.equal(adapter[member], undefined, `${adapter.id} defines ${member}, which nothing calls yet`);
+    }
+  }
+});
+
+test('the two member lists are disjoint, and every required member is a real fact about a runtime', () => {
+  // A member in both lists would be required on the strength of a contract nothing enforces.
+  for (const member of KIT_MEMBERS) {
+    assert.equal(REQUIRED_MEMBERS.includes(member), false, `${member} is in both lists`);
+  }
+  // The kernel reads exactly these three off the adapter, so they are the ones the required list
+  // should be built from. If a future kernel starts driving a fourth, this fails and the interface
+  // should be widened deliberately.
+  const kernel = fs.readFileSync(path.join(root, 'shared', 'kernel.mjs'), 'utf8');
+  const drivenByKernel = REQUIRED_MEMBERS.filter((member) => new RegExp(`adapter\\.${member}\\b`).test(kernel));
+  assert.deepEqual(drivenByKernel.sort(), ['defaults', 'id', 'versionBanner']);
+  // The rest are declared facts rather than called members, and each is asserted by a test above so
+  // it cannot decay into decoration either.
+  assert.deepEqual(
+    REQUIRED_MEMBERS.filter((member) => !drivenByKernel.includes(member)).sort(),
+    ['costBasis', 'defaultDataDir', 'displayName'],
+  );
+});
 
 test('both adapters satisfy the runtime-adapter interface', () => {
   assert.deepEqual(validateAdapter(clineAdapter), []);

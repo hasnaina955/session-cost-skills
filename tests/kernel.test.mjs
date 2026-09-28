@@ -20,7 +20,13 @@ import { validateAdapter, REQUIRED_MEMBERS } from '../shared/runtime-adapter.mjs
  * so they are pinned individually rather than as a group.
  */
 
-/** A complete adapter with no runtime behaviour, plus whatever a test wants to observe. */
+/**
+ * A complete adapter with no runtime behaviour, plus whatever a test wants to observe.
+ *
+ * It carries only the runnable interface. The storage and report members are not here because
+ * nothing invokes them - see KIT_MEMBERS - and the unknown-member guard would (correctly) refuse
+ * them, which is exactly what the real adapters found when they were ported.
+ */
 function kernelAdapter(overrides = {}) {
   const adapter = {
     id: 'mcode',
@@ -28,17 +34,16 @@ function kernelAdapter(overrides = {}) {
     costBasis: 'provider-rate-estimate',
     defaults: { session: null, mode: 'current', list: 0, json: false },
     defaultDataDir: () => '/tmp/kernel',
-    open: () => ({}),
-    close: () => {},
-    listSessions: () => [],
-    resolveCurrent: () => ({ sessionId: 's1' }),
-    buildReport: () => ({}),
-    aggregate: (reports) => ({ aggregated: reports.length }),
     helpLines: () => ['line one', 'line two'],
     versionBanner: () => 'session-cost 0.0.0 (kernel adapter)',
     ...overrides,
   };
   return adapter;
+}
+
+/** The same, plus the open/close pair withAdapter needs. */
+function storageAdapter(overrides = {}) {
+  return { ...kernelAdapter(), open: () => ({}), close: () => {}, ...overrides };
 }
 
 /** Capture stdout/stderr so a test can assert on what a user would actually see. */
@@ -156,12 +161,15 @@ test('the stack appears only behind SESSION_COST_DEBUG', async () => {
 });
 
 test('an adapter that cannot be driven is refused before any output', async () => {
+  // costBasis is a required member and is not kernel-driven, so removing it is the clearest way to
+  // build an adapter the kernel cannot run. (open/close would no longer do: they are kit members
+  // now, so dropping one would be a perfectly valid adapter.)
   const broken = kernelAdapter();
-  delete broken.close;
+  delete broken.costBasis;
   const { out, io } = capture();
   // assertAdapter throws rather than returning a code, so this surfaces as a rejected promise
   // rather than a silent success: a half-built adapter must never look like a clean run.
-  await assert.rejects(() => runCli(broken, [], io), /not usable[\s\S]*close/);
+  await assert.rejects(() => runCli(broken, [], io), /not usable[\s\S]*costBasis/);
   assert.deepEqual(out, []);
 });
 
@@ -220,7 +228,10 @@ test('the adapter receives the parsed options, not the raw argv', async () => {
   await runCli(kernelAdapter({ run: (context) => { seen = context.opts; return 0; } }), ['--json'], io);
   assert.equal(seen.json, true);
   assert.equal(seen.mode, 'current', 'defaults come from the adapter');
-  assert.equal(REQUIRED_MEMBERS.includes('buildReport'), true, 'the interface still names buildReport');
+  // The required list is what a run consumes, and buildReport is not on it: nothing calls it yet.
+  // See adapters-on-kernel.test.mjs, which pins that against the kernel source itself.
+  assert.equal(REQUIRED_MEMBERS.includes('defaults'), true, 'the interface still names defaults');
+  assert.equal(REQUIRED_MEMBERS.includes('buildReport'), false, 'nothing invokes buildReport, so it is not required');
 });
 
 test('fail raises a KernelError carrying the incomplete exit code', () => {

@@ -37,6 +37,17 @@ All notable changes to this project are documented here.
   undefined. And `runOnce` re-implemented the database-open guards inline while the adapter's own
   `open` member existed unused, so those guards now exist once.
 
+  Review also found that the runtime-adapter interface over-claimed, and that is corrected here
+  rather than deferred. WP-2.1 required twelve members, but the kernel invokes three of them:
+  `open`, `close`, `listSessions`, `resolveCurrent`, `buildReport` and `aggregate` are never
+  called, and both adapters satisfied them with `() => []` and `() => ({})`. `validateAdapter`
+  passed, which is the precise false confidence the interface exists to prevent - and the reason
+  the `aggregate` arity bug above could sit in the tree unnoticed. Those six move to a new
+  exported `KIT_MEMBERS`, which nothing requires yet; the required list is now the members a run
+  actually consumes plus the facts it states about a runtime. A test fails if either adapter starts
+  defining a kit member, and another asserts the two lists stay disjoint, so the gap cannot quietly
+  close with a stub. They are the contract WP-2.4's conformance kit will exercise.
+
 - MCode runs on the shared kernel. `adapters/mcode/skill/scripts/session-cost.mjs` went from 1,444
   lines to 12: it imports the adapter and calls `runCli`. The runtime-specific half moved, intact,
   to `adapters/mcode/skill/scripts/lib/runtime.mjs` (1,502 lines) - the ledger reads, the pricer,

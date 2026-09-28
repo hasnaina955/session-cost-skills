@@ -983,12 +983,10 @@ const clineAdapter = {
   helpLines: () => [HELP_TEXT],
 
   defaultDataDir: () => DEFAULT_DATA_DIR,
-  open: (options) => openClineDatabase(options?.dataDir ?? DEFAULT_DATA_DIR),
-  close: (handle) => handle.close(),
-  listSessions: () => [],
-  resolveCurrent: () => ({ sessionId: null, method: 'unique-active', requestedId: null, candidateIds: [] }),
-  buildReport: () => ({}),
-  aggregate: (reports) => aggregateReports(reports, 'aggregate'),
+  // The storage and report members are deliberately absent. See KIT_MEMBERS in
+  // shared/runtime-adapter.mjs: nothing calls them yet, and shipping `() => []` to satisfy a
+  // checklist is how an adapter passes validation while doing nothing. WP-2.4's conformance kit
+  // is what makes them real. openClineDatabase is still used - by this adapter's own run step.
 
   extraModes: {
     account: (context) => runAccount(context.dataDir),
