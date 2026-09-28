@@ -32,6 +32,12 @@ All notable changes to this project are documented here.
   Porting MCode is the next work package, with the golden corpus as the check that it changes
   nothing.
 
+  The Node 22.15 CI jobs caught what a local run on Node 24 could not: a missing brace in the new
+  test file made one test swallow the following nine as nested subtests, so the file reported nine
+  failures and cancelled the rest instead of the fifteen independent tests it contains. It is
+  worth recording because the file passed `node --check` and passed on the newer runtime - only
+  the older runner's subtest accounting exposed it.
+
 - `docs/session-cost-support-pack.html`: the one customer-facing document to send when someone is
   already installed and asks where the numbers come from. It covers the exact install paths, the
   config layers, what each operation reads and writes, where the network is used, how Cline

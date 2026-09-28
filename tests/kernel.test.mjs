@@ -89,6 +89,7 @@ test('a step returning a number is an exit code and stops the run', async () => 
 
 test('an unknown step name is refused rather than silently ignored', async () => {
   await assert.rejects(() => runToStep(kernelAdapter(), {}, 'nope'), /unknown kernel step: nope/);
+});
 
 test('--help prints the adapter help and exits 0 without running the adapter', async () => {
   const { out, err, io } = capture();
@@ -182,8 +183,6 @@ test('the adapter receives the parsed options, not the raw argv', async () => {
   assert.equal(seen.json, true);
   assert.equal(seen.mode, 'current', 'defaults come from the adapter');
   assert.equal(REQUIRED_MEMBERS.includes('buildReport'), true, 'the interface still names buildReport');
-});
-
 });
 
 test('fail raises a KernelError carrying the incomplete exit code', () => {
