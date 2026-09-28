@@ -1,6 +1,7 @@
 // Canonical dashboard renderer. `npm run check:dashboard` verifies that each
 // independently installable adapter contains an exact generated copy.
 import { isoNow } from './clock.mjs';
+import { barChart, stackedBar, sparkline } from './charts.mjs';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -121,6 +122,11 @@ function normalizeSession(session) {
   return {
     ...session,
     id: session.id ?? session.sessionId ?? session.row?.sessionId ?? session.session?.id ?? null,
+    // Parentage lives on the row for a single-session report and on the object key for a
+    // per-session map; the tree needs both, and `cost` is read off the metrics the same way
+    // `totalCost` is, because the two shapes disagree about where it lives.
+    parentId: session.parentId ?? session.row?.parentSessionId ?? session.session?.parentId ?? null,
+    cost: metrics.cost ?? metrics.totalCost ?? null,
     title: session.title ?? session.session?.title ?? metrics.title ?? null,
     metrics: {
       ...metrics,
@@ -507,6 +513,155 @@ body.theme-light{--bg:#f4f7fb;--surface:#fff;--surface-2:#edf3fa;--surface-3:#ff
 `;
 
 
+/**
+ * The session's shape, drawn in Node rather than in the browser.
+ *
+ * The interactive charts above need script to work; these do not. That matters for three reasons:
+ * the file must stay correct with JavaScript disabled, it must print to a clean PDF, and the
+ * numbers here are the same ones the report already computed - a chart cannot disagree with the
+ * report it sits next to because it never calculates anything.
+ *
+ * Every chart is followed by a collapsed table carrying the same figures, so no number exists
+ * only inside a graphic, and an unpriceable value is drawn hatched rather than as a zero.
+ */
+function costKnown(value) {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function tokenBreakdown(data) {
+  const usage = data?.usage ?? {};
+  const segments = [
+    { label: 'Fresh input', value: Number(usage.freshInputTokens ?? usage.inputTokens ?? 0) || 0 },
+    { label: 'Cached read', value: Number(usage.cacheReadTokens ?? 0) || 0 },
+    { label: 'Cache write', value: Number(usage.cacheWriteTokens ?? 0) || 0 },
+    { label: 'Output', value: Number(usage.outputTokens ?? 0) || 0 },
+  ];
+  return segments;
+}
+
+function timelineSection(data) {
+  const timeline = Array.isArray(data?.timeline) ? data.timeline : [];
+  if (timeline.length === 0) return '';
+  const known = timeline.filter((entry) => costKnown(entry.costUsd));
+  const hasUnknown = known.length !== timeline.length;
+  // Cumulative cost over time. The first and last figure are named, so the line is never the
+  // only place a number appears.
+  let running = 0;
+  const points = known.map((entry) => {
+    running += entry.costUsd;
+    return { t: entry.t, value: running };
+  });
+  const total = running;
+  const chart = sparkline({
+    points,
+    width: 720,
+    height: 90,
+    title: 'Cumulative cost over the session',
+  });
+  const rows = renderTable(
+    ['#', 'Time', 'Model', 'Cost'],
+    timeline.slice(0, 200).map((entry, index) => [
+      String(index + 1),
+      entry.t,
+      entry.model ?? '(unknown)',
+      money(costKnown(entry.costUsd) ? entry.costUsd : null),
+    ]),
+  );
+  const meta = data?.timelineMeta?.bucketed
+    ? `<p class="sub">Bucketed: ${timeline.length} time buckets rather than individual calls, because the session exceeds the inline limit.</p>`
+    : '';
+  const unknownNote = hasUnknown
+    ? '<p class="sub">Some calls could not be priced, so the cumulative line covers the priced calls only. The figures below name which.</p>'
+    : '';
+  // Nothing priced is a different statement from "priced at zero". Saying "$0.00 priced" for a
+  // session where no call could be priced is the exact error this project exists to prevent.
+  const pricedSummary = known.length === 0
+    ? 'no call could be priced'
+    : `${money(total)} priced${hasUnknown ? ', partly unpriced' : ''}`;
+  return `<section class="panel"><h2>Where the session went</h2>${meta}${unknownNote}${chart}`
+    + `<p class="sub">${timeline.length} call(s) · ${pricedSummary}</p>`
+    + `<details><summary>Every call</summary>${rows}</details></section>`;
+}
+
+function tokenMixSection(data) {
+  const segments = tokenBreakdown(data);
+  const known = segments.some((segment) => segment.value > 0);
+  if (!known) return '';
+  const chart = stackedBar({
+    segments,
+    width: 720,
+    title: 'Token mix',
+    format: (value) => `${Math.round(value).toLocaleString('en-US')} tok`,
+  });
+  return `<section class="panel"><h2>Token mix</h2>${chart}</section>`;
+}
+
+function modelCostSection(models) {
+  if (models.length === 0) return '';
+  const rows = models.slice(0, 12).map((model) => ({
+    label: `${model.provider ?? '?'} / ${model.model ?? '?'}`,
+    value: costKnown(model.totalCost) ? model.totalCost : (model.recordedCostUsd ?? null),
+    unknown: model.rateKnown === false || !(costKnown(model.totalCost) || costKnown(model.recordedCostUsd)),
+  }));
+  const chart = barChart({
+    rows,
+    width: 720,
+    title: 'Cost by model',
+    format: (value) => money(value),
+  });
+  const unpriced = rows.filter((row) => row.unknown).map((row) => row.label);
+  const note = unpriced.length > 0
+    ? `<p class="sub">Not priced: ${esc(unpriced.join(', '))}. An unknown cost is never drawn as zero.</p>`
+    : '';
+  return `<section class="panel"><h2>Cost by model</h2>${chart}${note}</section>`;
+}
+
+function sessionTreeSection(data, sessions) {
+  if (sessions.length === 0) return '';
+  const graph = data?.sessionGraph ?? {};
+  const excluded = new Set(graph.excludedSessionIds ?? []);
+  const byParent = new Map();
+  for (const session of sessions) {
+    const parent = session.parentId ?? null;
+    if (!byParent.has(parent)) byParent.set(parent, []);
+    byParent.get(parent).push(session);
+  }
+  const rows = [];
+  const visited = new Set();
+  const walk = (parent, depth) => {
+    for (const session of byParent.get(parent) ?? []) {
+      // A cycle in the stored graph would otherwise recurse forever. Skipping an already-shown
+      // session also keeps a session listed once when two parents claim it.
+      if (visited.has(session.id)) continue;
+      visited.add(session.id);
+      const cost = costKnown(session.cost) ? session.cost : (costKnown(session.recordedCostUsd) ? session.recordedCostUsd : null);
+      rows.push([
+        `${'\u00a0'.repeat(depth * 3)}${depth > 0 ? '\u2514 ' : ''}${session.title || session.id}`,
+        number(session.calls ?? 0),
+        money(cost),
+        excluded.has(session.id) ? 'excluded' : 'billed',
+      ]);
+      walk(session.id, depth + 1);
+    }
+  };
+  // Roots are the sessions with no parent, plus any the report names as roots. Walking `null`
+  // first covers the normal case; a root whose parent row is outside this report still gets
+  // walked, so a partial report does not silently hide a session.
+  const rootIds = new Set((graph.rootSessionIds ?? []).map(String));
+  for (const session of sessions) {
+    if (!session.parentId) rootIds.add(session.id);
+  }
+  for (const id of rootIds) walk(id, 0);
+  // A session whose parent is not in this report - a partial or filtered selection - would
+  // otherwise be invisible. Show it at the top level rather than silently dropping a cost.
+  for (const session of sessions) walk(session.id, 0);
+  if (rows.length === 0) return '';
+  const table = renderTable(['Session', 'Calls', 'Cost', 'Status'], rows);
+  return `<section class="panel"><h2>Session tree</h2>`
+    + '<p class="sub">An excluded subagent is not billed, and is listed so the total is not silently incomplete.</p>'
+    + `${table}</section>`;
+}
+
 export function renderDashboard(data, { title = 'Session Cost Dashboard' } = {}) {
   const account = data?.account;
   const totals = usage(data);
@@ -516,11 +671,20 @@ export function renderDashboard(data, { title = 'Session Cost Dashboard' } = {})
     .filter((model, index, all) => all.findIndex((item) => (
       item.provider === model.provider && item.model === model.model
     )) === index);
-  const rawSessions = data?.sessions ?? data?.perSession ?? [];
+  const rawPerSession = data?.perSession ?? null;
+  const rawSessions = data?.sessions ?? (rawPerSession
+    ? Object.entries(rawPerSession).map(([id, value]) => ({ id, ...value }))
+    : []);
   const sessions = (Array.isArray(rawSessions)
     ? rawSessions
     : Object.entries(rawSessions).map(([id, value]) => ({ id, ...value })))
     .map(normalizeSession);
+  const serverSections = [
+    timelineSection(data),
+    tokenMixSection(data),
+    modelCostSection(models),
+    sessionTreeSection(data, sessions),
+  ].filter(Boolean).join('\n');
   const payload = safeJson({ data, models, periods, sessions });
   const script = dashboardScript(payload);
   const policy = contentSecurityPolicy(script);
@@ -571,6 +735,7 @@ export function renderDashboard(data, { title = 'Session Cost Dashboard' } = {})
 <section class="grid"><div class="card"><div class="label">Total tokens</div><div class="value">${number(totals.totalTokens)}</div></div><div class="card"><div class="label">Cache-hit rate</div><div class="value">${percent(totals.cacheHitRate)}</div></div><div class="card"><div class="label">Recorded / reference cost</div><div class="value">${money(billingTotals.recordedCostUsd ?? billingTotals.referenceCostUsd)}</div></div><div class="card"><div class="label">Credits used</div><div class="value">${money(billingTotals.creditsUsedUsd)}</div></div></section>
 <section class="controls" id="filters"><label>Provider <select id="providerFilter"><option value="">All providers</option></select></label><label>Model <select id="modelFilter"><option value="">All models</option></select></label><label>Session <select id="sessionFilter"><option value="">All sessions</option></select></label><label>Day <select id="dayFilter"><option value="">All days</option></select></label><button id="resetFilters" type="button">Reset</button><small id="filterStatus"></small></section>
 <section class="grid" id="cards"></section>
+${serverSections}
 <div class="columns"><section class="panel"><h2>Usage trend</h2><div id="trendChart" class="chart" aria-label="Daily token and cost trend"></div></section><section class="panel"><h2>Model share</h2><div id="modelChart" aria-label="Token share by model"></div></section></div>
 ${periodTable ? `<h2>Period summary</h2>${periodTable}` : ''}
 ${modelTable ? `<h2>Models</h2>${modelTable}` : ''}

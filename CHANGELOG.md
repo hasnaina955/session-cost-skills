@@ -13,6 +13,16 @@ All notable changes to this project are documented here.
   two. Both are reachable only in narrow circumstances today, and both are the kind of thing that
   becomes reachable later without anyone noticing.
 
+- The dashboard gains four server-rendered sections: cumulative cost over the session, the token
+  mix, cost by model, and the session tree with excluded subagents marked. They are drawn in Node
+  and ship as inline SVG in the file itself, so they work with JavaScript disabled and print to a
+  clean PDF, alongside the existing interactive charts rather than replacing them. Each chart is
+  followed by a collapsed table carrying the same figures, so no number exists only inside a
+  graphic, and Cline gets the same sections as MCode. They are placed above the existing
+  interactive charts, because those render as empty boxes when script is unavailable and the
+  whole point of drawing in Node is that the page still reads without it. A 2,000-call session
+  produces a 99 KB file and the page says when a timeline has been bucketed.
+
 - `shared/charts.mjs` renders bar, stacked-bar, and sparkline charts as inline SVG **strings**, built
   in Node at report time rather than drawn in the browser. That is a constraint, not a limitation:
   no script means the dashboard works with JavaScript disabled and prints to PDF, the existing
