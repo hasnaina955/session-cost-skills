@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hasnaina955/session-cost-skills/report.schema.json",
+  "title": "Session Cost Report",
+  "type": "object",
+  "required": ["schemaVersion", "generatedAt", "snapshot", "usage", "billing"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "generatedAt": { "type": "string" },
+    "snapshot": {
+      "type": "object",
+      "required": ["active", "capturedAt"],
+      "properties": {
+        "active": { "type": "boolean" },
+        "capturedAt": { "type": "string" },
+        "lastLedgerActivityAt": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "selection": { "type": ["object", "null"] },
+    "usage": {
+      "type": "object",
+      "required": ["totalTokens"],
+      "properties": {
+        "totalTokens": { "type": "number", "minimum": 0 },
+        "inputTokens": { "type": "number", "minimum": 0 },
+        "freshInputTokens": { "type": "number", "minimum": 0 },
+        "cacheReadTokens": { "type": "number", "minimum": 0 },
+        "cacheWriteTokens": { "type": ["number", "null"], "minimum": 0 },
+        "outputTokens": { "type": "number", "minimum": 0 },
+        "reasoningTokens": { "type": "number", "minimum": 0 },
+        "cacheHitRate": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "billing": {
+      "type": "object",
+      "required": ["classification"],
+      "properties": {
+        "classification": { "type": "string" },
+        "costBasis": { "type": "string" },
+        "coverage": { "type": "string" },
+        "recordedCostUsd": { "type": ["number", "null"] },
+        "rateCalculatedCostUsd": { "type": ["number", "null"] },
+        "apiEquivalentEstimateUsd": { "type": ["number", "null"] },
+        "subscriptionCashSpendUsd": { "type": ["number", "null"] },
+        "creditsConsumed": { "type": ["number", "null"] },
+        "rateSource": { "type": ["string", "null"] },
+        "rateEffectiveDate": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "coverage": { "type": "object" },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

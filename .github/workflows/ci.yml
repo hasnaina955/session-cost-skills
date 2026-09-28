@@ -3,17 +3,385 @@ name: Verify session-cost skills
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
-    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
-    runs-on: windows-latest
+    name: Node ${{ matrix.node }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        node: ["22.13.0", "24.x", "current"]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js ${{ matrix.node }}
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Verify adapters
+        run: npm run verify
+
+  bun:
+    name: Bun 1.4 compatibility / Ubuntu
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 24
-      - name: Verify
-        run: npm run verify
+          persist-credentials: false
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.4.2"
+      - name: Run adapter tests with Bun
+        run: bun test adapters
+      - name: Smoke-test installed-script entry points with Bun
+        run: |
+          bun adapters/cline/skill/scripts/session-cost.mjs --help > /dev/null
+          bun adapters/mcode/skill/scripts/session-cost.mjs --help > /dev/null
+
+  package-contract:
+    name: Clean package allowlist / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up supported Node floor
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "22.13.0"
+      - name: Validate allowlisted clean install
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import os from 'node:os';
+          import path from 'node:path';
+          import { spawnSync } from 'node:child_process';
+
+          const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const commonFiles = [
+            'LICENSE',
+            'README.md',
+            'CHANGELOG.md',
+            'SECURITY.md',
+            'SUPPORT.md',
+          ];
+          const supportPack = 'docs/session-cost-support-pack.html';
+          const definitions = {
+            cline: {
+              source: 'adapters/cline/skill',
+              wrapper: 'cline-session-cost',
+              destination: ['.cline', 'skills', 'session-cost'],
+              files: [
+                'SKILL.md',
+                'scripts/session-cost.mjs',
+                'scripts/lib/cline-account.mjs',
+                'scripts/lib/dashboard.mjs',
+                'scripts/lib/session-cost-core.mjs',
+                'references/storage.md',
+              ],
+            },
+            mcode: {
+              source: 'adapters/mcode/skill',
+              wrapper: 'mcode-session-cost',
+              destination: ['.minimax', 'skills', 'session-cost'],
+              files: [
+                'SKILL.md',
+                'scripts/session-cost.mjs',
+                'scripts/lib/dashboard.mjs',
+                'references/provider-rates.json',
+                'references/ledger-internals.md',
+              ],
+            },
+          };
+          const forbiddenPath = /(?:^|\/)(?:providers\.json|secrets\.json|sessions\.db(?:-.*)?|runtime-state\.sqlite(?:-.*)?|messages\.jsonl|llm-call\.json|ui_messages\.json|api_conversation_history\.json|transcripts(?:\/.*)?|package\.json)$|\.(?:db|sqlite|sqlite3|zip|tar|tgz|7z)$/i;
+
+          function copyFile(source, destination) {
+            fs.mkdirSync(path.dirname(destination), { recursive: true });
+            fs.copyFileSync(source, destination);
+          }
+
+          function walk(directory, prefix = '') {
+            const result = [];
+            for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+              const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+              const full = path.join(directory, entry.name);
+              if (entry.isSymbolicLink()) throw new Error(`package symlink rejected: ${relative}`);
+              if (entry.isDirectory()) result.push(...walk(full, relative));
+              else if (entry.isFile()) result.push(relative);
+            }
+            return result.sort();
+          }
+
+          function addCommonFiles(root) {
+            for (const file of commonFiles) copyFile(file, path.join(root, file));
+            copyFile(supportPack, path.join(root, supportPack));
+            fs.writeFileSync(path.join(root, 'RELEASE-VERSION.txt'), `${packageJson.version}\n`, 'utf8');
+          }
+
+          const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'session-cost-package-'));
+          try {
+            const cleanHomes = {
+              cline: fs.mkdtempSync(path.join(temporaryRoot, 'cline-home-')),
+              mcode: fs.mkdtempSync(path.join(temporaryRoot, 'mcode-home-')),
+            };
+
+            for (const [name, definition] of Object.entries(definitions)) {
+              const artifactRoot = path.join(temporaryRoot, `${name}-artifact`);
+              const skillRoot = path.join(artifactRoot, definition.wrapper);
+              for (const file of definition.files) {
+                copyFile(path.join(definition.source, file), path.join(skillRoot, file));
+              }
+              addCommonFiles(artifactRoot);
+
+              const expected = [
+                ...commonFiles,
+                supportPack,
+                'RELEASE-VERSION.txt',
+                ...definition.files.map((file) => `${definition.wrapper}/${file}`),
+              ].sort();
+              assert.deepEqual(walk(artifactRoot), expected, `${name} artifact allowlist drifted`);
+              for (const file of walk(artifactRoot)) {
+                assert.equal(forbiddenPath.test(file), false, `forbidden package path: ${file}`);
+                assert.doesNotMatch(file, /(?:^|\/)tests(?:\/|$)/i, `tests leaked into ${name} package`);
+              }
+
+              const installed = path.join(cleanHomes[name], ...definition.destination);
+              fs.cpSync(skillRoot, installed, { recursive: true, errorOnExist: true });
+              assert.ok(fs.existsSync(path.join(installed, 'SKILL.md')), `${name} SKILL.md missing after clean install`);
+              const cli = spawnSync(process.execPath, [path.join(installed, 'scripts', 'session-cost.mjs'), '--help'], {
+                encoding: 'utf8',
+                windowsHide: true,
+              });
+              assert.equal(cli.status, 0, `${name} clean-install --help failed\n${cli.stdout}\n${cli.stderr}`);
+            }
+
+            const bundleRoot = path.join(temporaryRoot, 'bundle-artifact');
+            for (const definition of Object.values(definitions)) {
+              fs.cpSync(
+                path.join(temporaryRoot, `${definition.wrapper === 'cline-session-cost' ? 'cline' : 'mcode'}-artifact`, definition.wrapper),
+                path.join(bundleRoot, definition.wrapper),
+                { recursive: true },
+              );
+            }
+            addCommonFiles(bundleRoot);
+            const bundleExpected = [
+              ...commonFiles,
+              supportPack,
+              'RELEASE-VERSION.txt',
+              ...Object.values(definitions).flatMap((definition) => definition.files.map((file) => `${definition.wrapper}/${file}`)),
+            ].sort();
+            assert.deepEqual(walk(bundleRoot), bundleExpected, 'bundle artifact allowlist drifted');
+            for (const file of walk(bundleRoot)) assert.equal(forbiddenPath.test(file), false, `forbidden bundle path: ${file}`);
+
+            console.log(`Verified ${packageJson.version} Cline, MCode, and bundle allowlists in clean homes.`);
+          } finally {
+            fs.rmSync(temporaryRoot, { recursive: true, force: true });
+          }
+          NODE
+
+  repository-contracts:
+    name: Documentation, encoding, links, secrets, and tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out full history without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up supported Node floor
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "22.13.0"
+      - name: Check committed whitespace
+        run: git diff --check HEAD^ HEAD
+      - name: Validate documentation and repository contracts
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { execFileSync } from 'node:child_process';
+
+          const read = (file) => fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
+          const packageJson = JSON.parse(read('package.json'));
+          const changelog = read('CHANGELOG.md');
+          const readme = read('README.md');
+          const security = read('SECURITY.md');
+          const support = read('SUPPORT.md');
+          const release = read('docs/release.md');
+          const supportPack = read('docs/session-cost-support-pack.html');
+          const supportListing = read('docs/gumroad-selling-guide.html');
+          const ci = read('.github/workflows/ci.yml');
+          const license = read('LICENSE');
+
+          assert.equal(packageJson.license, 'MIT');
+          assert.match(license, /^MIT License/);
+          assert.equal(packageJson.engines.bun, undefined, 'Bun is optional and must not silently become the package engine');
+          const floor = packageJson.engines.node.match(/\d+\.\d+\.\d+/)?.[0];
+          assert.ok(floor, 'package.json must declare an exact-enough Node floor for CI');
+          for (const document of [readme, security, supportPack]) {
+            assert.ok(document.includes(`Node.js ${floor}`), `Node floor ${floor} missing from public documentation`);
+            assert.ok(document.includes('Bun 1.4.2'), 'Bun compatibility contract missing from public documentation');
+          }
+
+          assert.match(changelog, /^## Unreleased$/m);
+          const releasedVersions = [...changelog.matchAll(/^## (\d+\.\d+\.\d+)$/gm)].map((match) => match[1]);
+          assert.equal(releasedVersions[0], packageJson.version, 'latest released changelog heading must match package.json');
+          assert.ok(readme.includes(`Current repository version: **${packageJson.version}**`));
+          assert.ok(supportPack.includes(`Repository version: <strong>${packageJson.version}</strong>`));
+          assert.ok(supportListing.includes(`Repository version: ${packageJson.version}`));
+          assert.ok(release.includes(`source-tree version is **${packageJson.version}**`));
+          assert.ok(release.includes('`npm publish` is not supported'));
+          assert.ok(release.includes('RELEASE-VERSION.txt'));
+          assert.ok(release.includes('adapters/cline/skill/SKILL.md'));
+          assert.ok(release.includes('adapters/mcode/skill/SKILL.md'));
+
+          for (const html of [supportPack, supportListing]) assert.match(html, /<meta charset="utf-8">/i);
+          for (const forbidden of [
+            'Replace the private-development license',
+            'Commercial single-user license',
+            'License: Commercial',
+            'Do not upload the private Git repository',
+            'LICENSE.txt',
+          ]) {
+            assert.equal(supportPack.includes(forbidden), false, `support-pack contradiction remains: ${forbidden}`);
+            assert.equal(supportListing.includes(forbidden), false, `support-listing contradiction remains: ${forbidden}`);
+          }
+          assert.ok(supportPack.includes('%USERPROFILE%\\.cline\\skills\\session-cost\\'));
+          assert.ok(supportPack.includes('%USERPROFILE%\\.minimax\\skills\\session-cost\\'));
+          assert.ok(supportPack.includes('Copy the <em>contents</em>'));
+          assert.ok(supportPack.includes('CLINE_API_KEY'));
+          assert.ok(supportPack.includes('data/settings/providers.json'));
+          assert.ok(supportPack.indexOf('CLINE_API_KEY') < supportPack.indexOf('data/settings/providers.json'));
+          assert.ok(supportPack.indexOf('data/settings/providers.json') < supportPack.indexOf('data/secrets.json'));
+          assert.ok(supportPack.includes('Recursively includes all descendant'));
+          assert.ok(supportPack.includes('direct child sessions only'));
+          assert.ok(supportPack.includes('missing rate is unknown, never an assumed zero'));
+          assert.ok(supportPack.includes('StepFun <code>step-5-preview</code> explicitly uses its input rate'));
+          assert.ok(supportPack.includes('Atomically rewrites the installed rate file only after all sources validate'));
+          assert.ok(supportListing.includes('Sell a service, not a license change'));
+          assert.ok(supportListing.includes('Every customer artifact must include the unmodified root'));
+
+          assert.match(ci, /^permissions:\n  contents: read$/m);
+          const actionRefs = [...ci.matchAll(/^\s*uses:\s*([^\s#]+)/gm)].map((match) => match[1]);
+          assert.ok(actionRefs.length >= 3, 'expected pinned checkout/setup actions');
+          for (const reference of actionRefs) {
+            assert.match(reference, /^[^@\s]+@[0-9a-f]{40}$/, `action is not pinned to a full SHA: ${reference}`);
+          }
+
+          const tracked = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean);
+          const decoder = new TextDecoder('utf-8', { fatal: true });
+          const mojibake = /(?:\u00e2\u20ac|\u00c2\u00a0|\u00c3\u00a2|\ufffd)/;
+          for (const file of tracked) {
+            if (file !== '.gitignore' && !/\.(?:md|html|ya?ml|json|mjs|txt)$/i.test(file)) continue;
+            const text = decoder.decode(fs.readFileSync(file));
+            assert.equal(mojibake.test(text), false, `possible mojibake in ${file}`);
+          }
+
+          const documentationFiles = [
+            'README.md',
+            'CHANGELOG.md',
+            'SECURITY.md',
+            'SUPPORT.md',
+            ...tracked.filter((file) => /^docs\/.*\.(?:md|html)$/i.test(file)),
+          ];
+          for (const file of new Set(documentationFiles)) {
+            const text = read(file);
+            const links = [
+              ...text.matchAll(/!?\[[^\]]*\]\(([^)]+)\)/g),
+              ...text.matchAll(/href="([^"]+)"/g),
+            ].map((match) => match[1]);
+            for (let target of links) {
+              if (/^(?:https?:|mailto:|#|data:)/i.test(target)) continue;
+              target = target.split('#', 1)[0].split('?', 1)[0];
+              if (!target || target.includes('%USERPROFILE%')) continue;
+              let decoded;
+              try { decoded = decodeURIComponent(target); } catch { decoded = target; }
+              const resolved = path.resolve(path.dirname(file), decoded);
+              assert.ok(fs.existsSync(resolved), `${file} has a missing local link: ${target}`);
+            }
+          }
+
+          console.log(`Validated UTF-8, links, version ${packageJson.version}, MIT terms, and pinned actions.`);
+          NODE
+      - name: Scan all reachable Git objects without printing values
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process';
+
+          const rows = execFileSync('git', ['rev-list', '--objects', '--all'], {
+            encoding: 'utf8',
+            maxBuffer: 64 * 1024 * 1024,
+          }).trim().split('\n').filter(Boolean);
+          const sensitivePath = /(?:^|\/)(?:providers\.json|secrets\.json|sessions\.db(?:-.*)?|runtime-state\.sqlite(?:-.*)?|messages\.jsonl|llm-call\.json|ui_messages\.json|api_conversation_history\.json|transcripts(?:\/.*)?)$|\.(?:zip|tar|tgz|7z)$/i;
+          const signatures = [
+            ['private-key', /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/],
+            ['aws-access-key', /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/],
+            ['github-token', /\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/],
+            ['google-api-key', /\bAIza[0-9A-Za-z_-]{35}\b/],
+            ['slack-token', /\bxox[baprs]-[0-9A-Za-z-]{20,}\b/],
+            ['openai-style-key', /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/],
+          ];
+          const findings = [];
+          let blobCount = 0;
+          for (const row of rows) {
+            const separator = row.indexOf(' ');
+            if (separator < 0) continue;
+            const objectId = row.slice(0, separator);
+            const objectPath = row.slice(separator + 1);
+            if (objectPath && sensitivePath.test(objectPath)) findings.push({ category: 'sensitive-path', objectId, objectPath });
+            const type = execFileSync('git', ['cat-file', '-t', objectId], { encoding: 'utf8' }).trim();
+            if (type !== 'blob') continue;
+            blobCount += 1;
+            const content = execFileSync('git', ['cat-file', 'blob', objectId], { maxBuffer: 64 * 1024 * 1024 });
+            const text = content.toString('latin1');
+            for (const [category, pattern] of signatures) {
+              if (pattern.test(text)) findings.push({ category, objectId, objectPath });
+            }
+          }
+          if (findings.length) {
+            for (const finding of findings) {
+              console.error(`history-secret-check: ${finding.category} ${finding.objectId.slice(0, 12)} ${finding.objectPath}`);
+            }
+            process.exit(1);
+          }
+          console.log(`Scanned ${rows.length} reachable objects (${blobCount} blobs); no high-confidence secret or sensitive-path finding.`);
+          NODE
+      - name: Verify release tag matches package version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "${GITHUB_REF_NAME}" = "v${version}" || {
+            echo "Tag ${GITHUB_REF_NAME} does not match package version v${version}" >&2
+            exit 1
+          }

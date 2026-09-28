@@ -100,3 +100,75 @@ test('dashboard renderer escapes report text and embeds no external assets', () 
 test('account request reports missing credentials without making a request', async () => {
   await assert.rejects(() => requestCline('/api/v1/users/me', { apiKey: '', fetcher: async () => { throw new Error('should not run'); } }), /API key is required/);
 });
+
+test('account history filters exact inclusive UTC boundaries and exposes completeness', async () => {
+  const start = '2026-01-03T12:00:00.000Z';
+  const end = '2026-01-10T12:00:00.000Z';
+  const rows = [
+    { createdAt: '2026-01-03T11:59:59.999Z', promptTokens: 1, costUsd: 100_000_000 },
+    { createdAt: start, promptTokens: 2, costUsd: 100_000_000, aiModelTypeName: 'cline-pass' },
+    { createdAt: end, promptTokens: 4, costUsd: 100_000_000 },
+    { createdAt: '2026-01-10T12:00:00.001Z', promptTokens: 99, costUsd: 100_000_000 },
+  ];
+  const fetcher = async (url) => {
+    if (url.endsWith('/users/me')) return jsonResponse({ id: 'usr-window' });
+    if (url.includes('/balance')) return jsonResponse({ balance: 0 });
+    if (url.endsWith('/plan')) return jsonResponse(null);
+    if (url.endsWith('/usage-limits')) return jsonResponse(null);
+    return jsonResponse({ items: rows, nextToken: '' });
+  };
+  const data = await fetchClineAccount({ apiKey: 'secret', fetcher, retries: 0, windowStart: start, windowEnd: end });
+  assert.deepEqual(data.usages.map((row) => row.promptTokens), [2, 4]);
+  assert.equal(data.history.excludedBeforeWindow, 1);
+  assert.equal(data.history.excludedAfterWindow, 1);
+  const summary = summarizeClineAccount(data, new Date(end));
+  assert.equal(summary.windowStart, start);
+  assert.equal(summary.windowEnd, end);
+  assert.equal(summary.requests, 2);
+  assert.equal(summary.billingTotals.clinePassReferenceCostUsd, 1);
+  assert.equal(summary.billingTotals.usageBillingReferenceCostUsd, 1);
+  assert.equal(summary.billingTotals.actualChargeUsd, null);
+  assert.equal(summary.periods.today.requests, 1);
+  assert.equal(summary.periods.today.periodEnd, '2026-01-10T23:59:59.999Z');
+  assert.equal(summary.periods.today.complete, false);
+  assert.equal(summary.periods.weekly[0].to, '2026-01-11');
+  const pointInTime = summarizeClineAccount({ userId: 'usr-window', usages: rows, pages: 1 }, new Date(end));
+  assert.equal(pointInTime.requests, 3);
+  assert.equal(pointInTime.completeness.futureRowsExcluded, 1);
+  const malformedDate = summarizeClineAccount({ userId: 'usr-window', usages: [{ createdAt: '2026-02-30T00:00:00Z', promptTokens: 99 }], pages: 1 }, new Date(end));
+  assert.equal(malformedDate.requests, 0);
+  assert.equal(malformedDate.history.invalidTimestamps, 1);
+});
+
+test('ClinePass positive reference cost is classified as subscription/reference, not usage-billed', () => {
+  const summary = summarizeClineAccount({
+    userId: 'usr-pass',
+    usages: [{ createdAt: '2026-01-01T00:00:00Z', promptTokens: 10, completionTokens: 2, costUsd: 200_000_000, aiModelTypeName: 'cline-pass', aiModelName: 'stealth/model' }],
+    pages: 1,
+  }, new Date('2026-01-02T00:00:00Z'));
+  assert.equal(summary.billingTotals.referenceCostUsd, 2);
+  assert.equal(summary.billingTotals.clinePassReferenceCostUsd, 2);
+  assert.equal(summary.billingTotals.usageBillingReferenceCostUsd, 0);
+  assert.equal(summary.models[0].classification, 'cline-pass');
+  assert.equal(summary.models[0].actualChargeUsd, null);
+  assert.equal(summary.usageBillingRequests, 0);
+});
+
+test('account client rejects malformed usage pages instead of treating them as empty', async () => {
+  const fetcher = async (url) => {
+    if (url.endsWith('/users/me')) return jsonResponse({ id: 'usr-malformed' });
+    if (url.includes('/balance')) return jsonResponse({ balance: 0 });
+    if (url.endsWith('/plan')) return jsonResponse(null);
+    if (url.endsWith('/usage-limits')) return jsonResponse(null);
+    return jsonResponse({ items: 'not-an-array', nextToken: '' });
+  };
+  await assert.rejects(() => fetchClineAccount({ apiKey: 'secret', fetcher, retries: 0 }), /malformed usage page/);
+  const malformedNumberFetcher = async (url) => {
+    if (url.endsWith('/users/me')) return jsonResponse({ id: 'usr-malformed-number' });
+    if (url.includes('/balance')) return jsonResponse({ balance: 0 });
+    if (url.endsWith('/plan')) return jsonResponse(null);
+    if (url.endsWith('/usage-limits')) return jsonResponse(null);
+    return jsonResponse({ items: [{ createdAt: '2026-01-01T00:00:00Z', costUsd: -1 }], nextToken: '' });
+  };
+  await assert.rejects(() => fetchClineAccount({ apiKey: 'secret', fetcher: malformedNumberFetcher, retries: 0 }), /malformed usage row/);
+});

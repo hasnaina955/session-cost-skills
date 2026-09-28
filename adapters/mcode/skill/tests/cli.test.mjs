@@ -25,6 +25,8 @@ test('MCode --rates works without reading the session ledger and emits versioned
   assert.equal(typeof output.rates.refreshedAt, 'string');
   assert.ok(output.rates.providers.commandcode.models > 0);
   assert.ok(output.rates.providers.stepfun.models > 0);
+  assert.equal(output.rates.providers.commandcode.componentCompleteness.cacheWrite.complete > 0, true);
+  assert.equal(output.rates.providers.commandcode.incompleteModels > 0, true);
 });
 
 test('MCode rates dashboard writes a self-contained HTML file', () => {

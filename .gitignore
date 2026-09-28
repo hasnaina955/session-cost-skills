@@ -1,21 +1,48 @@
-# Secrets and local runtime data
+# Secrets and local runtime credentials
 .env
 .env.*
 !.env.example
-secrets.json
-*.sqlite
-*.sqlite-shm
-*.sqlite-wal
+**/secrets.json
+**/providers.json
 
-# Generated reports and temporary files
+# SQLite ledgers and sidecars (Cline sessions.db and MCode runtime-state.sqlite)
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+
+# Copied runtime transcripts and message histories
+runtime-data/
+**/transcripts/
+**/messages.jsonl
+**/llm-call.json
+**/ui_messages.json
+**/api_conversation_history.json
+
+# Generated reports, releases, and temporary files
 reports/
 outputs/
 dist/
+/artifacts/
+/release-artifacts/
 *.log
 *.tmp
+/*.zip
+/*.tar
+/*.tar.gz
+/*.tgz
+/*.7z
+/*.sha256
+/SHA256SUMS
 
 # Editor and OS files
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+
+# Ignore rules are a convenience, not a security boundary. Customer artifacts
+# must be built from the explicit allowlist in docs/release.md, and already
+# tracked/history data requires the audit procedure in SECURITY.md.

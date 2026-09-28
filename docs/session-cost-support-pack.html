@@ -1,64 +1,270 @@
 ﻿<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Session Cost Skills — Support & Product Guide</title><style>
-:root{--bg:#08101d;--surface:#101a2b;--surface2:#14233a;--text:#eef4ff;--muted:#91a3bf;--line:#2b405f;--accent:#6ee7b7;--blue:#79a9ff;--warn:#ffd27d}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 15% 0,#1b355b 0,transparent 38%),var(--bg);color:var(--text);font:15px/1.65 system-ui,-apple-system,Segoe UI,sans-serif}main{max-width:980px;margin:auto;padding:42px 22px 70px}header,section,.card{background:linear-gradient(145deg,var(--surface2),var(--surface));border:1px solid var(--line);border-radius:18px}header{padding:30px;box-shadow:0 20px 55px #0004}section{padding:22px;margin-top:22px}h1{font-size:clamp(30px,5vw,48px);line-height:1.1;letter-spacing:-.04em;margin:0 0 12px}h2{font-size:23px;letter-spacing:-.02em;margin:0 0 12px}h3{color:var(--blue);margin:22px 0 8px}p,li{color:#d5e0f4}strong{color:var(--accent)}code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}pre{background:#070d18;border:1px solid var(--line);border-radius:12px;padding:16px;overflow:auto;color:#bcd0ed;font-size:13px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:20px 0}.card{padding:20px}.label{color:var(--muted);font-size:12px}.value{font-size:22px;font-weight:750;margin-top:5px}.callout{border-left:4px solid var(--warn);background:#2a2313;padding:14px;border-radius:8px;margin:18px 0}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-size:12px}footer{color:var(--muted);font-size:13px;margin-top:30px}@media(max-width:600px){main{padding:18px 12px}header{padding:22px}}
-</style></head><body><main><header><h1>Session Cost Skills</h1><h3 style="margin-top:0">Support & Product Guide</h3><p>Complete product, customization, installation, privacy, support, and Gumroad guidance for the free MIT-licensed Cline and MiniMax Code skills.</p><span class="tag">Cline</span> <span class="tag">MiniMax Code</span> <span class="tag">Developer tools</span> <span class="tag">Local-first</span></header><div class="grid"><div class="card"><div class="label">Recommended product</div><div class="value">Complete bundle</div></div><div class="card"><div class="label">Regular price</div><div class="value">$29</div></div><div class="card"><div class="label">Launch price</div><div class="value">$19</div></div><div class="card"><div class="label">Updates</div><div class="value">12 months</div></div></div>
-<section><h2>1. Recommended product</h2><h3>Session Cost Skills â€” Cline + MiniMax Code Bundle</h3><p>Sell one bundle containing separately installable Cline and MCode editions. Keep the installed directories separate because the ledgers and token semantics differ.</p><pre>session-cost-bundle-v1.0.0/
-â”œâ”€â”€ cline-session-cost/
-â”œâ”€â”€ mcode-session-cost/
-â”œâ”€â”€ LICENSE.txt
-â”œâ”€â”€ README.md
-â””â”€â”€ CHANGELOG.md</pre></section>
-<section><h2>2. Free software and optional support</h2><p>The Cline and MCode skills are free and MIT-licensed. Anyone may install and use them from the public repository. A Gumroad listing is optional and may provide voluntary paid support, compatibility help, or sponsored development. Payment is not required to unlock any software feature.</p><div class="callout"><strong>Do not describe the public repository as paid-only software.</strong> Sell help, convenience, or sponsored maintenanceâ€”not access to functionality that is already free and MIT-licensed.</div></section>
-<section><h2>3. Package contents</h2><h3>Cline edition</h3><ul><li>Current and historical session token usage</li><li>Fresh, cached, cache-write, and output tokens</li><li>Cache-hit rate</li><li>ClinePass, free, billed, and partial-cost classification</li><li>Per-model breakdowns</li><li>Subagent-aware totals</li><li>Live Cline account balance and plan</li><li>Five-hour, weekly, and monthly limits</li><li>Today, rolling seven-day, and current-month totals</li><li>Interactive self-contained HTML dashboards</li><li>Versioned JSON output</li></ul><h3>MCode edition</h3><ul><li>MCode runtime SQLite accounting</li><li>CommandCode and StepFun rates</li><li>Peak/off-peak CommandCode bands</li><li>Cache-read and cache-write billing</li><li>Multi-model and multi-provider support</li><li>Rate coverage dashboard</li><li>Session comparisons and filters</li><li>Subagent-aware totals</li><li>Versioned JSON output</li></ul></section>
-<section><h2>4. Before uploading</h2><ol><li>Replace the private-development license with a commercial license.</li><li>Create separate release ZIPs for Cline, MCode, and the bundle.</li><li>Generate SHA-256 checksums.</li><li>Run all tests and syntax checks.</li><li>Install each ZIP in a clean test profile.</li><li>Verify that no credentials, databases, reports, or private repository files are included.</li></ol><div class="callout"><strong>Do not upload the private Git repository.</strong> Upload only a clean customer ZIP containing the two installable skills.</div></section>
-<section><h2>5. Gumroad product setup</h2><ol><li>Open Gumroad and create a new digital product.</li><li>Use the title <code>Session Cost Skills â€” Cline + MiniMax Code Bundle</code>.</li><li>Set the regular price to <strong>$29</strong>.</li><li>Upload the bundle ZIP.</li><li>Add the description and installation instructions from this guide.</li><li>Add tags for Cline, MCode, developer tools, token usage, cost tracking, and dashboard.</li><li>Set visibility to public only after a test purchase and clean-install test.</li></ol></section>
-<section><h2>6. Product description</h2><pre>Session Cost Skills is a privacy-conscious usage and cost reporting system for Cline and MiniMax Code.
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Session Cost Skills — Customer Support Pack</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f7fb;
+      --surface: #ffffff;
+      --surface-alt: #edf3fa;
+      --text: #152238;
+      --muted: #52647d;
+      --line: #cbd8e8;
+      --accent: #087f5b;
+      --link: #155eef;
+      --warn-bg: #fff7df;
+      --warn-line: #9a6700;
+      --code-bg: #0d1728;
+      --code-text: #e6efff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #08101d;
+        --surface: #101a2b;
+        --surface-alt: #14233a;
+        --text: #eef4ff;
+        --muted: #a8b8d0;
+        --line: #304563;
+        --accent: #6ee7b7;
+        --link: #8db5ff;
+        --warn-bg: #2a2313;
+        --warn-line: #ffd27d;
+        --code-bg: #060c17;
+        --code-text: #e4edff;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    main { width: min(1040px, calc(100% - 32px)); margin: 0 auto; padding: 36px 0 72px; }
+    header, section {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--surface);
+      padding: clamp(20px, 4vw, 34px);
+    }
+    header { margin-bottom: 20px; }
+    section { margin-top: 20px; }
+    h1, h2, h3 { line-height: 1.2; }
+    h1 { margin: 0 0 10px; font-size: clamp(2rem, 5vw, 3.2rem); }
+    h2 { margin: 0 0 14px; font-size: 1.55rem; }
+    h3 { margin: 24px 0 8px; font-size: 1.12rem; color: var(--accent); }
+    p, li { color: var(--text); }
+    a { color: var(--link); }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    code { overflow-wrap: anywhere; }
+    pre {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 16px;
+      font-size: 0.88rem;
+      line-height: 1.55;
+      white-space: pre;
+    }
+    .eyebrow { color: var(--accent); font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; font-size: 0.78rem; }
+    .meta { color: var(--muted); }
+    .callout {
+      margin: 18px 0;
+      border-left: 5px solid var(--warn-line);
+      border-radius: 8px;
+      background: var(--warn-bg);
+      padding: 14px 16px;
+    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+    .card { border: 1px solid var(--line); border-radius: 12px; background: var(--surface-alt); padding: 16px; }
+    .card strong { display: block; color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; display: block; overflow-x: auto; }
+    th, td { min-width: 150px; padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 0.88rem; }
+    footer { color: var(--muted); margin-top: 24px; font-size: 0.9rem; }
+    @media print {
+      :root { color-scheme: light; }
+      body { background: #fff; color: #000; }
+      header, section { break-inside: avoid; box-shadow: none; }
+      a { color: #000; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Customer support pack</p>
+    <h1>Session Cost Skills</h1>
+    <p>Install, configure, understand, and troubleshoot the MIT-licensed Cline and MiniMax Code (<code>MCode</code>) reporting skills.</p>
+    <p class="meta">Repository version: <strong>0.2.0</strong> · Updated 2026-09-25</p>
+    <div class="grid" aria-label="Support summary">
+      <div class="card"><strong>Local-first</strong>Local ledgers stay on your computer.</div>
+      <div class="card"><strong>MIT licensed</strong>Use, modify, and redistribute the source under the included license.</div>
+      <div class="card"><strong>Explicit exceptions</strong>Account mode and MCode rate refresh use the network.</div>
+    </div>
+  </header>
 
-Track token usage, cached input, provider rates, billing classifications,
-subagent activity, session comparisons, and account usage limits.
+  <section id="license-boundary">
+    <h2>1. License and support boundary</h2>
+    <p>The source code, skill files, dashboards, and documentation are provided under the MIT License. A purchase is never required to use a feature already present in the public repository.</p>
+    <p>Optional paid help covers only the support service described by the seller. It does not relicense, rebrand, or withdraw rights from the MIT source.</p>
+    <p>See <a href="../LICENSE">LICENSE</a>, <a href="../SUPPORT.md">SUPPORT.md</a>, and <a href="../SECURITY.md">SECURITY.md</a>.</p>
+  </section>
 
-Included:
-â€¢ Cline local session and account analytics
-â€¢ MiniMax Code provider-rate accounting
-â€¢ Interactive offline HTML dashboards
-â€¢ JSON output for automation
-â€¢ No developer-owned server
+  <section id="requirements">
+    <h2>2. Requirements</h2>
+    <ul>
+      <li>Windows, Ubuntu, or macOS, plus the corresponding Cline CLI or MiniMax Code CLI.</li>
+      <li>Node.js 22.13.0 or newer. This is the repository support floor; the earlier introduction of <code>node:sqlite</code> is not the project support promise.</li>
+      <li>Bun 1.4.2 or newer is optional and CI-tested for adapter tests and CLI smoke checks. Use the reference Node.js runtime if a Cline or MCode integration issue occurs.</li>
+      <li>No npm install or Python dependency is required for the current verification suite.</li>
+    </ul>
+  </section>
 
-Cline and MiniMax Code use different ledgers and billing rules. Each edition
-intentionally preserves its runtime-specific accounting logic.</pre></section>
-<section><h2>7. Installation</h2><h3>Cline</h3><pre>1. Close Cline.
-2. Extract the bundle.
-3. Copy cline-session-cost into:
-   %USERPROFILE%\.cline\skills\
-4. Confirm:
-   %USERPROFILE%\.cline\skills\session-cost\SKILL.md
-5. Start a new Cline session.
-6. Run:
-   /session-cost</pre><h3>MiniMax Code</h3><pre>1. Close MiniMax Code.
-2. Extract the bundle.
-3. Copy mcode-session-cost into:
-   %USERPROFILE%\.minimax\skills\
-4. Confirm:
-   %USERPROFILE%\.minimax\skills\session-cost\SKILL.md
-5. Start a new MiniMax Code session.
-6. Run:
-   /session-cost</pre></section>
-<section><h2>8. Privacy and compatibility</h2><p>Local reports read runtime data already stored on the computer. Optional Cline account mode uses the customerâ€™s own Cline authentication and read-only API access. The product does not print or store credentials and does not use a developer-owned server.</p><p>Runtime updates may change ledgers, model identifiers, rate catalogs, or API response formats. The product reports unknown or unpriced data rather than guessing.</p><pre>Requirements:
-â€¢ Windows 10 or Windows 11
-â€¢ Cline CLI or MiniMax Code CLI
-â€¢ Node.js 22.5 or newer
-â€¢ Internet access only for Cline account mode
-â€¢ Valid Cline authentication for Cline account mode</pre></section>
-<section><h2>9. Refund and support policy</h2><p>This is a digital software product delivered as an instant download. Because it can be inspected after purchase, refunds after download are generally not available except where required by law or where the product is materially defective or materially different from its description.</p><p>Support includes installation help, command usage, compatibility troubleshooting, and confirmed bug reports. It does not include custom provider integration, reverse engineering, deleted-data recovery, or custom feature development.</p></section>
-<section><h2>10. Gumroad fees</h2><table><tr><th>Channel</th><th>Current fee</th><th>Example on $29</th></tr><tr><td>Direct sales</td><td>10% + $0.50</td><td>$3.40 fee; approximately $25.60 received</td></tr><tr><td>Gumroad Discover</td><td>30%</td><td>$8.70 fee; approximately $20.30 received</td></tr></table><p>Gumroad states that it acts as Merchant of Record and handles applicable sales-tax collection and remittance. You remain responsible for your own income and business taxes.</p></section>
-<section><h2>11. Launch checklist</h2><ul><li>Commercial license added</li><li>Changelog added</li><li>Cline ZIP tested</li><li>MCode ZIP tested</li><li>Bundle ZIP tested</li><li>No secrets or databases in packages</li><li>Test purchase completed</li><li>Refund flow tested</li><li>Payout method connected</li><li>Support email configured</li><li>Product thumbnail created</li><li>Product pages finalized</li></ul></section>
-<section><h2>12. Recommended launch</h2><pre>Product: Session Cost Skills â€” Complete Bundle
-Regular price: $29
-Launch price: $19
-Includes: Cline + MCode
-Updates: 12 months
-Support: 30 days
-License: Commercial single-user license
-Refunds: Digital-product policy</pre><p>Start with a small private beta, fix installation and compatibility issues, then publish v1.0 with the bundle pricing above.</p></section>
-<footer>Saved Gumroad selling guide â€¢ Session Cost Skills â€¢ 2026</footer></main></body></html>
+  <section id="install">
+    <h2>3. Install to the exact skill paths</h2>
+    <p>Copy the <em>contents</em> of each adapter source directory. The final directory must be named <code>session-cost</code>.</p>
+    <table>
+      <thead><tr><th>Adapter</th><th>Windows destination</th><th>Linux/macOS destination</th></tr></thead>
+      <tbody>
+        <tr><td>Cline</td><td><code>%USERPROFILE%\.cline\skills\session-cost\</code></td><td><code>$HOME/.cline/skills/session-cost/</code></td></tr>
+        <tr><td>MCode</td><td><code>%USERPROFILE%\.minimax\skills\session-cost\</code></td><td><code>$HOME/.minimax/skills/session-cost/</code></td></tr>
+      </tbody>
+    </table>
 
+    <h3>Windows from a source checkout</h3>
+    <pre>$Repo = "C:\path\to\session-cost-skills"
+$ClineSkill = "$env:USERPROFILE\.cline\skills\session-cost"
+$MCodeSkill = "$env:USERPROFILE\.minimax\skills\session-cost"
+
+New-Item -ItemType Directory -Force $ClineSkill | Out-Null
+New-Item -ItemType Directory -Force $MCodeSkill | Out-Null
+Copy-Item -Path "$Repo\adapters\cline\skill\*" -Destination $ClineSkill -Recurse -Force
+Copy-Item -Path "$Repo\adapters\mcode\skill\*" -Destination $MCodeSkill -Recurse -Force</pre>
+
+    <h3>Linux or macOS from a source checkout</h3>
+    <pre>mkdir -p "$HOME/.cline/skills/session-cost" "$HOME/.minimax/skills/session-cost"
+cp -R adapters/cline/skill/. "$HOME/.cline/skills/session-cost/"
+cp -R adapters/mcode/skill/. "$HOME/.minimax/skills/session-cost/"</pre>
+
+    <h3>From a release archive</h3>
+    <p>A release archive contains staging folders named <code>cline-session-cost/</code> and <code>mcode-session-cost/</code>. Copy each folder’s contents into the corresponding <code>session-cost/</code> destination; do not expect the wrapper name to become the installed skill name.</p>
+
+    <h3>Clean-install assertion (PowerShell)</h3>
+    <pre>$ClineSkill = "$env:USERPROFILE\.cline\skills\session-cost"
+$MCodeSkill = "$env:USERPROFILE\.minimax\skills\session-cost"
+
+if (-not (Test-Path "$ClineSkill\SKILL.md")) { throw "Cline install is incomplete" }
+if (-not (Test-Path "$MCodeSkill\SKILL.md")) { throw "MCode install is incomplete" }
+
+node "$ClineSkill\scripts\session-cost.mjs" --help
+node "$MCodeSkill\scripts\session-cost.mjs" --help</pre>
+    <p>Restart the CLI or begin a new session after installing so it discovers the skill.</p>
+  </section>
+
+  <section id="usage">
+    <h2>4. Run the skills</h2>
+    <pre># Cline
+node "$env:USERPROFILE\.cline\skills\session-cost\scripts\session-cost.mjs"
+node "$env:USERPROFILE\.cline\skills\session-cost\scripts\session-cost.mjs" --account
+node "$env:USERPROFILE\.cline\skills\session-cost\scripts\session-cost.mjs" --dashboard
+
+# MCode
+node "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs"
+node "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs" --rates
+node "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs" --refresh-rates
+node "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs" --dashboard</pre>
+    <p>Use <code>--session &lt;id&gt;</code> when automatic selection is ambiguous. Date, provider, model, JSON, comparison, and output options are listed by each CLI’s <code>--help</code>.</p>
+  </section>
+
+  <section id="configuration">
+    <h2>5. Optional standing configuration</h2>
+    <p>Both CLIs read, but do not rewrite, these optional files:</p>
+    <ul>
+      <li><code>%USERPROFILE%\.cline\session-cost.json</code></li>
+      <li><code>%USERPROFILE%\.minimax\session-cost.json</code></li>
+    </ul>
+    <pre>{
+  "standingSummary": true,
+  "includeChildren": true,
+  "defaultFormat": "compact",
+  "warnOnCacheRateBelow": 0.6
+}</pre>
+    <p>Command-line selection still takes precedence where explicitly supported. Keep the configuration free of credentials.</p>
+  </section>
+
+  <section id="privacy">
+    <h2>6. Privacy, network, and file-write disclosures</h2>
+    <table>
+      <thead><tr><th>Operation</th><th>Reads</th><th>Network</th><th>Writes</th></tr></thead>
+      <tbody>
+        <tr><td>Cline local report</td><td>Cline SQLite ledger and message JSON</td><td>No</td><td>Only requested JSON/stdout or dashboard output</td></tr>
+        <tr><td>Cline <code>--account</code></td><td>Credential and Cline account responses</td><td>Yes; read-only Cline API</td><td>Only requested output</td></tr>
+        <tr><td>MCode local report</td><td>MCode runtime SQLite ledger and session logs</td><td>No</td><td>Only requested output</td></tr>
+        <tr><td>MCode <code>--rates</code></td><td>Bundled <code>references/provider-rates.json</code></td><td>No</td><td>Only requested output</td></tr>
+        <tr><td>MCode <code>--refresh-rates</code></td><td>Current rate file plus provider pricing sources</td><td>Yes; CommandCode and StepFun</td><td>Atomically rewrites the installed rate file only after all sources validate; otherwise keeps the whole prior valid table without writing</td></tr>
+        <tr><td><code>--dashboard</code> / <code>--out</code></td><td>Selected report data</td><td>No external assets</td><td>Writes the chosen local HTML path</td></tr>
+      </tbody>
+    </table>
+    <div class="callout"><strong>Generated output can be private.</strong> HTML and JSON can include session titles, IDs, models, providers, usage, costs, and account identifiers even though they are self-contained and do not phone home when opened.</div>
+    <p>The project has no developer-owned telemetry or accounting server.</p>
+  </section>
+
+  <section id="account-credentials">
+    <h2>7. Cline account credentials</h2>
+    <p><code>--account</code> resolves credentials in this order:</p>
+    <ol>
+      <li><code>CLINE_API_KEY</code></li>
+      <li>A non-expired OAuth access token in <code>data/settings/providers.json</code> for <code>cline</code> or <code>cline-pass</code></li>
+      <li>Legacy <code>data/secrets.json</code> <code>apiKey</code></li>
+    </ol>
+    <p>The credential is sent only as authorization for the read-only Cline API request. It is not printed or embedded in a dashboard. Re-authenticate with <code>cline auth --provider cline</code> if it is expired or invalid.</p>
+  </section>
+
+  <section id="accounting">
+    <h2>8. Accounting behavior that differs by runtime</h2>
+    <table>
+      <thead><tr><th>Topic</th><th>Cline</th><th>MCode</th></tr></thead>
+      <tbody>
+        <tr><td>Input tokens</td><td><code>inputTokens</code> includes cached prompt tokens; fresh input is the remainder after cache read/write.</td><td><code>input_tokens</code> is fresh input and excludes cache reads/writes.</td></tr>
+        <tr><td>Cost</td><td>Uses Cline-recorded per-call <code>metrics.cost</code>.</td><td>Calculates cost from mirrored provider rates.</td></tr>
+        <tr><td>Cache-write billing</td><td>Reports recorded cache-write tokens/cost without applying Cline’s formula to MCode.</td><td>Uses a published cache-write rate. A missing rate is unknown, never an assumed zero; positive cache writes then make the call partial/unknown. StepFun <code>step-5-preview</code> explicitly uses its input rate.</td></tr>
+        <tr><td><code>--include-children</code></td><td>Recursively includes all descendant subagent sessions.</td><td>Includes direct child sessions only in version 0.2.0.</td></tr>
+        <tr><td>Unknown pricing</td><td>Missing recorded cost is reported, not guessed from an external table.</td><td>Unknown provider/model rates are excluded from the priced total and named.</td></tr>
+      </tbody>
+    </table>
+    <p>Never subtract MCode cache reads from <code>input_tokens</code>; that would apply Cline’s convention to the wrong ledger.</p>
+  </section>
+
+  <section id="troubleshooting">
+    <h2>9. Troubleshooting</h2>
+    <table>
+      <thead><tr><th>Symptom</th><th>Check</th></tr></thead>
+      <tbody>
+        <tr><td>Skill is not discovered</td><td>Confirm the file is exactly <code>…\.cline\skills\session-cost\SKILL.md</code> or <code>…\.minimax\skills\session-cost\SKILL.md</code>, then start a new CLI session.</td></tr>
+        <tr><td><code>node:sqlite</code> is unavailable</td><td>Run <code>node --version</code>; upgrade to Node.js 22.13.0 or newer.</td></tr>
+        <tr><td>Cline account unauthorized</td><td>Run <code>cline auth --provider cline</code>, then retry. Do not paste the credential into a report.</td></tr>
+        <tr><td>MCode says a rate is stale or unknown</td><td>Run <code>--rates</code>. Use <code>--refresh-rates</code> only when network access and a writable installed skill are acceptable.</td></tr>
+        <tr><td>MCode refresh cannot write</td><td>Restore write permission or install to a user-writable skills directory. If any source fails, a previous valid table is retained in full and no refresh file is written.</td></tr>
+        <tr><td>Subagent spend is missing</td><td>Use <code>--include-children</code>; Cline includes all descendants, while MCode 0.2.0 includes direct children.</td></tr>
+        <tr><td>Unexpected session selected</td><td>Use <code>--list</code> and then <code>--session &lt;id&gt;</code>.</td></tr>
+        <tr><td>Text renders incorrectly</td><td>Save the HTML as UTF-8. Both HTML documents in this repository declare UTF-8 and are checked by CI.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="support">
+    <h2>10. Get help safely</h2>
+    <p>For non-sensitive help, use the repository’s public issue tracker: <a href="https://github.com/hasnaina955/session-cost-skills/issues">hasnaina955/session-cost-skills issues</a>. Include the adapter, version, OS, Node/Bun version, exact command, expected result, and redacted error.</p>
+    <p>Never attach credentials, <code>providers.json</code>, <code>secrets.json</code>, databases, runtime JSON/JSONL, private dashboards, or account identifiers. Report vulnerabilities through the private advisory route in <a href="../SECURITY.md">SECURITY.md</a>.</p>
+  </section>
+
+  <footer>Session Cost Skills 0.2.0 · MIT-licensed source · This guide describes the customer-facing support contract, not private development notes.</footer>
+</main>
+</body>
+</html>

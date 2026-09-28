@@ -21,7 +21,7 @@ Mirrored providers and their sources:
 
 | Provider key | Source |
 | --- | --- |
-| `commandcode` | `https://commandcode.ai/docs/resources/pricing-limits` (71 models, peak/off-peak bands) |
+| `commandcode` | `https://commandcode.ai/docs/resources/pricing-limits` (79 parsed model records, with source context/time/promotion metadata where published) |
 | `stepfun` | `https://platform.stepfun.ai/docs/en/guides/pricing/details.md` (10 token-billed models, flat) |
 
 ## `local_runtime_token_usage` columns
@@ -106,19 +106,50 @@ calls), an independent hand computation from the message log plus the ledger giv
 **$10.684553**, and the script reports **$10.684553** — exact agreement, with 194/194 rows matched
 by timestamp.
 
-## Cache-write billing differs by provider
+## Cache-write billing and missing components
 
-This is the one place where a single billing rule would be wrong, and it is why the table stores a
-per-model `cacheWrite` rate:
+The rate parser reads CommandCode's structured `cacheWriteCost` field. A published numeric `0` is
+kept as an explicit zero; an omitted field is stored as JSON `null` and is **not** converted to
+zero. Each generated rate-card component retains both its source/raw amount and normalized numeric
+value. This distinction is exposed per component in `componentCompleteness` and in the `--rates`
+coverage output. A call with cache-write tokens and a null write rate is partial/unknown pricing:
+the known input/read/output components may be shown as a diagnostic subset, but the session cost
+is not presented as complete. The affected component's cost field is `null` and its known-rate
+status is exposed; it is not rendered as `$0.000000`.
 
-- **CommandCode** publishes no cache-write rate for these models, so cache writes bill at `$0`.
-- **StepFun** states *"For `step-5-preview`, the cache-miss input price includes writing new
-  content to the cache."* So for `step-5-preview` cache writes bill at the **input rate ($1.00/M)**.
-  The docs do not say this for the other StepFun models, so they keep `$0` rather than being
-  guessed at.
+StepFun is different because its official pricing page explicitly says that, for
+`step-5-preview`, the cache-miss input price includes writing new content to the cache. The parser
+therefore records `cacheWrite = input` (currently `$1.00/M`) for that model. The other StepFun
+rows do not publish a write component, so their value remains `null`; it is not guessed to be
+zero.
 
-Cache writes are rare but real — 9 ledger rows on 2026-09-20 carried up to 47,293 cache-write
-tokens — so the rule is worth getting right rather than hard-coding `$0` everywhere.
+The ledger's token arithmetic is unchanged: `cacheWriteTokens` is a separate prompt component and
+is included in `promptTokens` and `totalTokens`. Only its *rate* is conditional on published
+coverage.
+
+## Effective dates, context bands, and promotions
+
+The mirrored table is a rate-card catalog, not an undated price list. Each model can carry:
+
+- `effectiveFrom` / `effectiveThrough` and an ISO timestamp on each generated `rateCards` entry;
+- `contextTiers` with an inclusive `maxContext` threshold;
+- UTC `timeOfDay` peak/off-peak bands and their source effective date;
+- `promotions` with `starts`, `ends`, discount metadata, and explicit `listRates` when the source
+  publishes a revert rate; and
+- `source`, `sourceVersion`, `fetchedAt`, and a SHA-256 `rateCardFingerprint`; each card's
+  `components` entries carry `tokenComponent`, raw/value, and status fields.
+
+A call at an explicit context length selects the matching tier. The MCode ledger does not expose
+a reliable historical context-length field for every call, so when context is unavailable the
+script takes the **highest published rate for each component as a conservative upper bound** and
+sets `pricingExact: false`; it never labels that fallback as an exact invoice. A call before a known
+effective date, or outside a promotion window without a published list rate, is unknown rather
+than silently repriced with today's value.
+
+Promotion windows are selected by the call timestamp. A current promotional rate and its explicit
+list/revert rate remain separate records. If the source gives no start/end date, the rate is marked
+as observed/approximate; a missing future or historical rate is not inferred from a discount
+percentage.
 
 ## Peak / off-peak bands
 
@@ -128,19 +159,14 @@ DeepSeek V4 models (and a few others) bill differently by UTC time of day:
 - off-peak: the other 17h/day
 
 The script resolves the band **per call** from each row's `ts` (epoch ms), not per session, so a
-session that spans a boundary is billed correctly on both sides. Band rule implemented:
-
-```
-peak  ⇔  UTC weekday ∈ Mon..Fri  AND  (1 ≤ utcHour < 4  OR  6 ≤ utcHour < 10)
-```
-
-The `04:00` / `10:00` boundaries are reads of the published window `01–04 & 06–10`; a session
-exactly on the boundary can differ by one call. Models without a `timeOfDay` block in the rate
-table have a single flat rate — StepFun models all fall here.
+session that spans a boundary is handled on both sides. The `04:00` / `10:00` boundaries are
+reads of the published window `01–04 & 06–10`; a session exactly on the boundary can differ by
+one call. If a time-band component is absent, it remains null and makes that call partial; it is
+not filled with a zero or an unrelated base rate.
 
 Verified by hand on a synthetic ledger: one peak call (`2026-09-21T02:00Z`, Monday) plus one
 off-peak call (`2026-09-21T05:00Z`), 100k fresh in / 1M cache read / 10k out each, must total
-`0.048 + 0.024 = $0.072000`. The script reports exactly `$0.072000`.
+`0.048 + 0.024 = $0.072000` when the applicable card has all four components.
 
 ## Model-id matching
 
@@ -153,9 +179,29 @@ lowercasing, dropping the `vendor/` prefix, and removing every non-alphanumeric 
 `inclusionai/ling-3.0-flash-sante:free`) are listed under `freeModels` and bill at `$0`.
 
 If a model matches nothing inside its provider's table, the report lists it as `rate unknown` with
-its call count, keeps it out of the priced total, and exits with code `2`. It never invents a rate
-— report the unknown model to the user and offer `--refresh-rates`, then add an alias if the
-catalog renamed it.
+its call count, keeps it out of the priced total, and exits with code `2`. A recognized model can
+also be **partially covered** when a required component is null or when a context/promotion
+selection is unavailable. JSON exposes `pricingCoverage`, `pricingExact`, component completeness,
+rate-card fingerprints, and the partial known-component value. The script never invents a rate or
+turns an unknown component into zero.
+
+## Cost domains in JSON
+
+MCode's ledger `cost_usd` and the provider-rate calculation are different domains. The normalized
+JSON keeps them separate:
+
+- `billing.recordedCostUsd`: the sum of numeric ledger `cost_usd` values (an explicit zero remains
+  zero); it is `null` when any row is missing/unparseable, with coverage and known-row counts;
+- `billing.rateCalculatedCostUsd`: the provider-rate estimate, or `null` when no complete priced
+  subset exists;
+- `billing.apiEquivalentCostUsd`: the same estimate only when pricing coverage is complete,
+  explicitly labelled API-equivalent rather than charged; and
+- `billing.pricingCoverage` / `pricingExact`: `complete`, `partial`, `unknown`, and whether the
+  selected card is exact or conservative/estimated.
+
+`cost_usd` in the current BYOK ledger is commonly a runtime placeholder zero. A zero there must
+not be substituted for the rate estimate, and the rate estimate must not be called a recorded
+charge.
 
 ## Known limits
 
@@ -170,6 +216,13 @@ catalog renamed it.
 - A session that is still running yields a snapshot, not a final figure: the report states the
   snapshot instant and warns when the last call is recent. Reading the same session twice will
   legitimately give different totals.
-- Rates drift. Each provider's `fetchedAt` is recorded in the rate file and printed in the report
-  footer; `--refresh-rates` re-fetches both sources, keeping the previous rates for a source that
-  fails.
+- Rates drift. Each provider's `fetchedAt`, parser version, and rate-card fingerprint are recorded
+  in the rate file and printed in the report footer. `--refresh-rates` parses structured source
+  data, validates required components and duplicate model ids, then writes through a temporary
+  file and atomic rename. If any source is incomplete or fails, the refresh is rejected and the
+  previous valid table is kept; the CLI reports the rejection with a nonzero status and never
+  publishes a partial refresh.
+- A current rate snapshot is not proof of historical pricing when the source does not publish an
+  effective date. Such calls are labelled estimates and carry the source/fetch provenance.
+- CommandCode's open-source table says prices are provider means and that actual upstream cost
+  can vary. The report preserves that caveat instead of calling the result an invoice amount.

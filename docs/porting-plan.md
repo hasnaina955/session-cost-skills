@@ -1,61 +1,73 @@
 # MCode porting plan
 
-## Phase 1 — preserve the native baseline
+## Current baseline
 
-- Keep the existing MCode skill and provider-rate logic intact.
-- Copy it into `adapters/mcode/skill/` without importing Cline credentials or local session data.
-- Add a version marker and tests for the native MCode ledger assumptions.
+The MCode adapter under `adapters/mcode/skill/` is the native implementation. Port shared product behavior without importing Cline credentials, local ledgers, or token formulas. Any change to the following invariants requires MCode-specific tests and documentation updates.
 
-## Phase 2 — extract shared UX
+## Non-negotiable MCode accounting
 
-Port these Cline usability improvements to the MCode adapter:
+- `input_tokens` is fresh input and excludes cache reads/writes.
+- Total prompt = input + cache read + cache write.
+- Cost is calculated from mirrored CommandCode/StepFun rates, not the ledger's zero `cost_usd` values.
+- Cache reads use the model's published cache-read rate.
+- A provider-supplied cache-write rate is used when present. An omitted value remains `null`/unknown, never an assumed zero.
+- A call with positive cache-write tokens and no published cache-write rate is partial/unknown rather than silently free.
+- StepFun `step-5-preview` cache writes are priced at that model's input rate; other unpublished StepFun cache-write rates are not guessed.
+- Unknown provider/model rates produce token counts without a guessed cost.
+- Model and provider can switch within one session, so every call is priced using its resolved provider/model.
+- Rate timestamps and priced/unpriced coverage remain visible.
+
+These rules are intentionally different from Cline, whose `inputTokens` includes cached prompt tokens.
+
+## Storage and network contract
+
+- Normal reports open the MCode runtime ledger and read session message logs. They do not rewrite the ledger.
+- `--rates` reads the bundled `references/provider-rates.json`; it does not need network access.
+- `--refresh-rates` explicitly fetches the configured CommandCode and StepFun pricing sources.
+- A successful all-source refresh atomically writes `references/provider-rates.json` inside the installed MCode skill.
+- If any source fetch or validation fails and a previous valid table exists, the whole previous table is retained and no file is written; without a valid previous table the refresh fails.
+- The installed skill directory therefore must be writable for an explicit refresh and should be backed up before one.
+- `--dashboard` and `--out` write local HTML. JSON output may expose session titles, IDs, models, providers, tokens, and costs and must be handled as private data.
+- There is no developer-owned telemetry service.
+
+## Child-session behavior
+
+MCode subagents are separate session IDs. In 0.2.0, `--include-children` includes sessions whose `parent_session_id` is the selected target (direct children only). Reports name excluded children. Do not describe this as recursive descendant aggregation.
+
+Cline's same flag recursively includes every descendant. Any future MCode recursive implementation must walk descendants safely, preserve each child's provider/model resolution, avoid cycles/duplicates, and add nested-child tests before documentation changes.
+
+## Shared UX to preserve
 
 - Automatic current-session selection
 - `--last`
 - `--today`
 - `--compare`
-- Date range filters
+- UTC date range filters
 - Provider/model filters
 - Versioned JSON output
 - Snapshot metadata
 - Optional standing-summary configuration
-- Clear excluded/included subagent reporting
+- Clear included/excluded subagent reporting
+- Self-contained dashboard output
 
-## Phase 3 — preserve MCode-specific accounting
+The adapters share UX, not raw field interpretation.
 
-Keep these semantics MCode-only:
+## Runtime compatibility
 
-- `input_tokens` is fresh input and excludes cache reads
-- Total prompt = input + cache read + cache write
-- Cost is calculated from mirrored CommandCode/StepFun rates
-- Unknown provider/model rates produce token counts without a guessed cost
-- Model/provider can switch within one session
-- Rate timestamps and coverage must be visible
+- Node.js 22.13.0 or newer is the repository support floor declared by `package.json` and exercised in CI.
+- Windows, Ubuntu, and macOS run the Node verification matrix.
+- Bun 1.4.2 or newer is an optional compatibility runtime with separate adapter-test and CLI smoke coverage; it is not a replacement for the declared Node engine.
+- Do not add Python or dependency requirements to a port unless the implementation and release contract are deliberately changed.
 
-## Phase 4 — add MCode rate coverage mode
+## Release handoff
 
-Instead of copying Cline `--account`, add an MCode-specific mode such as:
+The MCode customer package is built from the explicit file allowlist in [release.md](release.md), not by copying the repository root. A release uses the same `X.Y.Z` identity and `vX.Y.Z` tag as Cline and the combined bundle. Each artifact includes `RELEASE-VERSION.txt`, the root MIT license, and support/security documents; the release output also includes checksums and a clean-install smoke result.
 
-```text
-/session-cost rates
-```
-
-It should report:
-
-- Mirrored providers
-- Rate-table freshness
-- Models with complete rates
-- Models with unknown rates
-- Whether the selected session is fully priceable
-- Priced versus unpriced call counts
-
-## Phase 5 — release
-
-Build separate artifacts:
+Before tagging, run:
 
 ```text
-dist/cline-session-cost-vX.Y.Z.zip
-dist/mcode-session-cost-vX.Y.Z.zip
+npm run verify
+bun test adapters
 ```
 
-Run both adapter test suites before creating either artifact.
+The second command is the Bun compatibility check, not a replacement for the Node matrix. Packaging/tagging commands are documented separately because they require an approved release script and `package.json` entry.

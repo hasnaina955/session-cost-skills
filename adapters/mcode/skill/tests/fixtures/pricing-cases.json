@@ -1,0 +1,74 @@
+{
+  "source": "https://commandcode.ai/docs/resources/pricing-limits",
+  "parserVersion": "commandcode-rsc-v2",
+  "fetchedAt": "2026-01-10T00:00:00.000Z",
+  "models": {
+    "zero-write": {
+      "id": "zero-write",
+      "name": "Zero write",
+      "provider": "Synthetic",
+      "input": 2,
+      "output": 4,
+      "cacheRead": 0.2,
+      "cacheWrite": 0,
+      "effectiveFrom": "2026-01-01T00:00:00.000Z",
+      "requiredComponents": ["input", "output", "cacheRead", "cacheWrite"]
+    },
+    "paid-write": {
+      "id": "paid-write",
+      "name": "Paid write",
+      "provider": "Synthetic",
+      "input": 2,
+      "output": 4,
+      "cacheRead": 0.2,
+      "cacheWrite": 1.5,
+      "effectiveFrom": "2026-01-01T00:00:00.000Z",
+      "requiredComponents": ["input", "output", "cacheRead", "cacheWrite"]
+    },
+    "missing-write": {
+      "id": "missing-write",
+      "name": "Missing write",
+      "provider": "Synthetic",
+      "input": 2,
+      "output": 4,
+      "cacheRead": 0.2,
+      "cacheWrite": null,
+      "effectiveFrom": "2026-01-01T00:00:00.000Z",
+      "requiredComponents": ["input", "output", "cacheRead"]
+    },
+    "context-model": {
+      "id": "context-model",
+      "name": "Context model",
+      "provider": "Synthetic",
+      "input": 1,
+      "output": 2,
+      "cacheRead": 0.1,
+      "cacheWrite": 0.5,
+      "effectiveFrom": "2026-01-01T00:00:00.000Z",
+      "requiredComponents": ["input", "output", "cacheRead", "cacheWrite"],
+      "contextTiers": [
+        { "maxContext": 100000, "input": 1, "output": 2, "cacheRead": 0.1, "cacheWrite": 0.5 },
+        { "maxContext": null, "input": 3, "output": 6, "cacheRead": 0.3, "cacheWrite": 1.5 }
+      ]
+    },
+    "promo-model": {
+      "id": "promo-model",
+      "name": "Promotion model",
+      "provider": "Synthetic",
+      "input": 1,
+      "output": 2,
+      "cacheRead": 0.1,
+      "cacheWrite": 0.5,
+      "effectiveFrom": "2026-01-01T00:00:00.000Z",
+      "requiredComponents": ["input", "output", "cacheRead", "cacheWrite"],
+      "promotions": [
+        {
+          "id": "promo",
+          "starts": "2026-02-01T00:00:00.000Z",
+          "ends": "2026-02-28T23:59:59.999Z",
+          "listRates": { "input": 2, "output": 4, "cacheRead": 0.2, "cacheWrite": 1 }
+        }
+      ]
+    }
+  }
+}
