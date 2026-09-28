@@ -76,7 +76,13 @@ export function barChart({ rows = [], width = 520, rowHeight = 26, format = (val
       + `<rect x="${labelWidth}" y="${y + 3}" width="${w.toFixed(1)}" height="${rowHeight - 10}" rx="3" fill="${fill}"></rect>`
       + `<text x="${labelWidth + plot + 8}" y="${y + 15}" font-size="12" fill="${row.unknown ? 'var(--warning)' : 'var(--muted)'}">${escapeXml(shown)}</text>`;
   }).join('');
-  return frame({ width, height, title, description: description || `${rows.length} values, largest ${format(max)}`, body });
+  // When nothing is priced, the largest value is not zero - it is unknown. Saying "$0.00" here
+  // is the silent-zero failure wearing a chart, and it is the reason this branch exists.
+  const priced = rows.filter((row) => !row.unknown);
+  const summary = priced.length === 0
+    ? 'no priced value'
+    : `${rows.length} value(s), largest ${format(max)}`;
+  return frame({ width, height, title, description: description || summary, body });
 }
 
 /**
