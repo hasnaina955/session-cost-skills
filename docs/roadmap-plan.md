@@ -23,8 +23,8 @@ Delivered and merged, each on its own PR with the full CI matrix green:
 | WP-3.1 | A zero-dependency inline-SVG chart module |
 | v0.5.0 | Cut, with a cross-platform skill update workflow (`docs/updating.md`) |
 
-Still ahead: WP-2.1-2.4 (the shared CLI kernel), WP-3.2-3.5 (dashboard v2, terminal bars, themes,
-share card), WP-4.x (MCP server, installer, perf budget), and Phase 5 adapters.
+**Phase 3 (Sight) is complete.** Still ahead: WP-2.1-2.4 (the shared CLI kernel), WP-4.x (MCP
+server, installer, perf budget), and Phase 5 adapters.
 
 Two findings are recorded rather than papered over, both filed as issues:
 `calculateTokenCost` coerces unusable token counts into a finite `0` (#67), and `bandForTimestamp`
