@@ -6,6 +6,48 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- Cline runs on the shared kernel, the second runtime to do so. `adapters/cline/skill/scripts/session-cost.mjs`
+  went from 898 lines to 9. The runtime-specific half moved intact to
+  `adapters/cline/skill/scripts/lib/runtime.mjs` (1,020 lines). As with MCode this was code motion
+  rather than a rewrite: all ten golden files are byte-identical to the baseline captured before
+  either port, and `--help` was diffed line by line against a stashed pre-port build.
+
+  Cline needed one thing MCode did not. Its `die()` called `process.exit(2)` from the inside of
+  the report path, which is untestable and unsafe on Windows, where exiting while a database
+  handle is open trips a libuv assertion. It now raises the kernel's `KernelError`, so the exit
+  code is the kernel's decision and no function below the adapter decides it. `--account` also
+  stopped being a branch inside the report and became an `extraModes` entry: it reads a different
+  source and produces a different document, and there is now no function through which an account
+  figure could reach `billing`. That is accounting rule 3 made structural instead of promised, and
+  a test asserts the report step does not mention `account` at all.
+
+  The kernel gained the extra-mode dispatch WP-2.3 assumed and which WP-2.1 had not built. An extra
+  mode runs after the configuration is loaded and instead of the report, so `--session-config`
+  still applies to it and no invocation can produce both documents.
+
+  Review found that last claim was wrong on the first attempt and the shipped version is corrected:
+  the extra mode was dispatched straight after `loadConfig`, which silently skipped `configAction`,
+  `setup`, `diagnostic` and `applyDefaults`. `--account --init-config` therefore stopped writing the
+  config file and went to the network instead - verified by running the pre-port and post-port
+  builds side by side, since both still exited 2 and only the side effect differed. An extra mode now
+  replaces the report step alone, and a test pins the ordering.
+
+  Two wiring bugs in the same code are also fixed. The adapter's `aggregate` member called a
+  three-argument function with one, which would have left the aggregate's title and selection method
+  undefined. And `runOnce` re-implemented the database-open guards inline while the adapter's own
+  `open` member existed unused, so those guards now exist once.
+
+  Review also found that the runtime-adapter interface over-claimed, and that is corrected here
+  rather than deferred. WP-2.1 required twelve members, but the kernel invokes three of them:
+  `open`, `close`, `listSessions`, `resolveCurrent`, `buildReport` and `aggregate` are never
+  called, and both adapters satisfied them with `() => []` and `() => ({})`. `validateAdapter`
+  passed, which is the precise false confidence the interface exists to prevent - and the reason
+  the `aggregate` arity bug above could sit in the tree unnoticed. Those six move to a new
+  exported `KIT_MEMBERS`, which nothing requires yet; the required list is now the members a run
+  actually consumes plus the facts it states about a runtime. A test fails if either adapter starts
+  defining a kit member, and another asserts the two lists stay disjoint, so the gap cannot quietly
+  close with a stub. They are the contract WP-2.4's conformance kit will exercise.
+
 - MCode runs on the shared kernel. `adapters/mcode/skill/scripts/session-cost.mjs` went from 1,444
   lines to 12: it imports the adapter and calls `runCli`. The runtime-specific half moved, intact,
   to `adapters/mcode/skill/scripts/lib/runtime.mjs` (1,502 lines) - the ledger reads, the pricer,
