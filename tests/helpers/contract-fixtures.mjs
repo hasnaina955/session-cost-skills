@@ -149,6 +149,18 @@ export function createClineFixture({ base } = {}) {
     today: partialStarted.slice(0, 10),
     rootDate: rootStarted.slice(0, 10),
     sessionIds: ['cline-root', 'cline-child', 'cline-grandchild', 'cline-other', 'cline-partial', 'cline-truncated'],
+    // The conformance kit's scenario handles. See tests/conformance/run-conformance.mjs for what
+    // each one is required to be. Naming them here rather than in the kit keeps the kit
+    // runtime-agnostic: a new adapter supplies its own fixture with the same five handles.
+    root: 'cline-root',
+    child: 'cline-child',
+    grandchild: 'cline-grandchild',
+    // Cline has no session whose cost is wholly unknown - it records a cost per call - so the rule-1
+    // case is `cline-partial`, whose coverage is partial: the disclosed amount is a lower bound and
+    // the CSV charge cell must stay empty. `cline-truncated` is the known-zero case (no calls),
+    // which is a real answer and is what the `torn` handle exercises.
+    unpriced: 'cline-partial',
+    torn: 'cline-truncated',
   };
 }
 
@@ -314,6 +326,14 @@ export function createMCodeFixture({ base } = {}) {
     today: new Date(partialTs).toISOString().slice(0, 10),
     rootDate: new Date(rootTs).toISOString().slice(0, 10),
     sessionIds: ['mcode-root', 'mcode-child', 'mcode-grandchild', 'mcode-other', 'mcode-partial', 'mcode-truncated', 'mcode-unpriced'],
+    // The conformance kit's scenario handles. See tests/conformance/run-conformance.mjs for what
+    // each one is required to be. Naming them here rather than in the kit keeps the kit
+    // runtime-agnostic: a new adapter supplies its own fixture with the same five handles.
+    root: 'mcode-root',
+    child: 'mcode-child',
+    grandchild: 'mcode-grandchild',
+    unpriced: 'mcode-unpriced',
+    torn: 'mcode-truncated',
   };
 }
 
