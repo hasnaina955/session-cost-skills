@@ -6,6 +6,38 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- `shared/kernel.mjs`: the orchestration both entry points were writing twice, and the piece
+  WP-2.1's title promised but did not ship. It owns argument parsing (through the existing
+  `shared/cli-args.mjs`), the order a run performs its steps in, help and version, and the
+  translation from a thrown condition to an exit code. It deliberately does not interpret storage
+  or render a report: those are the two places where being wrong produces a plausible number
+  instead of an error, so they stay in the adapter.
+
+  The step order is exported as data (`RUN_STEPS`) rather than written as a call graph, so it is
+  readable in one place and testable without running a runtime. A step the adapter does not define
+  is skipped, not called, so a runtime with no rate table has no refresh step.
+
+  The exit codes are pinned individually in the tests, because they are the part that cannot
+  change later without breaking someone's automation: `0` priced, `2` ran but incomplete or a
+  usage error, `1` a real fault. A caller can tell "I could not price this" from "the tool broke",
+  and a stack trace stays behind `SESSION_COST_DEBUG` because it names local paths and can quote a
+  payload fragment.
+
+  `defaults` and `versionBanner` join the required members of the runtime-adapter interface,
+  because the kernel drives them on the runtime's behalf and cannot run an adapter that omits
+  them. The step hooks are permitted but not required, and `RUN_STEPS` is derived from the
+  interface's own list so the two cannot drift.
+
+  No adapter uses any of this yet: both entry points are untouched and their output is unchanged.
+  Porting MCode is the next work package, with the golden corpus as the check that it changes
+  nothing.
+
+  The Node 22.15 CI jobs caught what a local run on Node 24 could not: a missing brace in the new
+  test file made one test swallow the following nine as nested subtests, so the file reported nine
+  failures and cancelled the rest instead of the fifteen independent tests it contains. It is
+  worth recording because the file passed `node --check` and passed on the newer runtime - only
+  the older runner's subtest accounting exposed it.
+
 - `docs/session-cost-support-pack.html`: the one customer-facing document to send when someone is
   already installed and asks where the numbers come from. It covers the exact install paths, the
   config layers, what each operation reads and writes, where the network is used, how Cline

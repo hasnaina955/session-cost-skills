@@ -31,13 +31,48 @@ export const COST_BASIS = Object.freeze({
   ESTIMATED: 'provider-rate-estimate',
 });
 
-/** Every member an adapter must provide. Checked before the kernel runs anything. */
+/**
+ * Every member an adapter must provide. Checked before the kernel runs anything.
+ *
+ * `defaults` and `versionBanner` are here because the kernel drives them, not because an adapter
+ * finds them useful: the kernel parses through `shared/cli-args.mjs` and needs each runtime's
+ * option defaults, and it answers `--version` on the runtime's behalf. An adapter that supplies
+ * neither cannot be run, which is why they are required rather than optional. `helpLines` and the
+ * rest stay optional so a minimal adapter is still expressible in a test.
+ */
 export const REQUIRED_MEMBERS = Object.freeze([
   'id', 'displayName', 'costBasis', 'defaultDataDir', 'open', 'close',
   'listSessions', 'resolveCurrent', 'buildReport', 'aggregate',
+  'defaults', 'versionBanner',
 ]);
 
+/**
+ * Optional members.
+ *
+ * The step hooks (`loadConfig`, `configAction`, `setup`, `diagnostic`, `applyDefaults`,
+ * `preflight`, `run`) are deliberately absent from both lists. They are the kernel's own step
+ * contract, named by `RUN_STEPS` in `shared/kernel.mjs`, and the kernel skips any it does not find
+ * rather than refusing the adapter: a runtime with no rate table has no refresh step, and one with
+ * no setup wizard has no setup step. Listing them here would make every runtime declare hooks it
+ * has no use for, and the unknown-member guard exists precisely to catch a typo like `buildReprot`
+ * that would otherwise be a method nobody calls.
+ */
 export const OPTIONAL_MEMBERS = Object.freeze(['extraModes', 'helpLines', 'storageSchema']);
+
+/**
+ * The kernel's step hooks, duplicated here so the validator can recognise them without importing
+ * the kernel (which imports this module, and the cycle would be worse than the duplication).
+ *
+ * They are optional because the kernel skips any it does not find: a runtime with no rate table
+ * has no refresh step, and one with no setup wizard has no setup step. They are nevertheless
+ * *permitted*, which is the part that matters - the unknown-member guard exists to catch a typo
+ * like `buildReprot` that would otherwise be a method nobody calls, and a hook the kernel itself
+ * looks up by name is not that.
+ */
+export const STEP_HOOKS = Object.freeze([
+  'loadConfig', 'configAction', 'setup', 'diagnostic', 'applyDefaults', 'preflight', 'run',
+]);
+
 
 /**
  * Validate an adapter, and return a list of what is wrong with it.
@@ -56,7 +91,7 @@ export function validateAdapter(adapter) {
     }
   }
   for (const [member, value] of Object.entries(adapter)) {
-    if (REQUIRED_MEMBERS.includes(member) || OPTIONAL_MEMBERS.includes(member)) continue;
+    if (REQUIRED_MEMBERS.includes(member) || OPTIONAL_MEMBERS.includes(member) || STEP_HOOKS.includes(member)) continue;
     problems.push(`unknown member: ${member} - extend the interface in shared/runtime-adapter.mjs instead`);
   }
   if (adapter.id !== undefined && !/^[a-z][a-z0-9-]*$/.test(String(adapter.id))) {
