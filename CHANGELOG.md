@@ -4,6 +4,30 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Changed
+
+- MCode runs on the shared kernel. `adapters/mcode/skill/scripts/session-cost.mjs` went from 1,444
+  lines to 12: it imports the adapter and calls `runCli`. The runtime-specific half moved, intact,
+  to `adapters/mcode/skill/scripts/lib/runtime.mjs` (1,502 lines) - the ledger reads, the pricer,
+  `--rates`, `--refresh-rates`, and every renderer. The kernel now decides the order a run performs
+  its steps in; the adapter says what each step means for MiniMax Code.
+
+  The work was code motion rather than a rewrite, because the acceptance criterion is that output
+  does not change. All ten golden files are byte-identical to a baseline captured before the port
+  started, and the `--help` output was diffed line by line against the pre-port build rather than
+  trusted. The two things that had to be understood rather than moved: the options used to be
+  parsed at module load, so they now arrive through the run context and are reset per run, because
+  `--watch` calls the report once per poll inside one process; and the local `CostError` is now the
+  kernel's `KernelError`, which carries the same "understood failure, exit 2, no stack" contract.
+
+  One existing test needed correcting rather than the code. "Every flag the schema accepts is
+  actually acted on" read `session-cost.mjs` looking for `opts.<key>`, which was a reasonable proxy
+  while the option flow lived in one file and silently became wrong once it did not. It now searches
+  the whole scripts directory. That is a weaker-looking change, so I confirmed the stronger
+  behaviour by renaming every `opts.counterfactual` reference in the adapter and checking the test
+  still fails with "the CLI never reads opts.counterfactual" - it does. A test that stops catching
+  the bug it was written for is worse than one that fails on a layout change.
+
 ### Added
 
 - `shared/kernel.mjs`: the orchestration both entry points were writing twice, and the piece
