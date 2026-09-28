@@ -19,12 +19,18 @@ Delivered and merged, each on its own PR with the full CI matrix green:
 | WP-1.4 | Storage schema-drift detection: a renamed column fails by name instead of reading as zero |
 | WP-1.5 | Bun runs on Windows; the `EBUSY` cleanup failures are gone |
 | WP-1.6 | Seeded fuzzing of session logs, message files, and pricing pages |
+| WP-2.1 | The shared CLI kernel: one implementation of argument parsing, output formatting, and the step machine, with `sync-kernel.mjs` as the only copy of the text |
+| WP-2.2 | MCode onto the kernel |
+| WP-2.3 | Cline onto the kernel |
+| WP-2.4 | The conformance kit: nine scenarios, run as a command or a single test line, plus `docs/adapter-authoring.md` for the next adapter |
 | WP-3.0 | A bounded per-call timeline, and MCode `--json` reports that emit it |
 | WP-3.1 | A zero-dependency inline-SVG chart module |
 | v0.5.0 | Cut, with a cross-platform skill update workflow (`docs/updating.md`) |
 
-**Phase 3 (Sight) is complete.** Still ahead: WP-2.1-2.4 (the shared CLI kernel), WP-4.x (MCP
-server, installer, perf budget), and Phase 5 adapters.
+**Phase 2 (Core) and Phase 3 (Sight) are complete.** The 0.6.0 exit criterion is met on both
+halves: both adapters run on the shared kernel with the ten goldens still byte-identical to the
+baseline captured before the first port, and the timeline is in the contract. Still ahead: WP-4.x
+(MCP server, installer, perf budget), and Phase 5 adapters.
 
 Two findings are recorded rather than papered over, both filed as issues:
 `calculateTokenCost` coerces unusable token counts into a finite `0` (#67), and `bandForTimestamp`
