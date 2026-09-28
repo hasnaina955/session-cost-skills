@@ -39,6 +39,7 @@ import { compareToBaseline, renderInsightsText } from './insights.mjs';
 import { detectConfiguredProvider } from './provider-driver.mjs';
 import { discoverModels, doctorReport, explainModelMatch, renderDiagnostics } from './provider-diagnostics.mjs';
 import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, readConfigFile } from './config.mjs';
+import { renderBriefText, briefJson } from './brief.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 // <dataDir>/skills/session-cost/scripts/lib/ -> four levels up is <dataDir>. This module used to sit
@@ -143,6 +144,7 @@ const HELP_TEXT = `session-cost — token usage and Cline-recorded cost
   --rollup <when>      with --list, total spend per day or per week
   --top <n>            with --list, rank sessions by cost, most expensive first
   --explain            show the arithmetic behind the reported cost
+  --brief              a short answer: the cost, tokens, cache rate, and one caveat
   --csv                emit CSV, one row per session
   --budget <amount>    warn and exit non-zero when a session passes this amount
   --counterfactual <m> estimate the same tokens priced on model <m>; needs that
@@ -865,6 +867,9 @@ try {
         })));
       }
     } else if (opts.csv) { if (!quiet) console.log(renderCsv(report)); }
+    else if (opts.brief) {
+      if (!quiet) console.log(opts.json ? JSON.stringify(briefJson(report), null, 2) : renderBriefText(report));
+    }
     else if (opts.json) { if (!quiet) console.log(JSON.stringify(report, replacer, 2)); }
     else if (opts.explain) { if (!quiet) console.log(renderExplanation(report)); }
     else if (!quiet) console.log(render(report));

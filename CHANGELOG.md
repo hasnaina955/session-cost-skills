@@ -217,6 +217,15 @@ All notable changes to this project are documented here.
   plants a negative count in a real fixture and asserts the report goes partial rather than
   understating. `tokenCountIsUsable` is exported for other readers.
 
+- `--brief` answers "what did this cost?" in at most six lines: the cost with its coverage
+  beside it, the tokens and cache rate, the top model, whether subagents are billed, and one caveat
+  if there is a single thing worth knowing. `--brief --json` returns a small, stable, documented
+  shape (`session-brief`) so a consumer does not re-derive the contract from the full report. The
+  full report is thorough because a person auditing a bill needs it to be; the agent answering a
+  bare cost question does not, and it pays the token cost of the whole thing either way. Unknown
+  cost stays `unavailable` or `null`, never a zero, and a partial total is labelled rather than
+  shown as a small number. Both `SKILL.md` files now steer the common case to `--brief` first.
+
 - `shared/charts.mjs` renders bar, stacked-bar, and sparkline charts as inline SVG **strings**, built
   in Node at report time rather than drawn in the browser. That is a constraint, not a limitation:
   no script means the dashboard works with JavaScript disabled and prints to PDF, the existing

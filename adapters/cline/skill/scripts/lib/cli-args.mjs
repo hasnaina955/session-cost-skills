@@ -102,6 +102,7 @@ const COMMON_FLAGS = Object.freeze({
   // is worse than a flag that does not exist.
   explain: { key: 'explain', value: true },
   csv: { key: 'csv', value: true },
+  brief: { key: 'brief', value: true },
   rollup: {
     key: 'rollup',
     value: (argv, i) => {
