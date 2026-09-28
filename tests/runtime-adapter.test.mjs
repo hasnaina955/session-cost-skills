@@ -8,6 +8,10 @@ export function fakeAdapter(overrides = {}) {
     id: 'fake',
     displayName: 'Fake Runtime',
     costBasis: COST_BASIS.RECORDED,
+    // The kernel parses argv through the shared parser and answers --version itself, so it needs
+    // each runtime's option defaults and banner. They are part of the interface, not decoration.
+    defaults: { mode: 'current' },
+    versionBanner: () => 'session-cost 0.0.0 (fake adapter)',
     defaultDataDir: () => '/tmp/fake',
     open: () => ({ closed: false }),
     close: (handle) => { handle.closed = true; },
