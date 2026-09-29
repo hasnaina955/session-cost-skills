@@ -115,3 +115,24 @@ test('a report with no timeline omits that section rather than drawing an empty 
   const text = strip(html);
   assert.ok(!text.includes('Where the session went') || text.includes('too few points'));
 });
+
+test('the headline figures are in the server-rendered HTML, not only in the script', () => {
+  // The redesign dropped the four KPI tiles that used to be rendered into the page and left only
+  // the container the script fills. With JavaScript disabled - which is the case the
+  // server-rendered charts exist for - the page then had no totals at all. No test noticed,
+  // because every assertion was about the charts. This one asserts the numbers themselves.
+  const { status, html } = dashboardFor(createMCodeFixture(), mcodeScript, ['--session', 'mcode-root', '--include-children']);
+  assert.equal(status, 0);
+  // Strip the script, so only what the server produced is inspected.
+  const serverRendered = html.replace(/<script>[\s\S]*?<\/script>/g, '');
+  for (const label of ['Total tokens', 'Cache-hit rate', 'Recorded / reference cost', 'Credits used']) {
+    assert.ok(serverRendered.includes(label), `"${label}" must be in the server-rendered HTML`);
+  }
+  // And they carry real figures, not placeholders: the tile for tokens shows a number.
+  const tokensTile = /Total tokens<\/div><div class="value">([^<]+)</.exec(serverRendered);
+  assert.ok(tokensTile, 'the total-tokens tile must have a value element');
+  assert.match(tokensTile[1], /[0-9]/, 'the tile must carry a figure, not an empty value');
+  // The container the script fills is the same element, so a JS reader gets filter-aware tiles
+  // and a no-JS reader still gets the session totals.
+  assert.match(serverRendered, /<section class="kpis" id="cards">[\s\S]*?<\/section>/, 'the KPI container must hold the server-rendered tiles');
+});
