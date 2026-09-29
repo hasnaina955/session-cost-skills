@@ -50,9 +50,22 @@ export function createSessionGraph(rows, { idKey = 'session_id', parentKey = 'pa
 
 export function selectTopLevelCandidates(candidateIds, graph) {
   const candidates = [...new Set((candidateIds ?? []).map(String))].filter((id) => graph.byId.has(id));
-  const includedRootIds = candidates.filter((candidate) => (
-    !candidates.some((other) => other !== candidate && graph.isDescendant(candidate, other))
-  ));
+  const candidateSet = new Set(candidates);
+
+  // A candidate is a top-level root when no ancestor of it is also a candidate. Walking UP the
+  // parent chain once per candidate is O(chain length) each; the previous form asked
+  // `isDescendant(candidate, other)` for every pair, which is a full depth-first descent per pair
+  // - O(candidates squared times graph depth), and 10 seconds on a 10,000-session ledger. Found
+  // by the benchmark, which is the only thing that would have caught it: every answer was right,
+  // it just took that long to produce.
+  const includedRootIds = candidates.filter((candidate) => {
+    let current = graph.byId.get(candidate)?.parentId ?? null;
+    while (current !== null) {
+      if (candidateSet.has(current)) return false;   // an ancestor is also a candidate
+      current = graph.byId.get(current)?.parentId ?? null;
+    }
+    return true;
+  });
   const included = new Set(includedRootIds);
   return {
     includedRootIds,

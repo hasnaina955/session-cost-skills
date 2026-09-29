@@ -12,7 +12,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const CACHE_VERSION = 1;
+// Bumped whenever the shape of a cached value changes. A cache written by an older version is
+// ignored rather than read into code that expects a different shape - the v1 entries stored a
+// narrow aggregate that `--list --json` could not use, and serving them produced rows with no
+// session id. The key includes this version, so a bump invalidates everything without a migration.
+export const CACHE_VERSION = 2;
 
 /**
  * A fingerprint of the inputs a computation depended on. Any change to size or mtime

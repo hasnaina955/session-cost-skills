@@ -99,12 +99,20 @@ if (WRITE_BASELINE) {
 }
 let baseline = null;
 if (fs.existsSync(BASELINE_PATH)) baseline = JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8'));
+// Compare only like for like. A baseline recorded for the quick shape says nothing about the full
+// shape, and comparing across them reported a 6x "regression" that was just a bigger ledger. The
+// shape is part of the baseline, and a mismatch skips the comparison rather than inventing one.
+const baselineMatchesShape = baseline?.shape?.sessions === SHAPE.sessions
+  && baseline?.shape?.callsPerSession === SHAPE.callsPerSession;
 for (const result of results) {
-  const base = baseline?.timings?.[result.label];
+  const base = baselineMatchesShape ? baseline?.timings?.[result.label] : null;
   result.baselineMs = base ?? null;
   result.regressed = base != null && result.ms > base * REGRESSION_FACTOR;
   result.pass = result.pass && !result.regressed;
 }
+const baselineNote = !baseline
+  ? 'no baseline recorded; run --write-baseline to start tracking regressions'
+  : (baselineMatchesShape ? null : `baseline is for the ${baseline.shape?.sessions}-session shape, not this one; regression comparison skipped`);
 
 const summary = {
   shape: { ...SHAPE, generateMs },
@@ -118,6 +126,7 @@ if (JSON_OUT) {
   console.log(JSON.stringify(summary, null, 2));
 } else {
   console.log(`bench: ${SHAPE.sessions} sessions x ${SHAPE.callsPerSession} calls (${generateMs}ms to generate) on ${process.platform} / ${process.version}`);
+  if (baselineNote) console.log(`  note: ${baselineNote}`);
   for (const result of results) {
     const marker = result.pass ? 'PASS' : 'FAIL';
     const vs = result.baselineMs != null ? `  (baseline ${result.baselineMs}ms, ${(result.ms / result.baselineMs).toFixed(1)}x)` : '  (no baseline)';
