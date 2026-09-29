@@ -14,6 +14,7 @@ import { COST_BASIS } from './runtime-adapter.mjs';
 import { writeDashboard } from './dashboard.mjs';
 import { now as nowMs, isoNow, utcDay } from './clock.mjs';
 import { createTimeline } from './timeline.mjs';
+import { renderCard } from './card.mjs';
 import { createRollupCache, fingerprintFile, sessionKey } from './rollup-cache.mjs';
 import { bar, compositionBar } from './term-bars.mjs';
 import { observeSchema, checkSchema, describeDrift } from './schema-drift.mjs';
@@ -115,6 +116,8 @@ const HELP_TEXT = `session-cost — token usage and provider-rate cost of a Mini
   --explain               show the arithmetic behind the reported cost
   --csv                   emit CSV, one row per session
   --brief                 a short answer: the cost, tokens, cache rate, and one caveat
+  --card                  write a shareable SVG summary card (no session data by default)
+  --card-include-title    with --card: include the session title on the card
   --budget <amount>       warn and exit non-zero when a session passes this amount
   --counterfactual <m>     estimate what this session would cost on model <m>
   --setup                  guided custom-provider setup; prints a paste-ready config
@@ -1490,6 +1493,19 @@ async function main(context) {
       const outputPath = writeDashboard(enhanceReport(report, selection), { outPath: opts.out ?? path.join(dataDir, 'reports', 'session-cost', 'session-dashboard.html'), title: 'MCode Session Cost Dashboard' });
       if (opts.json) console.log(JSON.stringify({ schemaVersion: 1, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'mcode', kind: 'dashboard', generatedAt: isoNow(), dashboardPath: outputPath, report: enhanceReport(report, selection) }, null, 2));
       else console.log(`Dashboard written: ${outputPath}`);
+    } else if (opts.card) {
+      // The shareable summary, deliberately private by default: no session title, id, or path
+      // reaches the SVG unless the caller passes --card-include-title, because a card is the one
+      // artefact of this tool designed to leave the machine.
+      const svg = renderCard(enhanceReport(report, selection), {
+        includeTitle: Boolean(opts.cardIncludeTitle),
+        generatedAt: new Date(report.snapshotAt ?? Date.now()).toISOString(),
+      });
+      const outputPath = opts.out ?? path.join(dataDir, 'reports', 'session-cost', 'session-card.svg');
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      fs.writeFileSync(outputPath, svg, 'utf8');
+      if (opts.json) console.log(JSON.stringify({ schemaVersion: 1, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'mcode', kind: 'card', generatedAt: isoNow(), cardPath: outputPath }, null, 2));
+      else console.log(`Card written: ${outputPath}`);
     } else if (opts.insights) {
       // Measured history only. Insights never forecasts and never replaces the report.
       const rows = (report.sessions ?? []).map((entry) => ({

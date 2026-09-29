@@ -267,6 +267,15 @@ All notable changes to this project are documented here.
   `--write-baseline`, never automatically. The absolute-speed finding is filed as #87; the cache
   wiring is a separate change because it touches the money path.
 
+- `--card` writes the shareable SVG summary that `shared/card.mjs` has been able to render since
+  WP-3.5 but that no flag reached. The module shipped and the wiring was missed. A 1200x630 card -
+  the Open Graph size - carrying the total, token mix, cache rate, top models, and the coverage
+  verdict, written to `reports/session-cost/session-card.svg` (override with `--out`). **A session
+  title, id, or path appears only with `--card-include-title`**, because a card is the one artefact
+  of this tool designed to leave the machine and a cost summary does not need a session name to be
+  useful. For a session nothing could price the card says `unavailable` and names the unpriced
+  models; it never shows `$0.00`. Both adapters write it.
+
 - `shared/charts.mjs` renders bar, stacked-bar, and sparkline charts as inline SVG **strings**, built
   in Node at report time rather than drawn in the browser. That is a constraint, not a limitation:
   no script means the dashboard works with JavaScript disabled and prints to PDF, the existing

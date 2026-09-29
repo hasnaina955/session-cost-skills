@@ -40,6 +40,7 @@ import { detectConfiguredProvider } from './provider-driver.mjs';
 import { discoverModels, doctorReport, explainModelMatch, renderDiagnostics } from './provider-diagnostics.mjs';
 import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, readConfigFile } from './config.mjs';
 import { renderBriefText, briefJson } from './brief.mjs';
+import { renderCard } from './card.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 // <dataDir>/skills/session-cost/scripts/lib/ -> four levels up is <dataDir>. This module used to sit
@@ -145,6 +146,8 @@ const HELP_TEXT = `session-cost — token usage and Cline-recorded cost
   --top <n>            with --list, rank sessions by cost, most expensive first
   --explain            show the arithmetic behind the reported cost
   --brief              a short answer: the cost, tokens, cache rate, and one caveat
+  --card               write a shareable SVG summary card (no session data by default)
+  --card-include-title with --card: include the session title on the card
   --csv                emit CSV, one row per session
   --budget <amount>    warn and exit non-zero when a session passes this amount
   --counterfactual <m> estimate the same tokens priced on model <m>; needs that
@@ -838,6 +841,18 @@ try {
       });
       if (opts.json) console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'cline', kind: 'dashboard', generatedAt: isoNow(), dashboardPath: outputPath, report }, replacer, 2));
       else console.log(`Dashboard written: ${outputPath}`);
+    } else if (opts.card) {
+      // Private by default: no session title, id, or path on the card unless asked for, because a
+      // card is the one artefact of this tool designed to leave the machine.
+      const svg = renderCard(report, {
+        includeTitle: Boolean(opts.cardIncludeTitle),
+        generatedAt: report.snapshot?.capturedAt ?? isoNow(),
+      });
+      const outputPath = opts.out ?? path.join(dataDir, 'data', 'reports', 'session-cost', 'session-card.svg');
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      fs.writeFileSync(outputPath, svg, 'utf8');
+      if (opts.json) console.log(JSON.stringify({ schemaVersion: SCHEMA_VERSION, contractVersion: REPORT_CONTRACT_VERSION, runtime: 'cline', kind: 'card', generatedAt: isoNow(), cardPath: outputPath }, replacer, 2));
+      else console.log(`Card written: ${outputPath}`);
     } else if (opts.insights) {
       // Measured history only. Insights never forecasts and never replaces the report.
       const rows = (report.sessions ?? []).map((entry) => ({ row: entry.row, metrics: entry.metrics }));
