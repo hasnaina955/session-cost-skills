@@ -149,6 +149,7 @@ A Gumroad product may be offered for voluntary support, compatibility assistance
 - [Updating an installed skill](docs/updating.md)
 - [Normalized report contract](contracts/README.md)
 - [Principles](docs/principles.md)
+- [Handoff: continuing this project](docs/handoff.md)
 - [Roadmap execution plan](docs/roadmap-plan.md)
 - [MCode porting plan](docs/porting-plan.md)
 - [Optional support and troubleshooting](SUPPORT.md)
