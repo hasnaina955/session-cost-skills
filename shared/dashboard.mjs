@@ -191,7 +191,7 @@ function table(headers, rows) {
 }
 
 function card(label, value) {
-  return element('div', { class: 'card' }, [
+  return element('div', { class: 'kpi' }, [
     element('div', { class: 'label', text: label }),
     element('div', { class: 'value', text: value }),
   ]);
@@ -501,23 +501,86 @@ function contentSecurityPolicy(script) {
 
 
 const STYLES = String.raw`
-/* A reader whose system asks for light gets light without a click, and without a dark flash
-   before the script runs. The toggle still overrides this, so the choice is theirs either way. */
+/* Design system: flat surfaces, hairline separators, and one accent. No gradients, no large
+   shadows, no decorated boxes. Every colour comes from a token so both themes stay in step and
+   the contrast audit in tests/theme-contrast.test.mjs can read them straight out of these
+   blocks. A reader whose system asks for light gets light without a click and without a dark
+   flash; the toggle still overrides, so the choice stays theirs. */
 @media (prefers-color-scheme:light){
-  :root:not([data-theme="dark"]){color-scheme:light;--bg:#f4f7fb;--surface:#fff;--surface-2:#edf3fa;--surface-3:#fff;--text:#142033;--muted:#4b5b73;--line:#d7e1ef;--accent:#087f5b;--accent-2:#1d4ed8;--warning:#805400;--danger:#b4232f}
-  body{background:var(--bg);color:var(--text)}
-  .controls,.card,.panel{background:rgba(255,255,255,.96)}
-  table,thead,tbody,tr,td,th{background:#fff;color:var(--text);border-color:var(--line)}
+  :root:not([data-theme="dark"]){color-scheme:light;--bg:#f7f8fa;--surface:#ffffff;--surface-2:#f2f4f8;--surface-3:#e9ecf2;--text:#171b21;--muted:#5a6472;--line:#e3e6ec;--accent:#0a7d5c;--accent-2:#1d4ed8;--warning:#7a4f00;--danger:#c02733}
+  body{background:var(--bg)}
 }
-:root{color-scheme:dark;--bg:#08101d;--surface:#101a2b;--surface-2:#14233a;--surface-3:#1a2c47;--text:#eef4ff;--muted:#91a3bf;--line:#263956;--accent:#6ee7b7;--accent-2:#79a9ff;--warning:#f5c56b;--danger:#ff8198;--radius:18px;--radius-sm:11px;--shadow:0 18px 50px rgba(0,0,0,.22)}
-*{box-sizing:border-box}html{background:var(--bg)}body{margin:0;background:radial-gradient(ellipse 70% 40% at 15% -5%,#1d3962 0,transparent 65%),var(--bg);color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.005em}main{max-width:1500px;margin:0 auto;padding:38px 40px 60px}.top-actions{display:flex;align-items:center;flex-wrap:wrap}.theme-toggle,.format-toggle{border:1px solid var(--line);background:var(--surface-3);color:var(--text);border-radius:999px;padding:7px 11px;cursor:pointer;font:inherit;margin-left:8px}.format-toggle{color:var(--accent-2)}.theme-toggle:hover,.format-toggle:hover{background:#24405f}.theme-toggle:focus-visible,.format-toggle:focus-visible{outline:3px solid rgba(121,169,255,.32);outline-offset:2px}h1{font-size:clamp(26px,3vw,38px);line-height:1.1;letter-spacing:0;margin:0 0 8px}h2{font-size:18px;letter-spacing:0;margin:30px 0 12px}.sub{color:var(--muted);font-size:13px}
-.controls,.card,.panel{background:linear-gradient(145deg,rgba(20,35,58,.94),rgba(13,23,39,.96));border:1px solid var(--line);box-shadow:var(--shadow);border-radius:var(--radius)}.controls{padding:16px;margin:26px 0 18px;display:flex;align-items:end;gap:12px;flex-wrap:wrap}.controls label{display:flex;flex-direction:column;gap:6px;min-width:150px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.09em}.controls input,.controls select,.controls button{min-height:40px;border:1px solid #314a6c;border-radius:var(--radius-sm);background:#0b1527;color:var(--text);padding:8px 11px;font:inherit}.controls input:focus-visible,.controls select:focus-visible,.controls button:focus-visible{outline:3px solid rgba(121,169,255,.32);outline-offset:2px;border-color:var(--accent-2)}.controls button{min-height:40px;cursor:pointer;background:var(--surface-3);color:var(--accent);font-weight:700;transition:transform 150ms cubic-bezier(.2,0,0,1),background 150ms ease}.controls button:hover{background:#24405f}.controls button:active{transform:scale(.96)}#filterStatus{color:var(--muted);align-self:center}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:18px 0 26px}.card{padding:17px 18px;min-height:100px;position:relative;overflow:hidden}.card::after{content:"";position:absolute;inset:0 0 auto;height:2px;background:linear-gradient(90deg,var(--accent-2),transparent);opacity:.7}.label{color:var(--muted);font-size:12px;letter-spacing:.02em}.value{font-size:25px;font-weight:760;letter-spacing:0;margin-top:8px;font-variant-numeric:tabular-nums}.columns{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);gap:16px}.panel{padding:19px;min-width:0;overflow:auto}.panel h2{margin-top:0}
-table{width:100%;border-collapse:collapse;border-radius:12px;overflow:hidden}th,td{text-align:left;padding:11px 12px;border-bottom:1px solid rgba(55,76,108,.58);white-space:nowrap;font-variant-numeric:tabular-nums}th{color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:rgba(10,18,32,.35);position:sticky;top:0;backdrop-filter:blur(8px)}tr:last-child td{border-bottom:0}tbody tr{transition:background 150ms ease}tbody tr:hover{background:rgba(81,129,190,.12)}.chart{display:flex;flex-direction:column;gap:12px;padding-top:5px}.bar-row{display:grid;grid-template-columns:100px minmax(80px,1fr) 118px;gap:10px;align-items:center;font-size:12px}.bar-row.inactive{opacity:.35}.bar{height:11px;background:#1a2a43;border-radius:99px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent-2),var(--accent));border-radius:99px;transition:width 220ms cubic-bezier(.2,0,0,1)}.empty{color:var(--muted);padding:22px 0;text-align:center}
+:root{color-scheme:dark;--bg:#0b0d12;--surface:#12151c;--surface-2:#171b22;--surface-3:#1d222b;--text:#e8ebf2;--muted:#a0a9bb;--line:#272c38;--accent:#34d399;--accent-2:#7aa2ff;--warning:#fbbf24;--danger:#fb7185;--radius:12px;--radius-sm:8px}
+body.theme-light{--bg:#f7f8fa;--surface:#ffffff;--surface-2:#f2f4f8;--surface-3:#e9ecf2;--text:#171b21;--muted:#5a6472;--line:#e3e6ec;--accent:#0a7d5c;--accent-2:#1d4ed8;--warning:#7a4f00;--danger:#c02733}
+*{box-sizing:border-box}html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:1280px;margin:0 auto;padding:32px 32px 64px}
 
-pre{white-space:pre-wrap;word-break:break-word;background:#070d19;border:1px solid var(--line);padding:16px;border-radius:var(--radius-sm);max-height:560px;overflow:auto;color:#b6c8e5;font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace}footer{color:var(--muted);margin-top:30px;font-size:12px}
-body.theme-light{--bg:#f4f7fb;--surface:#fff;--surface-2:#edf3fa;--surface-3:#fff;--text:#142033;--muted:#4b5b73;--line:#d7e1ef;--accent:#087f5b;--accent-2:#1d4ed8;--warning:#805400;--danger:#b4232f;background:radial-gradient(ellipse 70% 40% at 15% -5%,#dbeafe 0,transparent 65%),var(--bg);color:var(--text)}body.theme-light .controls,body.theme-light .card,body.theme-light .panel{background:rgba(255,255,255,.96);box-shadow:0 12px 35px rgba(20,40,70,.08)}body.theme-light .controls input,body.theme-light .controls select,body.theme-light .controls button{background:#fff;border-color:#9fb4cf;color:var(--text)}body.theme-light .controls select option{background:#fff;color:var(--text)}body.theme-light .controls button{background:#e8f1ff;color:var(--accent-2)}body.theme-light table,body.theme-light tbody,body.theme-light tbody tr,body.theme-light tr{background:#fff;color:var(--text)}body.theme-light th{background:#eaf1fb;color:#34445c;border-color:var(--line)}body.theme-light td{border-color:var(--line);color:var(--text)}body.theme-light tbody tr:hover{background:#eef5ff}body.theme-light pre{background:#0b1527;color:#c4d5ee}body.theme-light :focus-visible{outline-color:#1d4ed8}
-@media(max-width:900px){main{padding:26px 16px 44px}.columns{grid-template-columns:1fr}.controls label{flex:1 1 140px}.value{font-size:22px}.bar-row{grid-template-columns:80px minmax(60px,1fr) 105px}}@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important;scroll-behavior:auto!important}}
+/* Header: one line of identity, one of metadata, controls right. */
+.page-head{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-bottom:24px}
+.page-head h1{font-size:22px;font-weight:650;letter-spacing:-.01em;margin:0;line-height:1.2}
+.page-meta{color:var(--muted);font-size:12.5px;margin:0 0 0 auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.theme-toggle,.format-toggle{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);padding:7px 12px;cursor:pointer;font:inherit;font-size:12.5px;transition:background .15s ease,border-color .15s ease}
+.format-toggle{color:var(--accent-2)}
+.theme-toggle:hover,.format-toggle:hover{border-color:var(--muted)}
+:is(.theme-toggle,.format-toggle):focus-visible{outline:3px solid rgba(122,162,255,.45);outline-offset:2px}
+
+/* KPIs: quiet tiles, big tabular figures. */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:0 0 20px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+.kpi .label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:550}
+.kpi .value{font-size:26px;font-weight:680;letter-spacing:-.01em;margin-top:10px;font-variant-numeric:tabular-nums}
+
+/* Filters: one quiet row. */
+.controls{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;margin:0 0 20px;display:flex;align-items:end;gap:10px;flex-wrap:wrap}
+.controls label{display:flex;flex-direction:column;gap:5px;min-width:140px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:550}
+.controls input,.controls select,.controls button{min-height:36px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text);padding:7px 10px;font:inherit;font-size:13px}
+.controls input:focus-visible,.controls select:focus-visible,.controls button:focus-visible{outline:3px solid rgba(122,162,255,.45);outline-offset:2px;border-color:var(--accent-2)}
+.controls button{cursor:pointer;background:var(--surface-3);color:var(--text);font-weight:600}
+.controls button:hover{border-color:var(--muted)}
+#filterStatus{color:var(--muted);align-self:center;font-size:12.5px}
+
+/* Bento: a 12-column grid so tiles can take meaningful, varied widths instead of stacking. */
+.bento{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;min-width:0;overflow:auto}
+.panel h2{font-size:12.5px;font-weight:650;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:0 0 14px}
+.span-8{grid-column:span 8}.span-6{grid-column:span 6}.span-4{grid-column:span 4}.span-12{grid-column:span 12}
+.chart{min-height:180px}
+.sub{color:var(--muted);font-size:12.5px}
+
+/* Tables: hairline rows, no boxed grid. */
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;font-variant-numeric:tabular-nums}
+th{color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:550}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--surface-2)}
+
+/* Interactive bars drawn by the script. */
+.bar-row{display:grid;grid-template-columns:100px minmax(80px,1fr) 118px;gap:10px;align-items:center;font-size:12.5px}
+.bar-row.inactive{opacity:.35}
+.bar{height:10px;background:var(--surface-3);border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent-2);border-radius:99px;transition:width 220ms cubic-bezier(.2,0,0,1)}
+.empty{color:var(--muted);padding:22px 0;text-align:center}
+
+/* The raw payload is data, not a section of the report. It is collapsed by default so the page
+   is a report; a reader who wants the envelope can open it. */
+details.raw{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);margin-top:16px}
+details.raw>summary{cursor:pointer;padding:12px 16px;color:var(--muted);font-size:12.5px;font-weight:550;letter-spacing:.04em;list-style:none}
+details.raw>summary::-webkit-details-marker{display:none}
+details.raw[open]>summary{border-bottom:1px solid var(--line)}
+details.raw pre{border:none;border-radius:0;margin:0;padding:16px;max-height:520px;overflow:auto;background:var(--surface-2)}
+pre{white-space:pre-wrap;word-break:break-word;color:var(--muted);font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace}
+h2.standalone{font-size:12.5px;font-weight:650;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:28px 0 10px}
+footer{color:var(--muted);margin-top:28px;font-size:12px;border-top:1px solid var(--line);padding-top:16px}
+
+@media(max-width:960px){
+  main{padding:20px 16px 48px}
+  .span-8,.span-6,.span-4{grid-column:span 12}
+  .controls label{flex:1 1 130px}
+  .kpi .value{font-size:22px}
+  .bar-row{grid-template-columns:80px minmax(60px,1fr) 100px}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important;scroll-behavior:auto!important}}
 `;
 
 
@@ -586,7 +649,7 @@ function timelineSection(data) {
   const pricedSummary = known.length === 0
     ? 'no call could be priced'
     : `${money(total)} priced${hasUnknown ? ', partly unpriced' : ''}`;
-  return `<section class="panel"><h2>Where the session went</h2>${meta}${unknownNote}${chart}`
+  return `<section class="panel span-12"><h2>Where the session went</h2>${meta}${unknownNote}${chart}`
     + `<p class="sub">${timeline.length} call(s) · ${pricedSummary}</p>`
     + `<details><summary>Every call</summary>${rows}</details></section>`;
 }
@@ -601,7 +664,7 @@ function tokenMixSection(data) {
     title: 'Token mix',
     format: (value) => `${Math.round(value).toLocaleString('en-US')} tok`,
   });
-  return `<section class="panel"><h2>Token mix</h2>${chart}</section>`;
+  return `<section class="panel span-6"><h2>Token mix</h2>${chart}</section>`;
 }
 
 function modelCostSection(models) {
@@ -621,7 +684,7 @@ function modelCostSection(models) {
   const note = unpriced.length > 0
     ? `<p class="sub">Not priced: ${esc(unpriced.join(', '))}. An unknown cost is never drawn as zero.</p>`
     : '';
-  return `<section class="panel"><h2>Cost by model</h2>${chart}${note}</section>`;
+  return `<section class="panel span-6"><h2>Cost by model</h2>${chart}${note}</section>`;
 }
 
 function sessionTreeSection(data, sessions) {
@@ -665,7 +728,7 @@ function sessionTreeSection(data, sessions) {
   for (const session of sessions) walk(session.id, 0);
   if (rows.length === 0) return '';
   const table = renderTable(['Session', 'Calls', 'Cost', 'Status'], rows);
-  return `<section class="panel"><h2>Session tree</h2>`
+  return `<section class="panel span-12"><h2>Session tree</h2>`
     + '<p class="sub">An excluded subagent is not billed, and is listed so the total is not silently incomplete.</p>'
     + `${table}</section>`;
 }
@@ -737,18 +800,16 @@ export function renderDashboard(data, { title = 'Session Cost Dashboard' } = {})
 </head>
 <body>
 <main>
-<h1>${esc(title)}</h1>
-<div class="sub">${esc(titleValue)} · generated ${esc(generatedAt)} · ${esc(snapshot.active ? 'snapshot' : 'final')}</div>
-<div class="top-actions"><button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle light and dark mode">☼ Light mode</button><button id="formatToggle" class="format-toggle" type="button" aria-pressed="true">Full numbers</button></div>
-<section class="grid"><div class="card"><div class="label">Total tokens</div><div class="value">${number(totals.totalTokens)}</div></div><div class="card"><div class="label">Cache-hit rate</div><div class="value">${percent(totals.cacheHitRate)}</div></div><div class="card"><div class="label">Recorded / reference cost</div><div class="value">${money(billingTotals.recordedCostUsd ?? billingTotals.referenceCostUsd)}</div></div><div class="card"><div class="label">Credits used</div><div class="value">${money(billingTotals.creditsUsedUsd)}</div></div></section>
+<header class="page-head">
+  <h1>${esc(title)}</h1>
+  <div class="page-meta"><span>${esc(titleValue)} · ${esc(generatedAt)} · ${esc(snapshot.active ? 'snapshot' : 'final')}</span><button id="formatToggle" class="format-toggle" type="button" aria-pressed="true">Full numbers</button><button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle light and dark mode">Light mode</button></div>
+</header>
 <section class="controls" id="filters"><label>Provider <select id="providerFilter"><option value="">All providers</option></select></label><label>Model <select id="modelFilter"><option value="">All models</option></select></label><label>Session <select id="sessionFilter"><option value="">All sessions</option></select></label><label>Day <select id="dayFilter"><option value="">All days</option></select></label><button id="resetFilters" type="button">Reset</button><small id="filterStatus"></small></section>
-<section class="grid" id="cards"></section>
-${serverSections}
-<div class="columns"><section class="panel"><h2>Usage trend</h2><div id="trendChart" class="chart" aria-label="Daily token and cost trend"></div></section><section class="panel"><h2>Model share</h2><div id="modelChart" aria-label="Token share by model"></div></section></div>
-${periodTable ? `<h2>Period summary</h2>${periodTable}` : ''}
-${modelTable ? `<h2>Models</h2>${modelTable}` : ''}
+<div class="bento">${serverSections}<section class="panel span-6"><h2>Usage trend</h2><div id="trendChart" class="chart" aria-label="Daily token and cost trend"></div></section><section class="panel span-6"><h2>Model share</h2><div id="modelChart" aria-label="Token share by model"></div></section></div>
+${periodTable ? `<h2 class="standalone">Period summary</h2>${periodTable}` : ''}
+${modelTable ? `<h2 class="standalone">Models</h2>${modelTable}` : ''}
 <div id="filterTables"></div>
-<h2>Normalized report data</h2><pre>${esc(JSON.stringify(data, null, 2))}</pre>
+<details class="raw"><summary>Normalized report data</summary><pre>${esc(JSON.stringify(data, null, 2))}</pre></details>
 <footer>Generated locally by session-cost. No external assets or network requests.</footer>
 <script>${script}</script>
 </main>

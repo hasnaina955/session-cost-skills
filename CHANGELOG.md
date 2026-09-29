@@ -6,6 +6,17 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- The dashboard is redesigned as a modern flat report. The old page wore 2020-era chrome - a
+  radial-gradient background, gradient-filled panels, an 18px radius, large shadows, and an
+  accent bar on every card - and stacked eight sections in a single column with the raw JSON
+  envelope as a visible section. It is now a bento grid on a 12-column layout with flat surfaces,
+  hairline 1px separators, no shadows, a 12px radius, a compact header, quiet KPI tiles, and
+  small uppercase section labels with tabular figures. The raw JSON envelope is collapsed behind
+  a disclosure, because it is data for a consumer rather than part of the report. Every colour is
+  now a token, so the light theme follows automatically; both palettes were checked against the
+  WCAG audit before the CSS was written, not after. The CSP, the hashed inline script, the
+  server-rendered SVG charts, the focus rings, and prefers-reduced-motion are all unchanged.
+
 - `docs/handoff.md` is a starting brief for picking this up with no prior context: the state, the
   one architecture rule that bites (edit `shared/`, never an adapter's generated copy), the process
   rules, and the failure mode that has caught every serious bug here - rendering the awkward case
