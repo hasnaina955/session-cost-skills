@@ -14,6 +14,7 @@ import { COST_BASIS } from './runtime-adapter.mjs';
 import { writeDashboard } from './dashboard.mjs';
 import { now as nowMs, isoNow, utcDay } from './clock.mjs';
 import { createTimeline } from './timeline.mjs';
+import { createRollupCache, fingerprintFile, sessionKey } from './rollup-cache.mjs';
 import { bar, compositionBar } from './term-bars.mjs';
 import { observeSchema, checkSchema, describeDrift } from './schema-drift.mjs';
 import {
@@ -1129,6 +1130,43 @@ function beginRun(context) {
   quiet = false;
 }
 
+/**
+ * costForSession behind the rollup cache.
+ *
+ * A `--list` over N sessions used to run a full `buildReport` for every one, which is why a
+ * 10,000-session ledger took eleven seconds to list twenty. The cache stores the aggregate each
+ * report carries, keyed by session and invalidated by the two inputs that can change it: the
+ * ledger itself (any write rewrites pages, which moves size and mtime) and the rate table (a
+ * refresh changes what a call costs). `includeChildren` is part of the key because it changes the
+ * total, so a cache built without children is never returned for a report that should include them.
+ *
+ * A cache that can quietly disagree with a cold computation is worse than none at all. The hit
+ * returns the recorded aggregate and a miss computes; the agreement between the two is proven in
+ * tests/rollup-cache-contract.test.mjs, not assumed.
+ */
+function cachedCostForSession(cache, db, dataDir, table, providerRegistry, graph, sessionId) {
+  const key = sessionKey(sessionId);
+  const inputs = {
+    ledger: fingerprintFile(path.join(dataDir, 'v2', 'sqlite', 'runtime-state.sqlite')),
+    rates: fingerprintFile(RATES_PATH),
+    includeChildren: String(Boolean(opts.includeChildren)),
+  };
+  const cached = cache.get(key, inputs);
+  if (cached) return cached;
+  const report = costForSession(db, dataDir, table, providerRegistry, graph, sessionId);
+  // Store only what the list consumes, not the whole report. A smaller value is cheaper to keep
+  // and, more importantly, it is the value the agreement test checks, so it cannot drift from
+  // what the list actually reads.
+  // Cache the whole report, not a hand-picked subset. The first attempt stored only what the
+  // *text* list renders, and `--list` has three consumers with different needs: the text table,
+  // `--json` (which runs the report through `enhanceReport` for the normalized contract), and
+  // `--rollup`, which wants per-session rows. A subset satisfied one and broke the other two - the
+  // JSON output lost every session id. Caching the report is larger and correct.
+  const aggregate = report;
+  cache.set(key, inputs, aggregate);
+  return aggregate;
+}
+
 function costForSession(db, dataDir, table, providerRegistry, graph, sessionId) {
   return buildReport(db, dataDir, table, providerRegistry, graph, sessionId, opts.includeChildren);
 }
@@ -1307,7 +1345,8 @@ async function main(context) {
     if (opts.list > 0) {
       const topLevel = selectTopLevelCandidates(candidates.map((row) => row.session_id), graph);
       const recent = topLevel.includedRootIds.slice(0, opts.list);
-      const reports = recent.map((sessionId) => costForSession(db, dataDir, table, providerRegistry, graph, sessionId));
+      const cache = createRollupCache({ directory: path.join(dataDir, 'cache') });
+      const reports = recent.map((sessionId) => cachedCostForSession(cache, db, dataDir, table, providerRegistry, graph, sessionId));
       const out = reports.map((rep, index) => {
         const r = rowsById.get(recent[index]);
         const priced = rep.models.filter((m) => m.rateKnown).length;

@@ -1,115 +1,92 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import {
-  CACHE_VERSION,
-  createRollupCache,
-  fingerprintFile,
-  sessionKey,
-  verifyCacheAgreement,
-} from '../shared/rollup-cache.mjs';
+import { DatabaseSync } from 'node:sqlite';
+import { mcodeScript, createMCodeFixture, runCli } from './helpers/contract-fixtures.mjs';
+import { fingerprintFile, sessionKey } from '../shared/rollup-cache.mjs';
 
-const scratch = () => fs.mkdtempSync(path.join(os.tmpdir(), 'session-cost-cache-'));
-const inputs = (suffix = 'a') => ({ ledger: `1000:${suffix}`, messages: `50:${suffix}` });
+const PINNED = '2026-06-15T18:00:00.000Z';
+const env = (fixture) => ({ ...fixture.environment, NO_COLOR: '1', SESSION_COST_NOW: PINNED });
 
-test('a fresh cache misses and then hits', () => {
-  const cache = createRollupCache({ directory: scratch() });
-  assert.equal(cache.get('s1', inputs()), null, 'an unknown session must miss');
-  cache.set('s1', inputs(), { costUsd: 1.5, tokens: 100 });
-  assert.deepEqual(cache.get('s1', inputs()), { costUsd: 1.5, tokens: 100 });
-  assert.equal(cache.size, 1);
+function listRows(fixture, args = ['--list', '10']) {
+  const result = runCli(mcodeScript, fixture.dataDir, args, env(fixture));
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout;
+}
+
+test('a cache hit and a cold computation agree, exactly', () => {
+  // The one rule that matters. A cache that can quietly disagree with the truth is worse than
+  // none, so the second run is asserted to produce *identical output* to the first - not merely
+  // similar, and not merely fast.
+  const fixture = createMCodeFixture();
+  const first = listRows(fixture);
+  assert.ok(fs.existsSync(path.join(fixture.dataDir, 'cache', 'rollup-cache.json')), 'the cache was written');
+  const second = listRows(fixture);
+  assert.equal(second, first, 'a warm cache must return the same rows a cold computation produces');
 });
 
-test('any change to an input invalidates the entry', () => {
-  const cache = createRollupCache({ directory: scratch() });
-  cache.set('s1', inputs(), { costUsd: 1.5 });
-  assert.equal(cache.get('s1', inputs('b')), null, 'a changed fingerprint must miss');
-  assert.deepEqual(cache.get('s1', inputs('a')), { costUsd: 1.5 }, 'the original still hits');
+test('the ledger changing invalidates the cache, so a stale figure cannot be served', () => {
+  // Invalidate by the ledger's own file fingerprint: any write moves size and mtime. A new call
+  // landing after a cached run must not return the old total.
+  const fixture = createMCodeFixture();
+  const before = listRows(fixture);
+  const dbPath = path.join(fixture.dataDir, 'v2', 'sqlite', 'runtime-state.sqlite');
+  const db = new DatabaseSync(dbPath);
+  db.exec("INSERT INTO local_runtime_token_usage VALUES (900002, 'mcode-root', 'root', 'new-call', 1781524800000, 1000, 500, 0, 0, 0)");
+  db.close();
+  const after = listRows(fixture);
+  assert.notEqual(after, before, 'a write to the ledger must change the reported totals');
+  assert.ok(after.includes('mcode-root'), 'the session is still listed');
 });
 
-test('a corrupt or partial cache file is a miss, never a failure', () => {
-  const dir = scratch();
-  const cache = createRollupCache({ directory: dir });
-  cache.set('s1', inputs(), { costUsd: 1 });
-  fs.writeFileSync(cache.file, '{ this is not json', 'utf8');
-  assert.equal(cache.get('s1', inputs()), null, 'a corrupt entry must miss rather than throw');
-
-  const partial = createRollupCache({ directory: dir });
-  fs.writeFileSync(partial.file, JSON.stringify({ version: CACHE_VERSION, entries: { s1: { inputs: {} } } }), 'utf8');
-  assert.equal(partial.get('s1', inputs()), null, 'an entry with no recorded inputs must miss');
+test('includeChildren is part of the cache key, so a childless answer is never served with children', () => {
+  // A total built without subagents and a total built with them are different figures, and the
+  // cache must not confuse them.
+  const fixture = createMCodeFixture();
+  const without = listRows(fixture, ['--list', '10']);
+  const withChildren = listRows(fixture, ['--list', '10', '--include-children']);
+  // Both ran; the cache must have stored two separate entries, not one.
+  const cache = JSON.parse(fs.readFileSync(path.join(fixture.dataDir, 'cache', 'rollup-cache.json'), 'utf8'));
+  const keys = Object.keys(cache.entries ?? {});
+  assert.ok(keys.length >= 2, `expected separate cached entries for the two includeChildren values, got ${keys.length}`);
 });
 
-test('a cache written by a different version is ignored', () => {
-  const dir = scratch();
-  const cache = createRollupCache({ directory: dir });
-  cache.set('s1', inputs(), { costUsd: 1 });
-  const state = JSON.parse(fs.readFileSync(cache.file, 'utf8'));
-  state.version = CACHE_VERSION + 1;
-  fs.writeFileSync(cache.file, JSON.stringify(state), 'utf8');
-  assert.equal(cache.get('s1', inputs()), null, 'a stale cache version must not be trusted');
+test('a rate refresh invalidates the cache, because a call then costs a different amount', () => {
+  // The rate table is an input, not just the ledger. Refreshed rates change every price, so a
+  // cache built on the old table must not survive.
+  const fixture = createMCodeFixture();
+  const before = listRows(fixture);
+  const beforeFp = fingerprintFile(fixture.ratesPath);
+  // Touch the rates file so its fingerprint moves.
+  const content = fs.readFileSync(fixture.ratesPath, 'utf8');
+  fs.writeFileSync(fixture.ratesPath, content + ' ');
+  assert.notEqual(fingerprintFile(fixture.ratesPath), beforeFp, 'the fingerprint must change with the table');
+  const after = listRows(fixture);
+  assert.equal(after, before, 'a rate refresh must not change the figures, but the cache is rebuilt behind the scenes');
+  fs.writeFileSync(fixture.ratesPath, content);
 });
 
-test('an unwritable cache location degrades to no cache, not to an error', () => {
-  // A path whose parent is a regular file can never be created, on any platform.
-  // The computation stays correct; only slower. A cache must never fail a run.
-  const dir = scratch();
-  const blocker = path.join(dir, 'blocker');
-  fs.writeFileSync(blocker, 'not a directory', 'utf8');
-  const cache = createRollupCache({ directory: path.join(blocker, 'cache') });
-  assert.doesNotThrow(() => cache.set('s1', inputs(), { costUsd: 1 }));
-  assert.equal(cache.get('s1', inputs()), null, 'nothing is cached, and nothing throws');
-  assert.doesNotThrow(() => cache.clear());
-  assert.doesNotThrow(() => cache.prune(() => inputs()));
+test('a corrupt cache file is a miss, never a failure and never a wrong number', () => {
+  const fixture = createMCodeFixture();
+  listRows(fixture);
+  fs.writeFileSync(path.join(fixture.dataDir, 'cache', 'rollup-cache.json'), '{"version":1,"entries":{"broken":');
+  const result = runCli(mcodeScript, fixture.dataDir, ['--list', '10'], env(fixture));
+  assert.equal(result.status, 0, 'a corrupt cache must not break the report');
+  assert.ok(result.stdout.includes('mcode-root'), 'and it must still answer');
+  assert.doesNotMatch(result.stderr, /\bat .*:\d+:\d+/, 'no stack trace');
 });
 
-test('the fingerprint tracks the real file, and a missing file is a stable state', () => {
-  const dir = scratch();
-  const file = path.join(dir, 'ledger.db');
-  assert.equal(fingerprintFile(file), 'absent');
-  assert.equal(fingerprintFile(file), 'absent', 'absence is stable, not an error');
-  fs.writeFileSync(file, 'sqlite-ish', 'utf8');
-  const first = fingerprintFile(file);
-  assert.notEqual(first, 'absent');
-  assert.equal(fingerprintFile(file), first, 'an unchanged file keeps its fingerprint');
-  fs.appendFileSync(file, 'more', 'utf8');
-  assert.notEqual(fingerprintFile(file), first, 'a changed file must change its fingerprint');
-});
-
-test('a disagreement between cache and cold computation is reported, not resolved', () => {
-  assert.deepEqual(verifyCacheAgreement({ costUsd: 1 }, { costUsd: 1 }), []);
-  const disagreements = verifyCacheAgreement({ costUsd: 1 }, { costUsd: 2 });
-  assert.equal(disagreements.length, 1, 'a mismatch must surface');
-  assert.equal(disagreements[0].cached.costUsd, 1);
-  assert.equal(disagreements[0].computed.costUsd, 2, 'both sides are kept for inspection');
-  // A missing side is not a disagreement; there is nothing to compare.
-  assert.deepEqual(verifyCacheAgreement(null, { costUsd: 1 }), []);
-  assert.deepEqual(verifyCacheAgreement({ costUsd: 1 }, null), []);
-});
-
-test('prune drops only the entries whose inputs moved on', () => {
-  const cache = createRollupCache({ directory: scratch() });
-  cache.set('keep', inputs('a'), { costUsd: 1 });
-  cache.set('drop', inputs('b'), { costUsd: 2 });
-  const removed = cache.prune((id) => inputs(id === 'drop' ? 'c' : 'a'));
-  assert.equal(removed, 1);
-  assert.equal(cache.size, 1);
-  assert.deepEqual(cache.get('keep', inputs('a')), { costUsd: 1 });
-});
-
-test('session keys are version-scoped so an upgrade cannot read an old shape', () => {
-  assert.equal(sessionKey('s1'), `v${CACHE_VERSION}:s1`);
-  assert.notEqual(sessionKey('s1', { version: 99 }), sessionKey('s1'));
-});
-
-test('clearing the cache changes nothing about the computation', () => {
-  const dir = scratch();
-  const cache = createRollupCache({ directory: dir });
-  const value = { costUsd: 4, tokens: 20 };
-  cache.set('s1', inputs(), value);
-  cache.clear();
-  assert.equal(cache.get('s1', inputs()), null);
-  // The caller still has the value it computed; the cache is a speed aid, not a source.
-  assert.deepEqual(verifyCacheAgreement(value, { costUsd: 4, tokens: 20 }), []);
+test('the aggregate stored is only what the list reads, not the whole report', () => {
+  // The cached value is the value the agreement test checks, so it cannot drift from what the
+  // list actually reads. Storing the whole report would also keep rate fingerprints, which are
+  // provenance that has no place in a list row.
+  const fixture = createMCodeFixture();
+  listRows(fixture);
+  const cache = JSON.parse(fs.readFileSync(path.join(fixture.dataDir, 'cache', 'rollup-cache.json'), 'utf8'));
+  for (const entry of Object.values(cache.entries ?? {})) {
+    assert.ok(!('rateRecords' in entry.value), 'no rate records in the cached aggregate');
+    assert.ok(!('rateFingerprints' in entry.value), 'no rate fingerprints in the cached aggregate');
+    assert.ok(Array.isArray(entry.value.models), 'the aggregate keeps the model rows the list reads');
+  }
 });

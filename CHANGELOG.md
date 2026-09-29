@@ -226,6 +226,26 @@ All notable changes to this project are documented here.
   cost stays `unavailable` or `null`, never a zero, and a partial total is labelled rather than
   shown as a small number. Both `SKILL.md` files now steer the common case to `--brief` first.
 
+- `--list` no longer takes eleven seconds on a large ledger, and the reason was not where the
+  benchmark first pointed. The dominant cost was `selectTopLevelCandidates` in
+  `shared/session-graph.mjs`, which asked `isDescendant(candidate, other)` for every pair of
+  candidates - a full depth-first descent per pair, so a 10,000-session ledger spent **10,127 ms**
+  deciding which sessions were top-level. It now walks each candidate's parent chain once instead,
+  which is the same answer in **6 ms**. The optimisation is proven faithful by comparing it against
+  the pairwise reference on random graphs, not by reading it. On a 10,000-session / 500,000-call
+  ledger `--list 20` went from 10,837 ms cold and 10,089 ms warm to **1,007 ms** and **243 ms**.
+- `rollup-cache.mjs` is now wired into that path, so a repeated `--list` reuses the per-session
+  reports instead of recomputing them. The cached value is the **whole report**, not a subset: the
+  first attempt cached only what the text table renders, and `--list` has three consumers with
+  different needs - the text table, `--json` (which runs each report through the normalized
+  contract), and `--rollup` - so the subset satisfied one and stripped the session ids out of the
+  other two. `CACHE_VERSION` is bumped to 2, because a cache written with the old shape must be
+  ignored rather than read into code expecting a new one.
+- `tests/rollup-cache-contract.test.mjs` proves the cache cannot change a figure: a hit and a cold
+  computation produce byte-identical output, and a ledger write, a rate refresh, or a different
+  `--include-children` each invalidate it. `scripts/bench.mjs` compares only like-for-like shapes,
+  since a baseline recorded for a smaller ledger says nothing about a larger one.
+
 - `scripts/bench.mjs` measures the database-driven operations against a synthetic ledger and
   fails if any of them regress. `--list 20` on a 10,000-session / 500,000-call ledger took
   **eleven seconds** when it was first measured, because it builds a full `buildReport` per

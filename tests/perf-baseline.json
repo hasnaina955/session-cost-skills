@@ -1,15 +1,15 @@
 {
   "shape": {
-    "sessions": 500,
-    "callsPerSession": 20,
-    "note": "quick shape"
+    "sessions": 10000,
+    "callsPerSession": 50,
+    "note": "full shape, the one that exposed the finding"
   },
   "node": "v24.21.0",
   "platform": "linux",
   "timings": {
-    "single session": 74,
-    "--list 20 (cold)": 165,
-    "--list 20 (warm)": 161,
-    "--list 20 --rollup daily": 166
+    "single session": 278,
+    "--list 20 (cold)": 1028,
+    "--list 20 (warm)": 244,
+    "--list 20 --rollup daily": 248
   }
 }
