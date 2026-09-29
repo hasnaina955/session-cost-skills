@@ -103,6 +103,8 @@ const COMMON_FLAGS = Object.freeze({
   explain: { key: 'explain', value: true },
   csv: { key: 'csv', value: true },
   brief: { key: 'brief', value: true },
+  card: { key: 'card', value: true },
+  cardIncludeTitle: { key: 'cardIncludeTitle', value: true },
   rollup: {
     key: 'rollup',
     value: (argv, i) => {
