@@ -99,9 +99,13 @@ report carries token-mix and per-model bars.
    standalone SVG summary, private by default - and nothing calls it from either CLI. WP-3.5 shipped
    the module and missed the flag. Wire it, add `--card-include-title`, test that a session title
    cannot appear without that flag, and add a golden for the SVG.
-2. **The cache could go further.** Only `--list` uses `rollup-cache.mjs`; `--rollup` and dashboard
-   range views rebuild reports per session. Measure before assuming it matters - `npm run bench` is
-   the tool.
+2. **The cache on the range path: measured, and deliberately not done.** `--list N --rollup` is
+   already cached and runs ~8x faster warm (8.8s to 1.1s over 200 sessions). The range mode -
+   `--from/--to`, `--today`, dashboards over a range - is not cached, and measured at 1.4s cold
+   *and* warm over a 30-day window, because the quadratic fixed in #87 was the dominant cost there
+   too. Wiring the cache in would add invalidation complexity to a path that already answers in
+   under two seconds, so it stays unwired. Revisit only if `npm run bench` shows the range path
+   regressing.
 3. Anything in `docs/roadmap-plan.md` under WP-4.x that needs no external facts.
 
 ## Blocked, and what unblocks it
