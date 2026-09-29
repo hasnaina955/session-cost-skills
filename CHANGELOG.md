@@ -13,9 +13,6 @@ All notable changes to this project are documented here.
   what would unblock it, so the next person does not guess a storage schema and produce plausible,
   wrong numbers.
 
-
-### Added
-
 - `tests/conformance/run-conformance.mjs`: the adapter conformance kit, which is issue #21's
   "an adapter must pass the shared usage, selection, session-graph and cost-domain contracts before
   it is accepted" turned from a review question into one command. It runs nine scenarios against any
@@ -44,74 +41,6 @@ All notable changes to this project are documented here.
   the fixture contract, and the three rules the Cline port had to learn the hard way. It also says
   plainly that `open`, `close`, `listSessions`, `resolveCurrent`, `buildReport` and `aggregate` are
   not to be implemented yet, because nothing calls them.
-
-### Changed
-
-- Cline runs on the shared kernel, the second runtime to do so. `adapters/cline/skill/scripts/session-cost.mjs`
-  went from 898 lines to 9. The runtime-specific half moved intact to
-  `adapters/cline/skill/scripts/lib/runtime.mjs` (1,020 lines). As with MCode this was code motion
-  rather than a rewrite: all ten golden files are byte-identical to the baseline captured before
-  either port, and `--help` was diffed line by line against a stashed pre-port build.
-
-  Cline needed one thing MCode did not. Its `die()` called `process.exit(2)` from the inside of
-  the report path, which is untestable and unsafe on Windows, where exiting while a database
-  handle is open trips a libuv assertion. It now raises the kernel's `KernelError`, so the exit
-  code is the kernel's decision and no function below the adapter decides it. `--account` also
-  stopped being a branch inside the report and became an `extraModes` entry: it reads a different
-  source and produces a different document, and there is now no function through which an account
-  figure could reach `billing`. That is accounting rule 3 made structural instead of promised, and
-  a test asserts the report step does not mention `account` at all.
-
-  The kernel gained the extra-mode dispatch WP-2.3 assumed and which WP-2.1 had not built. An extra
-  mode runs after the configuration is loaded and instead of the report, so `--session-config`
-  still applies to it and no invocation can produce both documents.
-
-  Review found that last claim was wrong on the first attempt and the shipped version is corrected:
-  the extra mode was dispatched straight after `loadConfig`, which silently skipped `configAction`,
-  `setup`, `diagnostic` and `applyDefaults`. `--account --init-config` therefore stopped writing the
-  config file and went to the network instead - verified by running the pre-port and post-port
-  builds side by side, since both still exited 2 and only the side effect differed. An extra mode now
-  replaces the report step alone, and a test pins the ordering.
-
-  Two wiring bugs in the same code are also fixed. The adapter's `aggregate` member called a
-  three-argument function with one, which would have left the aggregate's title and selection method
-  undefined. And `runOnce` re-implemented the database-open guards inline while the adapter's own
-  `open` member existed unused, so those guards now exist once.
-
-  Review also found that the runtime-adapter interface over-claimed, and that is corrected here
-  rather than deferred. WP-2.1 required twelve members, but the kernel invokes three of them:
-  `open`, `close`, `listSessions`, `resolveCurrent`, `buildReport` and `aggregate` are never
-  called, and both adapters satisfied them with `() => []` and `() => ({})`. `validateAdapter`
-  passed, which is the precise false confidence the interface exists to prevent - and the reason
-  the `aggregate` arity bug above could sit in the tree unnoticed. Those six move to a new
-  exported `KIT_MEMBERS`, which nothing requires yet; the required list is now the members a run
-  actually consumes plus the facts it states about a runtime. A test fails if either adapter starts
-  defining a kit member, and another asserts the two lists stay disjoint, so the gap cannot quietly
-  close with a stub. They are the contract WP-2.4's conformance kit will exercise.
-
-- MCode runs on the shared kernel. `adapters/mcode/skill/scripts/session-cost.mjs` went from 1,444
-  lines to 12: it imports the adapter and calls `runCli`. The runtime-specific half moved, intact,
-  to `adapters/mcode/skill/scripts/lib/runtime.mjs` (1,502 lines) - the ledger reads, the pricer,
-  `--rates`, `--refresh-rates`, and every renderer. The kernel now decides the order a run performs
-  its steps in; the adapter says what each step means for MiniMax Code.
-
-  The work was code motion rather than a rewrite, because the acceptance criterion is that output
-  does not change. All ten golden files are byte-identical to a baseline captured before the port
-  started, and the `--help` output was diffed line by line against the pre-port build rather than
-  trusted. The two things that had to be understood rather than moved: the options used to be
-  parsed at module load, so they now arrive through the run context and are reset per run, because
-  `--watch` calls the report once per poll inside one process; and the local `CostError` is now the
-  kernel's `KernelError`, which carries the same "understood failure, exit 2, no stack" contract.
-
-  One existing test needed correcting rather than the code. "Every flag the schema accepts is
-  actually acted on" read `session-cost.mjs` looking for `opts.<key>`, which was a reasonable proxy
-  while the option flow lived in one file and silently became wrong once it did not. It now searches
-  the whole scripts directory. That is a weaker-looking change, so I confirmed the stronger
-  behaviour by renaming every `opts.counterfactual` reference in the adapter and checking the test
-  still fails with "the CLI never reads opts.counterfactual" - it does. A test that stops catching
-  the bug it was written for is worse than one that fails on a layout change.
-
-### Added
 
 - `shared/kernel.mjs`: the orchestration both entry points were writing twice, and the piece
   WP-2.1's title promised but did not ship. It owns argument parsing (through the existing
@@ -310,6 +239,88 @@ All notable changes to this project are documented here.
   The default is still the real clock, so tests asserting relative-date behaviour are unchanged;
   the golden scenarios pin both the data and `SESSION_COST_NOW`, and a test asserts both pins
   rather than trusting them.
+
+### Changed
+
+- Cline runs on the shared kernel, the second runtime to do so. `adapters/cline/skill/scripts/session-cost.mjs`
+  went from 898 lines to 9. The runtime-specific half moved intact to
+  `adapters/cline/skill/scripts/lib/runtime.mjs` (1,020 lines). As with MCode this was code motion
+  rather than a rewrite: all ten golden files are byte-identical to the baseline captured before
+  either port, and `--help` was diffed line by line against a stashed pre-port build.
+
+  Cline needed one thing MCode did not. Its `die()` called `process.exit(2)` from the inside of
+  the report path, which is untestable and unsafe on Windows, where exiting while a database
+  handle is open trips a libuv assertion. It now raises the kernel's `KernelError`, so the exit
+  code is the kernel's decision and no function below the adapter decides it. `--account` also
+  stopped being a branch inside the report and became an `extraModes` entry: it reads a different
+  source and produces a different document, and there is now no function through which an account
+  figure could reach `billing`. That is accounting rule 3 made structural instead of promised, and
+  a test asserts the report step does not mention `account` at all.
+
+  The kernel gained the extra-mode dispatch WP-2.3 assumed and which WP-2.1 had not built. An extra
+  mode runs after the configuration is loaded and instead of the report, so `--session-config`
+  still applies to it and no invocation can produce both documents.
+
+  Review found that last claim was wrong on the first attempt and the shipped version is corrected:
+  the extra mode was dispatched straight after `loadConfig`, which silently skipped `configAction`,
+  `setup`, `diagnostic` and `applyDefaults`. `--account --init-config` therefore stopped writing the
+  config file and went to the network instead - verified by running the pre-port and post-port
+  builds side by side, since both still exited 2 and only the side effect differed. An extra mode now
+  replaces the report step alone, and a test pins the ordering.
+
+  Two wiring bugs in the same code are also fixed. The adapter's `aggregate` member called a
+  three-argument function with one, which would have left the aggregate's title and selection method
+  undefined. And `runOnce` re-implemented the database-open guards inline while the adapter's own
+  `open` member existed unused, so those guards now exist once.
+
+  Review also found that the runtime-adapter interface over-claimed, and that is corrected here
+  rather than deferred. WP-2.1 required twelve members, but the kernel invokes three of them:
+  `open`, `close`, `listSessions`, `resolveCurrent`, `buildReport` and `aggregate` are never
+  called, and both adapters satisfied them with `() => []` and `() => ({})`. `validateAdapter`
+  passed, which is the precise false confidence the interface exists to prevent - and the reason
+  the `aggregate` arity bug above could sit in the tree unnoticed. Those six move to a new
+  exported `KIT_MEMBERS`, which nothing requires yet; the required list is now the members a run
+  actually consumes plus the facts it states about a runtime. A test fails if either adapter starts
+  defining a kit member, and another asserts the two lists stay disjoint, so the gap cannot quietly
+  close with a stub. They are the contract WP-2.4's conformance kit will exercise.
+
+- MCode runs on the shared kernel. `adapters/mcode/skill/scripts/session-cost.mjs` went from 1,444
+  lines to 12: it imports the adapter and calls `runCli`. The runtime-specific half moved, intact,
+  to `adapters/mcode/skill/scripts/lib/runtime.mjs` (1,502 lines) - the ledger reads, the pricer,
+  `--rates`, `--refresh-rates`, and every renderer. The kernel now decides the order a run performs
+  its steps in; the adapter says what each step means for MiniMax Code.
+
+  The work was code motion rather than a rewrite, because the acceptance criterion is that output
+  does not change. All ten golden files are byte-identical to a baseline captured before the port
+  started, and the `--help` output was diffed line by line against the pre-port build rather than
+  trusted. The two things that had to be understood rather than moved: the options used to be
+  parsed at module load, so they now arrive through the run context and are reset per run, because
+  `--watch` calls the report once per poll inside one process; and the local `CostError` is now the
+  kernel's `KernelError`, which carries the same "understood failure, exit 2, no stack" contract.
+
+  One existing test needed correcting rather than the code. "Every flag the schema accepts is
+  actually acted on" read `session-cost.mjs` looking for `opts.<key>`, which was a reasonable proxy
+  while the option flow lived in one file and silently became wrong once it did not. It now searches
+  the whole scripts directory. That is a weaker-looking change, so I confirmed the stronger
+  behaviour by renaming every `opts.counterfactual` reference in the adapter and checking the test
+  still fails with "the CLI never reads opts.counterfactual" - it does. A test that stops catching
+  the bug it was written for is worse than one that fails on a layout change.
+
+### Fixed
+
+- `## Unreleased` had grown three separate `### Added` blocks, so a reader could not tell whether an
+  entry belonged to the batch above or the batch below - and the changelog is what someone reads to
+  find out what actually shipped. They are merged into one, and `check:docs` now fails on any
+  `### ` heading repeated inside `## Unreleased`. The check is scoped to Unreleased because
+  released sections are memory rather than drafts, and `0.3.0` deliberately files a second batch
+  under `### Also in this release`.
+- `docs/roadmap-plan.md` section 0 was asserting things the code no longer supported: it called
+  Phase 3 complete while WP-3.5 shipped only `shared/card.mjs` with no `--card` flag to write a
+  card, listed the perf budget as still ahead after WP-4.5 landed, and described #67 as an open
+  filed issue when PR #85 had already closed it. The status table now carries WP-3.2 through
+  WP-4.5 plus the #67 and #87 fixes, and the paragraph on the two recorded findings says plainly
+  that the `bandForTimestamp(null)` finding - still live, `null` resolving to the cheaper off-peak
+  band - was never filed as an issue at all.
 
 ## 0.5.0
 
@@ -608,3 +619,4 @@ installed skill also stops silently discarding state; see [docs/updating.md](doc
 - Node.js 22.15 or newer
 - Windows 10/11
 - Cline CLI and MiniMax Code CLI have separate adapters and installation targets
+

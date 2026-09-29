@@ -116,4 +116,25 @@ for (const key of ['standingSummary', 'warnOnCacheRateBelow', 'defaultFormat']) 
   );
 }
 
-console.log(`Documentation terms, encoding, install paths, and contacts verified (${documents.length} files).`);
+// A release section with two `### Added` headings is two sections pretending to be one: a reader
+// cannot tell whether an entry belongs to the batch above or the batch below, and the changelog is
+// what someone reads to find out what actually shipped. Unreleased accumulated three. Scoped to
+// Unreleased because released sections are memory rather than drafts, and 0.3.0 deliberately files
+// a second batch under "### Also in this release".
+const changelog = sources.get('CHANGELOG.md');
+assert.match(changelog, /^## Unreleased$/m, 'CHANGELOG.md must keep an Unreleased section');
+const unreleased = changelog.match(/^## Unreleased\r?\n([\s\S]*?)(?=^## )/m)?.[1];
+assert.ok(unreleased, 'CHANGELOG.md has no section after ## Unreleased to bound it');
+const unreleasedHeadings = unreleased.split(/\r?\n/).filter((line) => /^### /.test(line));
+const duplicatedHeadings = unreleasedHeadings
+  .filter((heading, index) => unreleasedHeadings.indexOf(heading) !== index);
+assert.deepEqual(
+  [...new Set(duplicatedHeadings)],
+  [],
+  `CHANGELOG.md Unreleased repeats a heading (${[...new Set(duplicatedHeadings)].join(', ')}); ` +
+  'one release section must contain at most one of each heading',
+);
+
+console.log(
+  `Documentation terms, encoding, install paths, contacts, and Unreleased headings verified (${documents.length} files).`,
+);

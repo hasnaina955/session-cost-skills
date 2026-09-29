@@ -8,7 +8,7 @@ done. Read sections 1-3 once; after that, each WP stands alone.
 
 Delivered and merged, each on its own PR with the full CI matrix green:
 
-| WP | Result |
+| Item | Result |
 | --- | --- |
 | WP-0.1 | Landed the in-flight work; rebased #61 onto a fixed `main` so its stale-green checks re-ran |
 | WP-0.2 | Roadmap checkboxes and the test count synced; the README `--version` example is now asserted against `package.json` |
@@ -25,16 +25,35 @@ Delivered and merged, each on its own PR with the full CI matrix green:
 | WP-2.4 | The conformance kit: nine scenarios, run as a command or a single test line, plus `docs/adapter-authoring.md` for the next adapter |
 | WP-3.0 | A bounded per-call timeline, and MCode `--json` reports that emit it |
 | WP-3.1 | A zero-dependency inline-SVG chart module |
-| v0.5.0 | Cut, with a cross-platform skill update workflow (`docs/updating.md`) |
+| WP-3.2 | Four server-rendered dashboard sections, drawn in Node and shipped as inline SVG so the page reads with JavaScript disabled, each followed by a table carrying the same figures |
+| WP-3.3 | Bars in the plain-text report: a one-line token mix with a legend and a per-model share bar, every value repeated beside its bar, with `--plain` as the escape hatch |
+| WP-3.4 | `shared/contrast.mjs` computes WCAG ratios and `tests/theme-contrast.test.mjs` audits the dashboard palettes against them; the audit found the light theme never declared `--danger` at all |
+| WP-3.5 | **Partial.** `shared/card.mjs` renders a 1200x630 standalone SVG summary, private by default, but `--card` was never wired to it, so no invocation can write a card. Wiring the flag is the next work package |
+| WP-4.1 | `--brief`: at most six lines answering "what did this cost?", plus `--brief --json` returning a stable, documented `session-brief` shape |
+| WP-4.5 | A performance budget: `scripts/bench.mjs` measures the database-driven operations against a synthetic ledger and fails on a regression |
+| #67 | Closed by PR #85: an unusable token count routes the call to the no-cost path, so coverage degrades to `partial` and names the gap instead of the bill silently shrinking |
+| #87 | `--list` was quadratic in the session count rather than slow to price: 10,837 ms to 1,007 ms cold on a 10,000-session ledger |
 
-**Phase 2 (Core) and Phase 3 (Sight) are complete.** The 0.6.0 exit criterion is met on both
-halves: both adapters run on the shared kernel with the ten goldens still byte-identical to the
-baseline captured before the first port, and the timeline is in the contract. Still ahead: WP-4.x
-(MCP server, installer, perf budget), and Phase 5 adapters.
+**Phase 2 (Core) is complete, and Phase 3 (Sight) meets its 0.7.0 exit criterion** - dashboard v2,
+terminal bars, and the accessibility checks all shipped. WP-3.5 is the one open item across both
+phases: its module exists and is tested, but the flag that would write a card does not. The 0.6.0
+exit criterion is met on both halves: both adapters run on the shared kernel with the ten goldens
+still byte-identical to the baseline captured before the first port, and the timeline is in the
+contract. Still ahead: wiring `--card`, WP-4.2 (MCP server), WP-4.3 (installer), WP-4.4 (budget
+notifications), and Phase 5 adapters.
 
-Two findings are recorded rather than papered over, both filed as issues:
-`calculateTokenCost` coerces unusable token counts into a finite `0` (#67), and `bandForTimestamp`
-resolves a `null` timestamp to the off-peak band, which is the cheaper one.
+The latest release is **v0.5.0**, cut on 2026-09-27 with the cross-platform skill update workflow
+(`docs/updating.md`). Most of the table above merged after that cut and is unreleased; the
+milestones table in section 1 records which version each phase is waiting on.
+
+Two findings were recorded rather than papered over. One is fixed: #67 closed in PR #85, where
+`calculateTokenCost` stopped coercing unusable token counts into a finite `0`. A count is usable
+only if it is `null` or a finite non-negative number, and anything else routes the call into the
+same no-cost path a model with no rate takes, so coverage degrades to `partial` and names the gap
+rather than the bill shrinking. The other is still open and has never been filed as an issue:
+`bandForTimestamp(null, ...)` resolves to the off-peak band, the cheaper one, because `Number(null)`
+is `0` and `new Date(0)` is a real epoch Thursday at 00:00 UTC. `undefined` and unparseable
+strings throw, so `null` is the one shape that slips through.
 
 ## 1. Direction
 
