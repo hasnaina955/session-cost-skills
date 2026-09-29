@@ -6,6 +6,16 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- `docs/handoff.md` is a starting brief for picking this up with no prior context: the state, the
+  one architecture rule that bites (edit `shared/`, never an adapter's generated copy), the process
+  rules, and the failure mode that has caught every serious bug here - rendering the awkward case
+  and reading it, rather than trusting a passing suite. It also records what is blocked and exactly
+  what would unblock it, so the next person does not guess a storage schema and produce plausible,
+  wrong numbers.
+
+
+### Added
+
 - `tests/conformance/run-conformance.mjs`: the adapter conformance kit, which is issue #21's
   "an adapter must pass the shared usage, selection, session-graph and cost-domain contracts before
   it is accepted" turned from a review question into one command. It runs nine scenarios against any
