@@ -30,7 +30,9 @@ test('the JSON emitter carries every field the normalized contract requires', ()
   const emitter = source.slice(emitterStart, emitterStart + 12000);
   for (const key of schema.required) {
     assert.ok(
-      new RegExp(`\\n\\s{4}${key}[,:]`).test(emitter),
+      // `\r?\n` for the same reason as the guard count below: this reads the source as text, so it
+      // must not assume LF on a machine that checked the file out with CRLF.
+      new RegExp(`\\r?\\n\\s{4}${key}[,:]`).test(emitter),
       `the JSON emitter must set the required contract field "${key}"`,
     );
   }
@@ -90,7 +92,12 @@ test('every reported timestamp comes from the injectable clock', () => {
 
 test('failure paths return one readable line', () => {
   // Principle 10: no stack trace, no local path, no credential on any error.
-  const wrappers = source.match(/try \{\n\s+(?:const argv|return \{ok)/g) || [];
+  // `\r?` so the assertion holds on a CRLF checkout too. A literal \n here once made this the only
+  // test red on Windows: the guards were present in the file, the regex could not see them, and the
+  // count came back 0 - an assertion about not leaking stack traces failing on a build that leaked
+  // nothing. `.gitattributes` now pins LF for `*.ts` as well; this keeps the test honest if the
+  // file is ever read from an archive or a tree where those attributes are not applied.
+  const wrappers = source.match(/try \{\r?\n\s+(?:const argv|return \{ok)/g) || [];
   assert.equal(wrappers.length, 2, 'the command handler and the tool run must both guard runReport');
   assert.equal((source.match(/catch \(error\)/g) || []).length, 2);
 });
