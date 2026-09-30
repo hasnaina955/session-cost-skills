@@ -5,3 +5,7 @@
 *.html text eol=lf
 *.ps1 text eol=crlf
 LICENSE text eol=lf
+# The Command Code adapter is TypeScript. Without an explicit rule, `* text=auto` lets the
+# Windows runners check it out with CRLF (core.autocrlf=true), and a test that reads the
+# source with a literal-\n pattern then cannot see guards that are present in the file.
+*.ts text eol=lf
