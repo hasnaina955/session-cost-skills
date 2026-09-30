@@ -38,8 +38,9 @@ import { describeStorageError } from './error-boundaries.mjs';
 import { renderExplanation } from './explain.mjs';
 import { renderRankingText as renderRanking, renderRollupText as renderRollup } from './rollup.mjs';
 import { renderCsv } from './csv.mjs';
-import { evaluateBudget } from './budget.mjs';
+import { BUDGET_STATUS, evaluateBudget, formatUsd } from './budget.mjs';
 import { counterfactualCost, renderCounterfactualText } from './counterfactual.mjs';
+import { createAlertGate, createNotifier } from './notify.mjs';
 import { createLiveSurface, nextInterval, renderLiveFrame } from './live-view.mjs';
 import { buildProviderProfile, renderSetupText } from './setup.mjs';
 import { compareToBaseline, renderInsightsText } from './insights.mjs';
@@ -119,6 +120,7 @@ const HELP_TEXT = `session-cost — token usage and provider-rate cost of a Mini
   --card                  write a shareable SVG summary card (no session data by default)
   --card-include-title    with --card: include the session title on the card
   --budget <amount>       warn and exit non-zero when a session passes this amount
+  --notify                with --budget: ring the bell and raise a desktop alert once, on crossing
   --counterfactual <m>     estimate what this session would cost on model <m>
   --setup                  guided custom-provider setup; prints a paste-ready config
   --insights               compare this session to your own history; no forecasting
@@ -1119,6 +1121,25 @@ let quiet = false;
 // registry here so the report step reads them instead of loading the table a second time.
 let runContext = {};
 
+// The alert gate deliberately sits OUTSIDE beginRun's reset list. A `--watch` process re-runs
+// main() every 500ms against the same budget, and the gate's whole job is to remember that the
+// threshold has already been announced. Resetting it per poll would deliver the same alert
+// thousands of times an hour, which is the reason `--notify` needs a gate at all.
+let alertGate = null;
+
+/**
+ * The process's one alert gate, built on first use.
+ *
+ * Null when `--notify` was not asked for or when there is no `--budget` to cross: with no
+ * threshold there is nothing to announce, and no amount is inferred to manufacture one.
+ */
+function budgetAlertGate() {
+  if (alertGate === null && opts.notify === true && typeof opts.budget === 'number') {
+    alertGate = createAlertGate({ thresholds: [opts.budget], notifier: createNotifier() });
+  }
+  return alertGate;
+}
+
 /** Install the options the kernel parsed, and clear everything a previous run left behind. */
 function beginRun(context) {
   opts = { ...context.opts };
@@ -1558,6 +1579,18 @@ async function main(context) {
       });
       console.error(verdict.message);
       budgetExitCode = verdict.exitCode;
+      // Only a blown budget is announced, and the decision is taken from the verdict rather than
+      // from the amount: `exceeded` is the one status that means a known spend passed a known
+      // limit. An `unknown` verdict is silent, because a session nobody could price has no
+      // severity to raise (accounting rule 1) - and under `--watch` this block runs once per
+      // poll, so the gate is what keeps it to one alert.
+      if (verdict.status === BUDGET_STATUS.EXCEEDED) {
+        budgetAlertGate()?.flush(verdict.amountUsd, {
+          title: 'session-cost budget exceeded',
+          format: (usd) => `session ${verdict.sessionId ?? 'spend'} passed the $${formatUsd(usd)} budget `
+            + `(now $${formatUsd(verdict.amountUsd)})`,
+        });
+      }
     }
 
     return Math.max(report.rateKnown ? 0 : 2, budgetExitCode);

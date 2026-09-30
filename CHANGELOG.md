@@ -4,6 +4,45 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Added
+
+- `--notify` raises a terminal bell and, where the platform has one, a desktop notification when
+  a session's spend passes `--budget`. The budget existed but was only ever a line of text on
+  stderr and an exit code, which means it can only catch you if you happen to be reading. A budget
+  you have to be looking at is not a budget, and the long `--watch` mode is the case that hurts
+  most: the interesting moment is the one crossing, and a repainting frame is exactly the moment
+  you are not looking at it.
+
+  Three properties are the work, not the notification itself.
+
+  An unknown cost never alerts. This is accounting rule 1 in a new place, and it is the reason
+  the alert is driven by the budget *verdict* rather than by the amount. `exceeded` is the only
+  status that means a known spend passed a known limit, so it is the only one that rings. A
+  session nobody could price has no severity to raise, and a notification claiming otherwise would
+  be the most expensive kind of wrong this tool can produce: it interrupts a person to tell them
+  something false. A partially priced total that has already passed the cap still alerts, because
+  a lower bound can prove a breach even though it can never prove compliance.
+
+  Each threshold fires exactly once per process. `--watch` re-evaluates the same spend every
+  500ms, so without a gate the same alert would arrive thousands of times an hour. The gate lives
+  outside the per-poll reset in both adapters, which is the whole reason it is not a local.
+
+  Platform commands are invoked with an argument array and `shell: false`, never a concatenated
+  command line. A notification body carries a session id, which is an attacker-adjacent string as
+  far as a shell is concerned. Where a platform's own quoting rules would have forced that string
+  into a script literal - osascript's AppleScript, PowerShell's `-Command` - the script reads its
+  arguments from the process argv instead, so a session id containing a quote cannot terminate
+  the literal it would otherwise be pasted into. There is a test that asserts the caller data
+  appears nowhere in the script text on those two platforms.
+
+  A missing notifier warns once and the bell still rings, because a `--watch` that reprinted the
+  warning every 500ms would be worse than no notification at all. A notifier that fails to start
+  is swallowed: the verdict is already printed and has already set the exit code, and the number
+  is the product.
+
+  New `shared/notify.mjs`, with the `sync:`/`check:` pair wired into `verify` like every other
+  shared module, so a drift between the two adapters' generated copies fails the build.
+
 ### Fixed
 
 - An unpriced session renders as `$0.000000` in the dashboard's session table. This is accounting
