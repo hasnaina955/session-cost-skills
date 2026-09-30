@@ -284,38 +284,103 @@ test('defaultCanRun resolves a real executable and rejects a missing one', () =>
   assert.equal(defaultCanRun('', { platform: process.platform, env: searchPath }), false, 'no name, no command');
 });
 
+/**
+ * A filesystem stub that records every candidate the lookup probes and can be told which
+ * candidates exist.
+ *
+ * A recording stub is the only honest way to test the separator logic. The previous version
+ * asserted `defaultCanRun(nodeBinary, {platform:'linux', env:{PATH:…realNodeDirectory}})` is true,
+ * which is untestable on Windows: splitting `C:\hostedtoolcache\...` on ":" shreds the drive
+ * letter into a bare "C", so the real directory is never a candidate at all and the assertion
+ * cannot hold on a GitHub Windows runner - it only passed locally because `path.join` on that one
+ * host happens to rebuild something that resolves.
+ */
+function recordingFs(existing) {
+  const probed = [];
+  const constant = { X_OK: 1 };
+  return {
+    probed,
+    constants: constant,
+    statSync(candidate) {
+      probed.push(candidate);
+      if (!new Set(existing).has(candidate)) throw new Error('ENOENT');
+      return { isFile: () => true };
+    },
+    // Only reached for a candidate that statSync accepted, so a recorded candidate that never
+    // got here is one the POSIX branch rejected on existence rather than on permissions.
+    accessSync(candidate) {
+      if (!new Set(existing).has(candidate)) throw new Error('EACCES');
+    },
+  };
+}
+
 test('PATH is split on the separator the platform uses, not a hardcoded one', () => {
   // The bug this guards: joining with ':' on Windows, or with ';' on POSIX, finds nothing at all,
-  // so the notifier is reported missing on a machine that has it. Both shapes are exercised on
-  // whichever host runs this, through the same injected environment.
-  const nodeCommand = path.basename(process.execPath);
-  const nodeDirectory = path.dirname(process.execPath);
+  // so the notifier is reported missing on a machine that has it. Neither branch touches the host
+  // filesystem, so the same assertions hold on every platform the matrix runs.
+  const COMMAND = 'notify-send';
+  const POSIX_PATH = '/usr/local/bin:/usr/bin:/bin';
+  const WINDOWS_PATH = String.raw`C:\first;C:\second;C:\third`;
 
-  const posixSeparated = defaultCanRun(nodeCommand, {
-    platform: 'linux',
-    env: { PATH: `/nonexistent-a:${nodeDirectory}:/nonexistent-b` },
-  });
-  assert.equal(posixSeparated, true, 'a POSIX PATH must be split on ":"');
-
-  const windowsSeparated = defaultCanRun(nodeCommand, {
-    platform: 'win32',
-    env: { PATH: `C:\\nonexistent-a;${nodeDirectory};C:\\nonexistent-b` },
-  });
-  assert.equal(windowsSeparated, true, 'a Windows PATH must be split on ";" and honour PATHEXT');
-
-  // The separator matters in the other direction too, and this is the half that needs care: on a
-  // POSIX lookup a ";" is NOT a separator, so a ";"-joined PATH is one single directory name.
-  // Asserted with a name that cannot resolve on any host, so the claim is exactly "it was not
-  // found" rather than a coincidence of how `path.join` treats the joined text on Windows.
-  const semicolonNotSplit = defaultCanRun('not-installed-anywhere-xyzzy', {
-    platform: 'linux',
-    env: { PATH: `/nonexistent-a;${nodeDirectory}` },
-  });
+  // The fixture builds its paths with `path.join`, exactly as the code under test does, so the
+  // comparison is platform-independent. Hardcoding them with "/" would make a Windows host probe
+  // `\usr\bin\notify-send` and compare it against a fixture entry written `/usr/bin/notify-send`.
+  const posixFound = path.join('/usr/bin', COMMAND);
+  const posix = recordingFs([posixFound]);
   assert.equal(
-    semicolonNotSplit,
-    false,
-    'a POSIX lookup treats ";"-joined text as one directory, so it finds nothing',
+    defaultCanRun(COMMAND, { platform: 'linux', env: { PATH: POSIX_PATH }, fsImpl: posix }),
+    true,
+    'a POSIX PATH must be split on ":" and the middle directory still reachable',
   );
+  assert.deepEqual(posix.probed, [
+    path.join('/usr/local/bin', COMMAND),
+    posixFound,
+  ], 'the ":"-separated directories are each probed, in order');
+
+  // The wrong separator is the failure this test exists for: on a POSIX host, ";" is not a
+  // separator, so a ";"-joined PATH is one single directory name and nothing is found.
+  const semicolon = recordingFs([posixFound]);
+  assert.equal(
+    defaultCanRun(COMMAND, { platform: 'linux', env: { PATH: '/usr/local/bin;/usr/bin' }, fsImpl: semicolon }),
+    false,
+    'a POSIX lookup must not split on ";"',
+  );
+  assert.deepEqual(semicolon.probed, [
+    path.join('/usr/local/bin;/usr/bin', COMMAND),
+  ], 'the whole ";"-joined string is one candidate');
+
+  // The fixture names a real Windows executable, extension included, because that is what the
+  // code actually probes: PATHEXT is appended to a bare name, so `notify-send` alone is never a
+  // candidate on Windows. Naming the bare file here would leave the second directory genuinely
+  // unreachable and the assertion would fail for a reason that has nothing to do with separators.
+  const windowsFound = path.join('C:\\second', COMMAND + '.COM');
+  const windows = recordingFs([windowsFound]);
+  assert.equal(
+    defaultCanRun(COMMAND, { platform: 'win32', env: { PATH: WINDOWS_PATH }, fsImpl: windows }),
+    true,
+    'a Windows PATH must be split on ";" and the second directory still reachable',
+  );
+  assert.deepEqual(windows.probed, [
+    path.join('C:\\first', COMMAND + '.COM'),
+    path.join('C:\\first', COMMAND + '.EXE'),
+    path.join('C:\\first', COMMAND + '.BAT'),
+    path.join('C:\\first', COMMAND + '.CMD'),
+    windowsFound,
+  ], 'each directory is tried against each PATHEXT extension, in order');
+
+  // A Windows command that already names its extension must be matched as written rather than
+  // have PATHEXT appended, or the one notifier Windows has is reported missing.
+  const powershellFound = path.join('C:\\second', 'powershell.exe');
+  const powershell = recordingFs([powershellFound]);
+  assert.equal(
+    defaultCanRun('powershell.exe', { platform: 'win32', env: { PATH: WINDOWS_PATH }, fsImpl: powershell }),
+    true,
+    'powershell.exe must be looked up as written, not as powershell.exe.exe',
+  );
+  assert.deepEqual(powershell.probed, [
+    path.join('C:\\first', 'powershell.exe'),
+    powershellFound,
+  ], 'a named extension suppresses the PATHEXT search');
 });
 
 test('the execute bit is what makes a file a command', { skip: process.platform === 'win32' ? 'POSIX permissions only' : false }, () => {
