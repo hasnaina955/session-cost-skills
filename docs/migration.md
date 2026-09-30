@@ -15,7 +15,7 @@ node "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs" --
 ```
 
 ```text
-session-cost 0.5.0 (cline adapter)
+session-cost 0.6.0 (cline adapter)
 report contract: 1.2.0
 node: 24.21.0 (requires >= 22.15.0)
 ```
@@ -48,7 +48,7 @@ an older release will not match the current `scripts/session-cost.mjs`.
 Verify the archive checksum before unpacking:
 
 ```powershell
-Get-FileHash .\session-cost-mcode-v0.5.0.zip -Algorithm SHA256
+Get-FileHash .\session-cost-mcode-v0.6.0.zip -Algorithm SHA256
 ```
 
 Then confirm the new banner:

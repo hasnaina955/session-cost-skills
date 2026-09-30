@@ -51,14 +51,14 @@ By default the script installs from this repository's working tree, which is wha
 you are building from source. To install a published archive instead, unpack it and point at it:
 
 ```bash
-node scripts/update-skill.mjs --from ./dist/session-cost-mcode-v0.5.0/ --apply
+node scripts/update-skill.mjs --from ./dist/session-cost-mcode-v0.6.0/ --apply
 ```
 
 Verify the archive before unpacking it, against the published `SHA256SUMS.txt`:
 
 ```bash
 sha256sum -c SHA256SUMS.txt          # Linux, macOS
-Get-FileHash .\session-cost-mcode-v0.5.0.zip -Algorithm SHA256   # Windows PowerShell
+Get-FileHash .\session-cost-mcode-v0.6.0.zip -Algorithm SHA256   # Windows PowerShell
 ```
 
 ## Where it installs
