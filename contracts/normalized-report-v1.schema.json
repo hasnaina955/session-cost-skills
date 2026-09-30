@@ -236,7 +236,8 @@
         "id": {
           "enum": [
             "cline",
-            "mcode"
+            "mcode",
+            "commandcode"
           ]
         },
         "costBasis": {

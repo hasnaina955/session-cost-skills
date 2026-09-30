@@ -12,6 +12,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const RUNTIMES = ['cline', 'mcode'];
+// The Command Code adapter ships as a self-contained mod rather than a
+// shared-CLI skill, so it is exempt from the shared argument-schema checks
+// below — but not from the version contract: every adapter carries the one
+// repository version, and its report must declare the shared contract.
+const ALL_RUNTIMES = ['cline', 'mcode', 'commandcode'];
 
 const packageJson = JSON.parse(read('package.json'));
 const version = packageJson.version;
@@ -22,7 +27,7 @@ assert.equal(packageJson.private, true, 'package.json must stay private so nothi
 assert.equal(packageJson.files, undefined, 'package.json must not define an npm files allowlist; GitHub archives are the distribution channel');
 assert.equal(packageJson.engines?.node, '>=22.15', 'package.json must declare the Node floor that CI exercises');
 
-for (const runtime of RUNTIMES) {
+for (const runtime of ALL_RUNTIMES) {
   const versionFile = path.join(root, 'adapters', runtime, 'skill', 'VERSION');
   assert.ok(fs.existsSync(versionFile), `adapters/${runtime}/skill/VERSION is missing`);
   const stamped = read(`adapters/${runtime}/skill/VERSION`).trim();
@@ -79,4 +84,23 @@ const contractVersion = read('shared/report-contract.mjs').match(/REPORT_CONTRAC
 assert.match(contractVersion ?? '', SEMVER, 'the report contract must declare a semantic contract version');
 assert.notEqual(contractVersion, version, 'the report contract version is independent of the release version');
 
-console.log(`Release version contract verified (release ${version}, report contract ${contractVersion}, ${RUNTIMES.length} adapters).`);
+// The Command Code mod declares its own copies of both versions because a
+// mod must load as a single self-contained file; drift between them and the
+// shared sources would break the one-version-per-repository contract that the
+// release archives enforce for the other two adapters.
+{
+  const mod = read('adapters/commandcode/skill/session-cost.ts');
+  assert.ok(
+    mod.includes(`const MOD_VERSION = '${version}'`),
+    `the commandcode mod must declare MOD_VERSION matching package.json (${version})`,
+  );
+  assert.ok(mod.includes("case '--version'"), 'the commandcode mod must handle --version');
+  const modContract = mod.match(/const CONTRACT_VERSION = '([^']+)'/)?.[1];
+  assert.equal(
+    modContract,
+    contractVersion,
+    'the commandcode mod contract version must match the shared report contract',
+  );
+}
+
+console.log(`Release version contract verified (release ${version}, report contract ${contractVersion}, ${ALL_RUNTIMES.length} adapters).`);

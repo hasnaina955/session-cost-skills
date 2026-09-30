@@ -2,7 +2,7 @@
 
 ## Normalized report contract v1.2
 
-`normalized-report-v1.schema.json` defines the common report envelope shared by the Cline and MCode session-cost CLIs.
+`normalized-report-v1.schema.json` defines the common report envelope shared by the Cline, MCode, and Command Code session-cost adapters.
 
 Every normalized report includes:
 
@@ -19,6 +19,7 @@ Every normalized report includes:
 
 - Cline uses `runtime-recorded`; `recordedCostUsd` contains the runtime-recorded amount.
 - MCode uses `provider-rate-estimate`; `estimatedCostUsd` contains the mirrored-rate estimate and `recordedCostUsd` is `null`.
+- Command Code uses `provider-rate-estimate`; its mod prices the local JSONL session ledger with the mirrored CommandCode provider-rate table, so `recordedCostUsd` is `null` and `estimatedCostUsd` carries the rate-based estimate.
 
 Unknown cost is `null`, never zero. A known zero-cost session with no calls may report a zero recorded amount with `coverage: "no-calls"`.
 

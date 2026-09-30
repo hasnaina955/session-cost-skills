@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Local-first token, cache, billing, and usage dashboards for the Cline and MiniMax Code (`MCode`) `session-cost` skills.
+Local-first token, cache, billing, and usage dashboards for the Cline and MiniMax Code (`MCode`) `session-cost` skills, and a self-contained Command Code mod.
 
 This repository keeps runtime-specific accounting adapters separate while sharing the product architecture, release process, documentation, and regression-test conventions.
 
@@ -11,6 +11,7 @@ This repository keeps runtime-specific accounting adapters separate while sharin
 - Public MIT-licensed repository
 - Cline adapter: local sessions, Cline account limits, cost/credits, and interactive dashboards
 - MCode adapter: native ledger accounting, CommandCode/StepFun rates, comparisons, and interactive dashboards
+- Command Code adapter: self-contained mod over the Command Code session ledger, rate-based costing with peak bands, config management, and HTML dashboards
 - Shared release and verification workflow
 - No credentials, session databases, generated reports, or API keys belong in this repository
 
@@ -35,12 +36,13 @@ This repository keeps runtime-specific accounting adapters separate while sharin
 
 ## Installation
 
-The source is split into two installable skills:
+The source is split into two installable skills and one Command Code mod:
 
 - `adapters/cline/skill/` → `%USERPROFILE%\.cline\skills\session-cost\`
 - `adapters/mcode/skill/` → `%USERPROFILE%\.minimax\skills\session-cost\`
+- `adapters/commandcode/skill/session-cost.ts` → `%USERPROFILE%\.commandcode\mods\session-cost.ts`
 
-To install or update, use the update script. It is cross-platform, verifies the result, and
+To install or update the skills, use the update script. It is cross-platform, verifies the result, and
 preserves MCode's refreshed rates, which a plain folder copy silently destroys:
 
 ```bash
@@ -48,9 +50,14 @@ node scripts/update-skill.mjs            # report what would change; writes noth
 node scripts/update-skill.mjs --apply    # install or update both adapters
 ```
 
-Full instructions, including installing a published archive and using it as a CI gate, are in
-[docs/updating.md](docs/updating.md). Keep the two installed copies separate. They share the
-public skill name but use different runtime ledgers and token semantics.
+The Command Code mod is a single self-contained file: copy it into the mods
+directory (or add the repository with `cmd mods add` once the package manifest
+ships) and reload mods. Full instructions, including installing a published
+archive and using it as a CI gate, are in
+[docs/updating.md](docs/updating.md); the adapter
+[USAGE.md](adapters/commandcode/USAGE.md) is the Command Code reference. Keep
+the installed copies separate. They share the public skill name but use
+different runtime ledgers and token semantics.
 
 `npm run bench` measures the database-driven operations against a synthetic ledger and fails if any of them regress. `--list 20` on a 10,000-session ledger took eleven seconds when first measured, because it built a full report per session - `shared/rollup-cache.mjs` is designed for exactly that and was never wired in (#87).
 
@@ -92,17 +99,26 @@ node "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs" --
 node "$env:USERPROFILE\.minimax\skills\session-cost\scripts\session-cost.mjs" --dashboard
 ```
 
+Command Code (mod):
+
+```text
+/session-cost
+/session-cost --rates
+/session-cost --dashboard
+```
+
 ## Runtime differences
 
-| Concern | Cline | MCode |
-| --- | --- | --- |
-| Primary data | `data/db/sessions.db` and message JSON | `v2/sqlite/runtime-state.sqlite` and session logs |
-| `inputTokens` | Includes cached prompt tokens | `input_tokens` excludes cached tokens |
-| Cost source | Recorded per-call `metrics.cost` | Provider-rate calculation for BYOK providers |
-| Account mode | Optional read-only Cline API view | Not applicable; use rate coverage |
-| Providers | Cline/ClinePass/OpenAI-compatible/etc. | Mirrored CommandCode and StepFun rates |
+| Concern | Cline | MCode | Command Code |
+| --- | --- | --- | --- |
+| Primary data | `data/db/sessions.db` and message JSON | `v2/sqlite/runtime-state.sqlite` and session logs | `~/.commandcode/projects` JSONL session transcripts |
+| `inputTokens` | Includes cached prompt tokens | `input_tokens` excludes cached tokens | `inputTokens` excludes cached tokens |
+| Cost source | Recorded per-call `metrics.cost` | Provider-rate calculation for BYOK providers | Provider-rate calculation from the mirrored CommandCode table |
+| Account mode | Optional read-only Cline API view | Not applicable; use rate coverage | Not applicable; use rate coverage |
+| Providers | Cline/ClinePass/OpenAI-compatible/etc. | Mirrored CommandCode and StepFun rates | Mirrored CommandCode rates (the shared table) |
+| Distribution | Skill folder | Skill folder | Single self-contained mod file |
 
-Never use the Cline fresh-input formula on MCode data.
+Never use the Cline fresh-input formula on MCode or Command Code data.
 
 ## Development
 
@@ -141,6 +157,7 @@ A Gumroad product may be offered for voluntary support, compatibility assistance
 
 - [Cline usage reference](adapters/cline/USAGE.md)
 - [MCode usage reference](adapters/mcode/USAGE.md)
+- [Command Code usage reference](adapters/commandcode/USAGE.md)
 - [Architecture](docs/architecture.md)
 - [Configuration](docs/configuration.md)
 - [Provider drivers](docs/provider-drivers.md)
