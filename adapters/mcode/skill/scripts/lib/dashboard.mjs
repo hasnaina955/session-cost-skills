@@ -103,12 +103,53 @@ function renderTable(headers, rows) {
   return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
+// The coverage claim an object makes about its own cost, or null when it makes none.
+//
+// Two shapes reach this file for the same word: a report carries `coverage: { status }` while a
+// billing block carries `coverage` as a bare string. Reading one shape and assuming the other
+// silently yields null, which drops the caller through to the boolean fallback below and misreads
+// a genuinely partly priced session as unknown.
+function coverageClaim(source) {
+  if (!source || typeof source !== 'object') return null;
+  const read = (value) => {
+    if (typeof value === 'string' && value !== '') return value;
+    if (value && typeof value === 'object' && typeof value.status === 'string' && value.status !== '') {
+      return value.status;
+    }
+    return null;
+  };
+  return read(source.coverage) ?? read(source.billing?.coverage ?? null);
+}
+
+// Whether a report, or one session inside it, has no figure to show at all.
+//
+// The coverage claim is the authority here, and it is the only signal that separates "nobody could
+// price this" from "somebody could price part of it": a real partly priced session and a wholly
+// unpriced one both carry `rateKnown: false`, so that boolean cannot be the discriminator - reading
+// it as one blanks a genuine lower bound, which is its own kind of lie, and the first version of
+// this fix did exactly that until the tests caught it. `partial` is deliberately NOT unknown: it
+// is a disclosed amount that can prove a budget was blown.
+//
+// The boolean and the classification are consulted only when a report carries no coverage claim at
+// all, which is the shape an older or third-party payload would have.
+function declaresCostUnknown(source) {
+  if (!source || typeof source !== 'object') return false;
+  const coverage = coverageClaim(source);
+  if (coverage !== null) {
+    return coverage === 'unavailable' || coverage === 'unknown' || coverage === 'cost-unavailable';
+  }
+  return source.rateKnown === false
+    || source.billing?.rateKnown === false
+    || source.classification === 'cost-unavailable'
+    || source.billing?.classification === 'cost-unavailable';
+}
+
 // The two adapters use different vocabularies for the same numbers: Cline reports
 // `total.cost` and splits tokens into input/output, while MCode reports `total.totalCost`
 // and `total.totalTokens`. The browser runtime reads one shape, so normalize here rather
 // than branching in the client. Doing it before the payload is hashed also keeps the
 // CSP script hash derived from a stable string.
-function normalizeSession(session) {
+function normalizeSession(session, { reportUnknown = false } = {}) {
   // A session entry can arrive as a bare metrics object, as the `{row, metrics}` shape a
   // single-session report carries, or as a whole nested report (which is what `--list`
   // produces). Walk all three so the table is populated in every case.
@@ -119,6 +160,20 @@ function normalizeSession(session) {
   const total = metrics.total ?? session.total ?? {};
   const tokens = Number(metrics.totalTokens ?? usage.totalTokens ?? total.totalTokens) || input + output;
   const cost = metrics.totalCost ?? metrics.cost ?? total.totalCost ?? total.cost;
+  // A session inherits the report's verdict when it carries none of its own. This is what closes
+  // the trap the file's own comment describes: both adapters keep a legacy `totalCost`/`cost`
+  // aggregate that is a finite `0` - not null - when no call could be priced, so guarding on
+  // "is the number usable" is not enough. A finite zero is exactly what "unknown" looks like once
+  // it has passed through an arithmetic accumulator, and it is indistinguishable from a real free
+  // session unless something declares otherwise. The session's own signals are checked first so
+  // a priced session in a partly-unpriced report keeps its real figure.
+  const costUnknown = reportUnknown
+    || declaresCostUnknown(session)
+    || declaresCostUnknown(metrics)
+    || declaresCostUnknown(session.billing ?? metrics.billing);
+  const knownCost = costUnknown
+    ? null
+    : (cost == null || !Number.isFinite(Number(cost)) ? null : Number(cost));
   return {
     ...session,
     id: session.id ?? session.sessionId ?? session.row?.sessionId ?? session.session?.id ?? null,
@@ -126,14 +181,16 @@ function normalizeSession(session) {
     // per-session map; the tree needs both, and `cost` is read off the metrics the same way
     // `totalCost` is, because the two shapes disagree about where it lives.
     parentId: session.parentId ?? session.row?.parentSessionId ?? session.session?.parentId ?? null,
-    cost: metrics.cost ?? metrics.totalCost ?? null,
+    cost: knownCost,
+    costKnown: !costUnknown,
     title: session.title ?? session.session?.title ?? metrics.title ?? null,
     metrics: {
       ...metrics,
       totalTokens: tokens,
       calls: Number(metrics.calls ?? total.calls) || 0,
       // An unknown cost stays null so the table cannot present it as $0.00.
-      totalCost: cost == null || !Number.isFinite(Number(cost)) ? null : Number(cost),
+      totalCost: knownCost,
+      costKnown: !costUnknown,
     },
   };
 }
@@ -451,7 +508,11 @@ function render() {
       session.title || metrics.title || '',
       fmt(metrics.calls ?? metrics.total?.calls),
       fmt(metrics.totalTokens ?? metrics.total?.totalTokens),
-      usd(metrics.totalCost ?? metrics.total?.totalCost),
+      // Same wording as the model row above, so one unknown cost never appears under two
+      // different labels on one page.
+      metrics.costKnown === false || session.costKnown === false
+        ? 'unpriced'
+        : usd(metrics.totalCost ?? metrics.total?.totalCost),
     ];
   });
   replaceChildren('filterTables', [
@@ -746,10 +807,21 @@ export function renderDashboard(data, { title = 'Session Cost Dashboard' } = {})
   const rawSessions = data?.sessions ?? (rawPerSession
     ? Object.entries(rawPerSession).map(([id, value]) => ({ id, ...value }))
     : []);
+  // Whether this report describes exactly one session, or aggregates several.
+  //
+  // The distinction decides who owns the cost verdict. A single-session report's `sessions` entry
+  // is a bare `{row, metrics}` pair that declares nothing, so it has to inherit the report's
+  // verdict or an unpriced session reads as a zero. An aggregate's `sessions` entries are whole
+  // reports, each carrying its own `coverage` and `rateKnown`; handing them the aggregate's verdict
+  // would blank every row the moment one session in the list was unpriced, because the aggregate's
+  // own coverage then reports `partial`. So the verdict is inherited only where there is nothing
+  // to inherit from.
+  const singleSessionReport = Boolean(data?.sessionId ?? data?.session?.id ?? null);
+  const reportVerdict = singleSessionReport && declaresCostUnknown(data);
   const sessions = (Array.isArray(rawSessions)
     ? rawSessions
     : Object.entries(rawSessions).map(([id, value]) => ({ id, ...value })))
-    .map(normalizeSession);
+    .map((session) => normalizeSession(session, { reportUnknown: reportVerdict }));
   const serverSections = [
     timelineSection(data),
     tokenMixSection(data),

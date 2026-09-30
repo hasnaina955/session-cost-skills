@@ -148,3 +148,69 @@ test('both CLIs fail a bad invocation before touching storage', () => {
     }
   }
 });
+
+// A flag that is accepted and then quietly does nothing is the same class of failure as printing
+// a number the accounting did not produce: the user asked for an artefact, got none, and was told
+// nothing. `--dashboard` only renders a single selected session (or, on Cline, an account), so the
+// aggregate modes are rejected up front rather than ignored.
+const UNSUPPORTED_WITH_DASHBOARD = [
+  [['--today'], '--today'],
+  [['--compare'], '--compare'],
+  [['--list', '5'], '--list'],
+  [['--rollup', 'daily'], '--rollup'],
+  [['--from', '2026-01-01'], '--from/--to'],
+  [['--to', '2026-12-31'], '--from/--to'],
+];
+
+test('--dashboard is rejected with an aggregate mode, and says which one', () => {
+  for (const runtimeId of ['cline', 'mcode']) {
+    for (const [argv, named] of UNSUPPORTED_WITH_DASHBOARD) {
+      assert.throws(
+        () => parseCliArgs([...argv, '--dashboard'], { runtimeId }),
+        (error) => {
+          assert.ok(error instanceof CliUsageError, 'a usage error, before any storage is opened');
+          assert.match(error.message, /--dashboard does not support/);
+          assert.ok(error.message.includes(named), `the message must name ${named}, got: ${error.message}`);
+          return true;
+        },
+        `${runtimeId}: ${argv.join(' ')} --dashboard must be rejected`,
+      );
+    }
+  }
+});
+
+test('--dashboard still works for the modes that can produce one', () => {
+  // The positive control. A guard written against the wrong shape of "absent" rejects everything,
+  // which is what the first version of this check did - the runtime defaults spell absent three
+  // different ways: a null (`from`), a zero (`list`), and a missing key (`rollup`).
+  const supported = [[], ['--last'], ['--session', 'abc'], ['--include-children'], ['--provider', 'x'], ['--brief'], ['--json'], ['--out', 'p.html']];
+  for (const runtimeId of ['cline', 'mcode']) {
+    for (const argv of supported) {
+      const parsed = parseCliArgs([...argv, '--dashboard'], { runtimeId });
+      assert.equal(parsed.dashboard, true, `${runtimeId}: ${argv.join(' ')} --dashboard must parse`);
+    }
+  }
+});
+
+test('several aggregate flags are named together rather than one at a time', () => {
+  assert.throws(
+    () => parseCliArgs(['--today', '--list', '3', '--dashboard'], { runtimeId: 'mcode' }),
+    (error) => {
+      assert.ok(error.message.includes('--list'));
+      assert.ok(error.message.includes('--today'));
+      return true;
+    },
+  );
+});
+
+test('the Cline message points at the one extra mode it can render', () => {
+  // Cline has an account dashboard, MCode does not, so the guidance cannot be identical.
+  assert.throws(
+    () => parseCliArgs(['--today', '--dashboard'], { runtimeId: 'cline' }),
+    (error) => { assert.match(error.message, /--account/); return true; },
+  );
+  assert.throws(
+    () => parseCliArgs(['--today', '--dashboard'], { runtimeId: 'mcode' }),
+    (error) => { assert.doesNotMatch(error.message, /--account/); return true; },
+  );
+});
