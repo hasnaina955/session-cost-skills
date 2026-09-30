@@ -23,6 +23,19 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
  * real one would have used. Nothing here writes to a real stream or spawns a real process: a test
  * that rang a bell or raised a toast on the developer's machine would be a test nobody runs twice.
  */
+/**
+ * A `PATH` value for the current platform, holding exactly one directory.
+ *
+ * Built from the real environment rather than hardcoded so the lookup test can run on any host:
+ * an empty or invented PATH would find nothing and the assertion would prove nothing.
+ */
+function platformPathValue(directory) {
+  const isWindows = process.platform === 'win32';
+  return isWindows
+    ? { PATH: directory, PATHEXT: '.COM;.EXE;.BAT;.CMD' }
+    : { PATH: directory };
+}
+
 function recordingNotifier(overrides = {}) {
   const writes = [];
   const spawns = [];
@@ -247,21 +260,62 @@ test('an empty title or body is replaced rather than sent blank', () => {
   assert.equal(call.args[1], '', 'a blank body stays blank rather than becoming the word undefined');
 });
 
-test('defaultCanRun finds a real executable and rejects a missing one', () => {
-  // `where` is on PATH on every supported platform, so it is a witness that needs no fixture.
-  assert.equal(defaultCanRun('where'), true, 'where.exe should be found on win32');
+test('defaultCanRun resolves a real executable and rejects a missing one', () => {
+  // The witness is the node binary already running this test, located by PATH search rather than by
+  // absolute path, so the assertion tests the lookup itself. It is hermetic: no CI image needs to
+  // ship a particular command, and no platform needs a particular tool to be installed.
+  //
+  // An earlier version asserted that `where` was findable, on the reasoning that it was "on PATH on
+  // every supported platform". It is a Windows-only command; Linux and macOS have no such binary,
+  // so the test failed on three of the five CI jobs while passing on the machine it was written on.
+  const nodeDirectory = path.dirname(process.execPath);
+  const nodeCommand = path.basename(process.execPath);
+  const searchPath = platformPathValue(nodeDirectory);
+  assert.equal(
+    defaultCanRun(nodeCommand, { platform: process.platform, env: searchPath }),
+    true,
+    'the running node binary must be found by PATH lookup',
+  );
+  assert.equal(
+    defaultCanRun('definitely-not-installed-xyzzy', { platform: process.platform, env: searchPath }),
+    false,
+    'a name that is not there is not found',
+  );
+  assert.equal(defaultCanRun('', { platform: process.platform, env: searchPath }), false, 'no name, no command');
+});
 
-  const tempDirectory = fs.mkdtempSync(path.join(repositoryRoot, 'tests', '.notify-canrun-'));
-  try {
-    assert.equal(
-      defaultCanRun('definitely-not-installed-xyzzy', { platform: 'linux', env: { PATH: tempDirectory } }),
-      false,
-    );
-    assert.equal(defaultCanRun('', { platform: 'linux', env: { PATH: tempDirectory } }), false);
-    assert.equal(defaultCanRun('where', { platform: 'linux', env: { PATH: '' } }), false, 'an empty PATH finds nothing');
-  } finally {
-    removeDirectory(tempDirectory);
-  }
+test('PATH is split on the separator the platform uses, not a hardcoded one', () => {
+  // The bug this guards: joining with ':' on Windows, or with ';' on POSIX, finds nothing at all,
+  // so the notifier is reported missing on a machine that has it. Both shapes are exercised on
+  // whichever host runs this, through the same injected environment.
+  const nodeCommand = path.basename(process.execPath);
+  const nodeDirectory = path.dirname(process.execPath);
+
+  const posixSeparated = defaultCanRun(nodeCommand, {
+    platform: 'linux',
+    env: { PATH: `/nonexistent-a:${nodeDirectory}:/nonexistent-b` },
+  });
+  assert.equal(posixSeparated, true, 'a POSIX PATH must be split on ":"');
+
+  const windowsSeparated = defaultCanRun(nodeCommand, {
+    platform: 'win32',
+    env: { PATH: `C:\\nonexistent-a;${nodeDirectory};C:\\nonexistent-b` },
+  });
+  assert.equal(windowsSeparated, true, 'a Windows PATH must be split on ";" and honour PATHEXT');
+
+  // The separator matters in the other direction too, and this is the half that needs care: on a
+  // POSIX lookup a ";" is NOT a separator, so a ";"-joined PATH is one single directory name.
+  // Asserted with a name that cannot resolve on any host, so the claim is exactly "it was not
+  // found" rather than a coincidence of how `path.join` treats the joined text on Windows.
+  const semicolonNotSplit = defaultCanRun('not-installed-anywhere-xyzzy', {
+    platform: 'linux',
+    env: { PATH: `/nonexistent-a;${nodeDirectory}` },
+  });
+  assert.equal(
+    semicolonNotSplit,
+    false,
+    'a POSIX lookup treats ";"-joined text as one directory, so it finds nothing',
+  );
 });
 
 test('the execute bit is what makes a file a command', { skip: process.platform === 'win32' ? 'POSIX permissions only' : false }, () => {
