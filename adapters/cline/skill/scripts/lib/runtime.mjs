@@ -31,7 +31,8 @@ import { describeStorageError } from './error-boundaries.mjs';
 import { renderExplanation } from './explain.mjs';
 import { renderRankingText as renderRanking, renderRollupText as renderRollup } from './rollup.mjs';
 import { renderCsv } from './csv.mjs';
-import { evaluateBudget } from './budget.mjs';
+import { BUDGET_STATUS, evaluateBudget, formatUsd } from './budget.mjs';
+import { createAlertGate, createNotifier } from './notify.mjs';
 import { counterfactualCost, renderCounterfactualText } from './counterfactual.mjs';
 import { createLiveSurface, nextInterval, renderLiveFrame } from './live-view.mjs';
 import { buildProviderProfile, renderSetupText } from './setup.mjs';
@@ -86,6 +87,24 @@ let effectiveConfiguration = null;
 let lastReport = null;
 let quiet = false;
 let runContext = {};
+
+// Outside beginRun's reset list, for the same reason as the MCode adapter: a `--watch` process
+// re-evaluates the same budget every poll, and the gate's only job is to remember that the
+// threshold has already been announced.
+let alertGate = null;
+
+/**
+ * The process's one alert gate, built on first use.
+ *
+ * Null when `--notify` was not asked for or when there is no `--budget` to cross: with no
+ * threshold there is nothing to announce, and no amount is inferred to manufacture one.
+ */
+function budgetAlertGate() {
+  if (alertGate === null && opts.notify === true && typeof opts.budget === 'number') {
+    alertGate = createAlertGate({ thresholds: [opts.budget], notifier: createNotifier() });
+  }
+  return alertGate;
+}
 
 /** Install the options the kernel parsed, and clear everything a previous run left behind. */
 function beginRun(context) {
@@ -150,6 +169,7 @@ const HELP_TEXT = `session-cost — token usage and Cline-recorded cost
   --card-include-title with --card: include the session title on the card
   --csv                emit CSV, one row per session
   --budget <amount>    warn and exit non-zero when a session passes this amount
+  --notify             with --budget: ring the bell and raise a desktop alert once, on crossing
   --counterfactual <m> estimate the same tokens priced on model <m>; needs that
                       model's rate records, which Cline's recorded cost does not carry
   --setup              guided custom-provider setup; prints a paste-ready config
@@ -900,6 +920,17 @@ try {
       });
       console.error(verdict.message);
       if (verdict.exitCode) process.exitCode = verdict.exitCode;
+      // Only a blown budget is announced, and the decision comes from the verdict rather than
+      // from the amount: `exceeded` is the one status meaning a known spend passed a known
+      // limit. An `unknown` verdict is silent, because a session nobody could price has no
+      // severity to raise (accounting rule 1).
+      if (verdict.status === BUDGET_STATUS.EXCEEDED) {
+        budgetAlertGate()?.flush(verdict.amountUsd, {
+          title: 'session-cost budget exceeded',
+          format: (usd) => `session ${verdict.sessionId ?? 'spend'} passed the $${formatUsd(usd)} budget `
+            + `(now $${formatUsd(verdict.amountUsd)})`,
+        });
+      }
     }
   }
 } finally {
