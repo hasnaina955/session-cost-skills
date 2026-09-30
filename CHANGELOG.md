@@ -4,7 +4,29 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
-Nothing yet. The next batch of changes lands here before it is cut into a release.
+- The Command Code adapter joins Cline and MCode: a single self-contained
+  TypeScript mod (`adapters/commandcode/skill/session-cost.ts`) that reads
+  Command Code's own session ledger (`~/.commandcode/projects`), prices calls
+  with the mirrored CommandCode provider-rate table (peak window 01-04 and
+  06-10 UTC Mon-Fri at twice the off-peak rate), and reports through the same
+  normalized report contract with runtime id `commandcode` and cost basis
+  `provider-rate-estimate`. It carries the full feature set of the other
+  adapters - current/last/today/compare/list/range modes, provider and model
+  filters, subagent tracking, HTML dashboards with a strict CSP, rate refresh,
+  the `doctor`/`providers`/`models discover`/`config explain` diagnostics,
+  layered configuration with model aliases, and `--json` - plus the mod's own
+  `session_cost` tool surface. Accounting semantics follow the repo principles:
+  `inputTokens` excludes cached tokens, an unknown model reports tokens with a
+  `null` cost rather than a guessed `$0`, a free-tier model is a known `$0`,
+  and subagent usage blocks are tracked separately until `--include-children`.
+  The reported clock honors `SESSION_COST_NOW` for deterministic output, and
+  every failure path returns one readable line. The runtime enum of the
+  normalized report contract gains `commandcode`; the contract version is
+  unchanged because the extension is additive.
+
+- The release version check now covers all three adapters: the Command Code
+  mod must declare the repository version and the shared contract version, or
+  the one-version-per-repository contract fails.
 
 ## 0.6.0
 
