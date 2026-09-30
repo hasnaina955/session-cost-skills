@@ -17,13 +17,17 @@ unknown cost is `null`, never `0`; totals are exact sums; accounting domains are
 
 | | |
 | --- | --- |
-| `main` | v0.5.0, 493 tests passing |
+| `main` | **v0.6.0, released and published**, 497 tests passing |
 | Gates | `npm run verify` and `npm run rehearse:release` must both pass |
 | Open PRs | none |
 | Bench | `npm run bench` (regression gate), `npm run bench:quick` |
+| Release | tag `v0.6.0`, three archives plus `SHA256SUMS.txt` on the GitHub release |
 
-**Phases 0, 1, 2 and 3 are complete.** Phase 4 is nearly done. Phase 5 (new runtimes) is the bulk of
-what remains, and it is blocked on knowledge rather than code.
+**Phases 0, 1, 2 and 3 are complete.** Phase 4 has three of four items done. Phase 5 (new runtimes)
+is the bulk of what remains, and it is blocked on knowledge rather than code.
+
+Note: **`v0.5.0` was merged but never tagged.** There is no release or archive for it, so the tag
+history has a gap between `v0.4.1` and `v0.6.0`. Decide whether to back-tag it or leave it.
 
 ## Architecture: the one rule that bites
 
@@ -84,10 +88,11 @@ is not evidence that the page or the terminal output is right.
 
 ## Features that exist
 
-`--brief` (short answer; `--json` gives a stable `session-brief` shape), `--list`, `--rollup`,
-`--top`, `--explain`, `--csv`, `--budget`, `--counterfactual`, `--insights`, `--watch`,
-`--dashboard`, `--rates`, `--refresh-rates`, `doctor`, `providers`, `models discover`,
-`config explain`, plus date/provider/model filters and `--include-children`.
+`--brief` (short answer; `--json` gives a stable `session-brief` shape), `--card` (a shareable
+SVG summary, private unless `--card-include-title`), `--list`, `--rollup`, `--top`, `--explain`,
+`--csv`, `--budget`, `--counterfactual`, `--insights`, `--watch`, `--dashboard`, `--rates`,
+`--refresh-rates`, `doctor`, `providers`, `models discover`, `config explain`, plus
+date/provider/model filters and `--include-children`.
 
 An MCode `--json` report also carries a bounded `timeline` of per-call events. The dashboard renders
 server-side inline SVG (cost over time, token mix, cost by model, session tree) and the plain-text
@@ -95,18 +100,25 @@ report carries token-mix and per-model bars.
 
 ## Actionable now, no external knowledge needed
 
-1. **`--card` is not wired to a flag.** `shared/card.mjs` exports `renderCard` - a 1200x630
-   standalone SVG summary, private by default - and nothing calls it from either CLI. WP-3.5 shipped
-   the module and missed the flag. Wire it, add `--card-include-title`, test that a session title
-   cannot appear without that flag, and add a golden for the SVG.
-2. **The cache on the range path: measured, and deliberately not done.** `--list N --rollup` is
+1. **WP-4.4: budget notifications.** `--notify` on `--budget` and `--watch`, emitting a terminal
+   bell and, where available, a desktop notification through the platform's own command
+   (`osascript` on macOS, `notify-send` on Linux, a PowerShell toast on Windows), called with
+   argument arrays rather than a shell string. A missing notifier warns once and continues, and an
+   unknown cost never triggers an alert because it has no severity. Test it by injecting a fake
+   notifier and asserting exactly one alert per threshold crossing.
+2. **The range-path cache: measured, and deliberately not done.** `--list N --rollup` is
    already cached and runs ~8x faster warm (8.8s to 1.1s over 200 sessions). The range mode -
    `--from/--to`, `--today`, dashboards over a range - is not cached, and measured at 1.4s cold
    *and* warm over a 30-day window, because the quadratic fixed in #87 was the dominant cost there
    too. Wiring the cache in would add invalidation complexity to a path that already answers in
    under two seconds, so it stays unwired. Revisit only if `npm run bench` shows the range path
    regressing.
-3. Anything in `docs/roadmap-plan.md` under WP-4.x that needs no external facts.
+3. **Someone should look at the redesigned dashboard.** It was rebuilt as a modern flat report -
+   bento grid, hairline borders, no shadows, collapsed raw data - and verified *structurally* (both
+   themes contrast-clean, the no-JS path renders its figures, 497 tests pass). Nobody has judged
+   how it looks. Open a generated `session-dashboard.html` and tune the tokens or the grid spans if
+   the aesthetic is off; that is the one part of this work no test can settle.
+4. Anything in `docs/roadmap-plan.md` under WP-4.x that needs no external facts.
 
 ## Blocked, and what unblocks it
 
