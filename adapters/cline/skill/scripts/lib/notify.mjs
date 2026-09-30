@@ -110,6 +110,10 @@ export function resolveDesktopCommand({ platform = process.platform, canRun = ()
  * probe process (which would cost a spawn on every `--watch` start). A non-executable or
  * unreadable candidate is skipped exactly as a missing one would be, so a directory containing a
  * same-named data file does not yield a notifier that fails the first time it fires.
+ *
+ * On Windows the lookup honours PATHEXT, and honours it in one direction only: a command that
+ * already names an extension is matched as written. Appending the extensions to every command
+ * would search for `powershell.exe.exe` and conclude the one notifier Windows has is missing.
  */
 export function defaultCanRun(command, {
   env = process.env,
@@ -120,7 +124,18 @@ export function defaultCanRun(command, {
   const rawPath = env?.PATH ?? env?.Path ?? env?.path ?? '';
   if (rawPath === '') return false;
   const separator = platform === 'win32' ? ';' : ':';
-  const extensions = platform === 'win32' ? (env?.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';') : [''];
+  const pathext = (env?.PATHEXT ?? env?.PathExt ?? '.COM;.EXE;.BAT;.CMD').toUpperCase().split(';');
+  const extensions = platform === 'win32'
+    // A command that already carries an extension - which every Windows notifier does, because
+    // `powershell.exe` is the command - must be looked up as-is. Appending PATHEXT to it searches
+    // for `powershell.exe.exe`, finds nothing, and reports the one notifier the machine has as
+    // missing, which silently downgrades `--notify` to the terminal bell.
+    ? (() => {
+      const upper = command.toUpperCase();
+      if (pathext.some((extension) => extension !== '' && upper.endsWith(extension))) return [''];
+      return pathext;
+    })()
+    : [''];
   for (const directory of rawPath.split(separator)) {
     if (directory === '') continue;
     for (const extension of extensions) {
