@@ -256,6 +256,32 @@ export function parseCliArgs(argv, { runtimeId, defaults = {} } = {}) {
   if (options.configAction === 'import' && !options.configImportPath) {
     throw new CliUsageError('--import-config requires a path');
   }
+
+  // `--dashboard` renders one subject: the session that was selected, or an account summary. The
+  // aggregate modes (--list, --today, a --from/--to range, --rollup, --compare) never reach a
+  // writeDashboard call, so combining them used to print a text report, write nothing, and say
+  // nothing at all - a flag that is accepted and silently does nothing, which is the same class of
+  // failure as printing a number the accounting did not produce. Reject it before any storage is
+  // opened, and name the modes that do work.
+  if (options.dashboard === true) {
+    // Presence has to be read per flag, not as "is it undefined": each runtime seeds the options
+    // with its own defaults, and those defaults spell "not asked for" three different ways - a
+    // null (`from`), a zero (`list`), and an absent key (`rollup`). Testing one shape for all three
+    // rejects every dashboard, which is exactly what the first version of this check did.
+    const AGGREGATE_MODES = [
+      ['--list', typeof options.list === 'number' && options.list > 0],
+      ['--today', options.mode === 'today'],
+      ['--compare', options.mode === 'compare'],
+      ['--from/--to', options.from != null || options.to != null],
+      ['--rollup', typeof options.rollup === 'string' && options.rollup !== ''],
+    ].filter(([, present]) => present).map(([flag]) => flag);
+    if (AGGREGATE_MODES.length > 0) {
+      throw new CliUsageError(
+        `--dashboard does not support ${AGGREGATE_MODES.join(', ')}: a dashboard is written for one selected session`
+        + `${runtimeId === 'cline' ? ' (or --account)' : ''}. Run it without the aggregate flag, or drop --dashboard.`,
+      );
+    }
+  }
   if (options.list > 0 && options.session) {
     throw new CliUsageError('--list and --session cannot be combined; list recent sessions or report one session');
   }

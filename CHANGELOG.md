@@ -4,7 +4,61 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
-Nothing yet. The next batch of changes lands here before it is cut into a release.
+### Fixed
+
+- An unpriced session renders as `$0.000000` in the dashboard's session table. This is accounting
+  rule 1 - the silent zero, the failure this whole project exists to prevent - and it was visible
+  on a real report: the same unknown cost appeared four ways on one page, as an em dash in the
+  Models table, as `unpriced` in the model breakdown, as `unavailable` with an explanatory note in
+  Cost by model, and as `$0.000000` in Matching sessions.
+
+  The cause is the trap the file's own comment describes. Both adapters keep a legacy
+  `totalCost`/`cost` aggregate that is a finite `0`, not null, when no call could be priced, so
+  `normalizeSession` nulled a cost only when it was `null` or non-finite. A finite zero is exactly
+  what "unknown" looks like once it has passed through an arithmetic accumulator, and it is
+  indistinguishable from a real free session unless something declares otherwise. The report
+  always declared: `coverage.status: "unavailable"`, every `costUsd: null`, an empty
+  `rateProvenance`, and a warning naming the reason. The table simply never read any of it.
+
+  The discriminator turned out not to be the obvious one. `rateKnown: false` is set for a *partly*
+  priced session too, so treating it as "unknown" would blank a genuine lower bound - its own kind
+  of lie, and the first version of this fix did exactly that until the tests caught it. The
+  authoritative signal is `coverage.status`: `unavailable` means there is no figure, `partial`
+  means there is a real amount that happens to be incomplete, and only the former blanks the cell.
+  The booleans are now consulted only for a payload that carries no coverage claim at all.
+
+- `--dashboard` combined with an aggregate mode (`--today`, `--compare`, `--list`,
+  `--from`/`--to`, `--rollup`) printed a text report, wrote no dashboard, and said nothing at all.
+  The flag was accepted and silently did nothing, which is the same class of failure as printing a
+  figure the accounting did not produce: the user asked for an artefact, got none, and was not
+  told. A dashboard is only ever written for one selected session, or for `--account` on Cline, so
+  the combination is now rejected before any storage opens, naming the flags that caused it. The
+  roadmap never promised a range dashboard, so failing loudly is the honest reading; implementing
+  one is new work, not a fix.
+
+### Tests
+
+- The regression test for the silent zero was green while the defect was live, and understanding
+  why mattered more than the fix. It asserted `strip(html)` contains no `$0.0000` - but the two
+  filter tables are built by the browser runtime, so the file on disk never contains the string a
+  reader finally sees. The assertion could not fail on any build, including one that renders
+  `$0.000000` to the reader. It is anchored to the wrong witness.
+
+  The new tests read the client payload instead - the `const P={...}` the script is handed - and
+  assert the session arrives with `costKnown: false` and a null cost, alongside a priced positive
+  control and a partly priced one, so a guard that blanked every cost would fail rather than pass.
+  The original assertion is kept, with a comment recording what it does and does not cover.
+
+  This is the second time the same mistake has cost this project a bug: the earlier redesign
+  dropped the headline figures and every assertion was about charts and sections rather than
+  numbers. The pattern is the same both times - assert on the artefact a reader actually consumes,
+  not on the nearest thing a test can cheaply reach.
+
+- A third guard bug, caught the same way: the `--dashboard` validation first read "absent" as
+  `undefined` for every flag, but the runtimes spell absent three different ways - a null (`from`),
+  a zero (`list`), and a missing key (`rollup`). It rejected every dashboard, including the
+  supported single-session ones. The positive-control test is what caught it; a test that only
+  checked the rejections would have shipped it green.
 
 ## 0.6.0
 

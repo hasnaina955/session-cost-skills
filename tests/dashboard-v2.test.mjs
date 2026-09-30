@@ -136,3 +136,63 @@ test('the headline figures are in the server-rendered HTML, not only in the scri
   // and a no-JS reader still gets the session totals.
   assert.match(serverRendered, /<section class="kpis" id="cards">[\s\S]*?<\/section>/, 'the KPI container must hold the server-rendered tiles');
 });
+
+/**
+ * The payload the browser runtime reads: `const P=<json>;` at the head of the inline script.
+ *
+ * The two filter tables are built by that runtime, not by the server, so the file on disk never
+ * contains the strings a reader finally sees. Asserting on `strip(html)` therefore cannot see a
+ * mis-rendered cost cell at all - which is how an unpriced session came to render `$0.000000` in
+ * front of a reader while the test that claims to cover exactly that case stayed green.
+ */
+function clientPayload(html) {
+  const start = html.indexOf('const P=');
+  assert.ok(start >= 0, 'the inline script must start with the payload assignment');
+  const from = start + 'const P='.length;
+  // The literal runs to the end of the line; the runtime is one statement per line.
+  const end = html.indexOf(';', from);
+  return JSON.parse(html.slice(from, end));
+}
+
+test('an unpriced session cannot reach the client as a finite zero', () => {
+  // The witness is the payload, not the rendered text. The report's own verdict is that the cost
+  // is unavailable, and a finite `0` in that position is what a reader takes as "this was free".
+  const { html } = dashboardFor(createMCodeFixture(), mcodeScript, ['--session', 'mcode-unpriced']);
+  const sessions = clientPayload(html).sessions;
+  assert.equal(sessions.length, 1);
+
+  const [session] = sessions;
+  assert.equal(session.costKnown, false, 'the session must carry the unknown verdict from the report');
+  assert.equal(session.cost, null, 'no zero may reach the client as a cost');
+  assert.equal(session.metrics.costKnown, false);
+  assert.equal(session.metrics.totalCost, null, 'a finite 0 here is the silent-zero failure');
+  // The raw number is still in the report, because hiding it would be its own kind of lie.
+  assert.equal(typeof session.metrics.calls, 'number');
+});
+
+test('a priced session keeps its real figure through the same path', () => {
+  // The positive control for the test above: a guard that blanks every cost would pass it too.
+  const { html } = dashboardFor(createMCodeFixture(), mcodeScript, ['--session', 'mcode-root', '--include-children']);
+  const [session] = clientPayload(html).sessions;
+  assert.equal(session.costKnown, true, 'a priced session must not be marked unknown');
+  assert.equal(typeof session.cost, 'number');
+  assert.ok(session.cost > 0, 'a priced session carries a positive figure');
+  assert.ok(session.metrics.totalCost > 0);
+});
+
+test('a partly priced session reports its lower bound rather than dropping it', () => {
+  // `partial` is a real figure: a lower bound. It can prove a budget was blown, so it is shown.
+  // Only `unavailable` means nobody could price the work, and only that blanks the cell.
+  const { html } = dashboardFor(createMCodeFixture(), mcodeScript, ['--session', 'mcode-partial']);
+  const [session] = clientPayload(html).sessions;
+  assert.equal(session.costKnown, true, 'a partial total is disclosed, not discarded');
+  assert.equal(typeof session.metrics.totalCost, 'number');
+});
+
+test('the file on disk cannot contain a zero cost for the unpriced session', () => {
+  // Kept, and now understood for what it is: a guard on the server-rendered half only. It passes
+  // even on a build that renders $0.000000 to the reader, which is why the payload assertions
+  // above exist alongside it rather than instead of it.
+  const { html } = dashboardFor(createMCodeFixture(), mcodeScript, ['--session', 'mcode-unpriced']);
+  assert.doesNotMatch(html, /\$0\.000000/, 'no formatted zero belongs in the file either');
+});
