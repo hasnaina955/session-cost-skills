@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+Nothing yet. The next batch of changes lands here before it is cut into a release.
+
+## 0.6.0
+
+The reach and readability release. A shared CLI kernel makes each runtime adapter a few hundred
+lines instead of a third copy; the dashboard is redesigned as a modern flat report; the tool
+learned to answer quickly (--brief), to be shared (--card), and to stay fast at scale. The trust
+release theme holds throughout: an unknown cost is still never a zero, and every figure can
+still be traced to a rate record.
+
 ### Added
 
 - The dashboard is redesigned as a modern flat report. The old page wore 2020-era chrome - a

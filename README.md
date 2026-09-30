@@ -65,7 +65,7 @@ node "$env:USERPROFILE\.cline\skills\session-cost\scripts\session-cost.mjs" --ve
 ```
 
 ```text
-session-cost 0.5.0 (cline adapter)
+session-cost 0.6.0 (cline adapter)
 report contract: 1.2.0
 node: 24.21.0 (requires >= 22.15.0)
 ```
