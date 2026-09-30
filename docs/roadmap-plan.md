@@ -25,16 +25,33 @@ Delivered and merged, each on its own PR with the full CI matrix green:
 | WP-2.4 | The conformance kit: nine scenarios, run as a command or a single test line, plus `docs/adapter-authoring.md` for the next adapter |
 | WP-3.0 | A bounded per-call timeline, and MCode `--json` reports that emit it |
 | WP-3.1 | A zero-dependency inline-SVG chart module |
-| v0.5.0 | Cut, with a cross-platform skill update workflow (`docs/updating.md`) |
+| WP-3.2 | Server-rendered dashboard sections: cost over time, token mix, cost by model, session tree |
+| WP-3.3 | Token-mix and per-model bars in the plain-text report |
+| WP-3.4 | WCAG contrast audit of both dashboard themes, and `prefers-color-scheme` honoured |
+| WP-3.5 | A shareable 1200x630 SVG summary card, private by default |
+| WP-4.1 | `--brief`: the cost, tokens, cache rate, and one caveat in a few lines |
+| WP-4.3 | A cross-platform skill update workflow (`scripts/update-skill.mjs`, `docs/updating.md`) |
+| WP-4.5 | A performance regression gate (`scripts/bench.mjs`) and the quadratic it found (#87) |
+| v0.5.0 | Cut, with the cross-platform skill update workflow |
+| v0.6.0 | **Released.** Phases 0-3 complete, the kernel and conformance kit in place, the dashboard redesigned |
 
-**Phase 2 (Core) and Phase 3 (Sight) are complete.** The 0.6.0 exit criterion is met on both
-halves: both adapters run on the shared kernel with the ten goldens still byte-identical to the
-baseline captured before the first port, and the timeline is in the contract. Still ahead: WP-4.x
-(MCP server, installer, perf budget), and Phase 5 adapters.
+**Phases 0, 1, 2 and 3 are complete, and 0.6.0 is published.** Both adapters run on the shared
+kernel with the ten goldens still byte-identical to the baseline captured before the first port,
+and the timeline is in the contract.
 
-Two findings are recorded rather than papered over, both filed as issues:
-`calculateTokenCost` coerces unusable token counts into a finite `0` (#67), and `bandForTimestamp`
-resolves a `null` timestamp to the off-peak band, which is the cheaper one.
+Still ahead, and **all of it blocked on knowledge rather than effort**:
+
+- **WP-4.2 (MCP server)** needs the MCP specification read properly. A wrong implementation there
+  fails to connect rather than reporting a wrong number, so it is lower risk than an adapter, but
+  it still should not be guessed.
+- **WP-4.4 (budget notifications)** is unblocked and small: `--notify` on `--budget`/`--watch`,
+  calling the platform's own notifier with argument arrays rather than a shell string.
+- **Phase 5 adapters** (#15-#20, #77) each need their runtime's storage layout. The kernel and
+  conformance kit exist so an adapter is a few hundred lines rather than another 1,500.
+
+One finding is closed and one is still open: `calculateTokenCost` coercing unusable token counts
+was fixed (#67), and `bandForTimestamp` resolving a `null` timestamp to the cheaper off-peak band
+is still open and still needs a decision.
 
 ## 1. Direction
 
