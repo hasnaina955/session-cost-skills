@@ -77,6 +77,16 @@ All notable changes to this project are documented here.
 
 ### Tests
 
+- `check:docs` now fails when `## Unreleased` repeats a `### ` heading. Unreleased had grown three
+  separate `### Added` blocks before the 0.6.0 cut, so a reader could not tell which batch an
+  entry belonged to, and the cut merged them by accident rather than by guard. The check is
+  scoped to Unreleased because released sections are memory rather than drafts, and 0.3.0
+  deliberately files a second batch under `### Also in this release`. Carried forward unchanged
+  from the closed #98, whose other two parts - the changelog restructure and the roadmap
+  section-0 corrections - were overtaken by #94 and #95 while it sat. The guard was proven to
+  fail on a reintroduced duplicate heading and to pass on the clean file, rather than only that
+  it passes.
+
 - The regression test for the silent zero was green while the defect was live, and understanding
   why mattered more than the fix. It asserted `strip(html)` contains no `$0.0000` - but the two
   filter tables are built by the browser runtime, so the file on disk never contains the string a
