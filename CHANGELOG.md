@@ -84,6 +84,13 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- `docs/handoff.md` and `docs/roadmap-plan.md` section 0 catch up with the Command Code adapter
+  (#77 closed, delivered via the #99 takeover): the state table records the third runtime and the
+  552-test suite, and the blocked table's #77 row is replaced by its one open follow-up, #107 -
+  the live-install validation a merge could not do. The roadmap records the takeover's broader
+  lesson: "blocked on knowledge" can often be unblocked by finding the primary sources, and the
+  verification must be cited in the adapter, not assumed.
+
 - `docs/handoff.md` and `docs/roadmap-plan.md` section 0 catch up with what merged: WP-4.4 is
   delivered (`--notify` shipped in #96), the `bandForTimestamp(null)` finding is now filed as
   #100, and #77 records that the CommandCode adapter attempt (#99) is held for provenance of the

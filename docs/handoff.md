@@ -6,8 +6,9 @@ then `docs/roadmap-plan.md` (section 0 is a status table).
 ## What this is
 
 Local-first token and cost reporting for coding-agent CLIs. Today it reads session ledgers for
-**Cline** and **MiniMax Code (MCode)** and reports what each session cost, with the exact rate
-records behind every figure. MIT, **zero runtime dependencies**, Node >= 22.15.
+**Cline**, **MiniMax Code (MCode)**, and **Command Code** (a TypeScript mod) and reports what each
+session cost, with the exact rate records behind every figure. MIT, **zero runtime dependencies**,
+Node >= 22.15.
 
 The project's whole claim is that its numbers can be trusted. Everything else bends around that: an
 unknown cost is `null`, never `0`; totals are exact sums; accounting domains are never merged.
@@ -17,15 +18,17 @@ unknown cost is `null`, never `0`; totals are exact sums; accounting domains are
 
 | | |
 | --- | --- |
-| `main` | **v0.6.0, released and published**; WP-4.4 (`--notify`) and the dashboard silent-zero fix merged since, 527 tests passing |
+| `main` | **v0.6.0, released and published**; since the cut: WP-4.4 (`--notify`), four correctness fixes (#97, #100, #104, the dashboard KPI row), and the Command Code adapter (#99) merged. 552 tests passing |
 | Gates | `npm run verify` and `npm run rehearse:release` must both pass |
-| Open PRs | #99 (CommandCode adapter) - changes requested: the storage-layout and mod-API facts need cited provenance |
+| Open PRs | none |
 | Bench | `npm run bench` (regression gate), `npm run bench:quick` |
 | Release | tag `v0.6.0`, three archives plus `SHA256SUMS.txt` on the GitHub release |
 
 **Phases 0, 1, 2 and 3 are complete.** Phase 4 is done except WP-4.2 (the MCP server), which is
-blocked on the spec. Phase 5 (new runtimes) is the bulk of what remains, and it is blocked on
-knowledge rather than code.
+blocked on the spec. Phase 5 has its first adapter: Command Code shipped in #99, its ledger facts
+verified against the vendor docs and an independent parser before merge (#77 closed). What remains
+of Phase 5 is still blocked on knowledge rather than code - and #107 records the one verification
+a merge could not do: a live Command Code install.
 
 Note: **`v0.5.0` was merged but never tagged.** There is no release or archive for it, so the tag
 history has a gap between `v0.4.1` and `v0.6.0`. Decide whether to back-tag it or leave it.
@@ -125,7 +128,7 @@ prevent - so these stay blocked rather than guessed.
 
 | Item | Needs |
 | --- | --- |
-| **#77** CommandCode CLI/desktop adapter (PR #99 attempted; held for provenance) | Session storage path per OS, format, per-call fields, whether a stored cost is a charge or needs pricing, parent/child linkage, whether `input` includes cached tokens, and the mod/plugin API |
+| **#107** Command Code live-install validation | A real session run under Command Code: the transcript version guard stays quiet, the recorded-cost tripwire stays quiet (the mirror matches what the vendor charges), the subagent `<usage>` regex matches real blocks, and ideally the conformance kit run end to end. A redacted real transcript settles it permanently as a fixture |
 | **#15** OpenCode | Same class of facts. A branch `feature/opencode-adapter` holds ~7,300 lines of implementation that is now ~10 releases stale; decide whether to rebase it onto the kernel or start fresh |
 | **#16-#20** Qwen, Goose, Codex, Claude Code, others | Per-runtime storage layout |
 | **WP-4.2** MCP server | Verification of the MCP spec against the real specification. A wrong implementation fails to connect rather than reporting a wrong number, so it is lower risk than an adapter, but it still needs the spec read properly |
