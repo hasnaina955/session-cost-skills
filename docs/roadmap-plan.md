@@ -32,6 +32,7 @@ Delivered and merged, each on its own PR with the full CI matrix green:
 | WP-4.1 | `--brief`: the cost, tokens, cache rate, and one caveat in a few lines |
 | WP-4.3 | A cross-platform skill update workflow (`scripts/update-skill.mjs`, `docs/updating.md`) |
 | WP-4.4 | `--notify` on `--budget`/`--watch`: bell plus the platform's own notifier, verdict-driven so an unknown cost never alerts, once per threshold per process |
+| #77 | **Delivered, via #99 (takeover): the Command Code adapter.** A self-contained TypeScript mod on the vendor's own mod API, its ledger facts verified against the vendor docs and an independent parser before merge; hardened with a transcript-version guard, #100-parity timestamp handling, the recorded-cost domain with a staleness tripwire, and behavioral tests under Node 24/Bun. Live-install validation open as #107 |
 | WP-4.5 | A performance regression gate (`scripts/bench.mjs`) and the quadratic it found (#87) |
 | v0.5.0 | Cut, with the cross-platform skill update workflow |
 | v0.6.0 | **Released.** Phases 0-3 complete, the kernel and conformance kit in place, the dashboard redesigned |
@@ -45,8 +46,11 @@ Still ahead, and **all of it blocked on knowledge rather than effort**:
 - **WP-4.2 (MCP server)** needs the MCP specification read properly. A wrong implementation there
   fails to connect rather than reporting a wrong number, so it is lower risk than an adapter, but
   it still should not be guessed.
-- **Phase 5 adapters** (#15-#20, #77) each need their runtime's storage layout. The kernel and
-  conformance kit exist so an adapter is a few hundred lines rather than another 1,500.
+- **Phase 5 adapters** (#15-#20) each need their runtime's storage layout. The kernel and
+  conformance kit exist so an adapter is a few hundred lines rather than another 1,500. #77 - the
+  Command Code adapter - shipped; what #99's takeover proved is that "blocked on knowledge" can
+  often be unblocked by finding the primary sources (vendor docs, independent parsers) instead of
+  waiting for them, and that the verification must be cited in the adapter, not assumed.
 
 One finding is closed and one is still open: `calculateTokenCost` coercing unusable token counts
 was fixed (#67), and `bandForTimestamp` resolving a `null` timestamp to the cheaper off-peak band
