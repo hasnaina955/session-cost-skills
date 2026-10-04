@@ -873,6 +873,36 @@ test('every driver that declares time bands prices a configured peak window iden
   assert.deepEqual(observed, expected, 'an ISO-8601 `at` must price the same window an epoch-millisecond `at` prices');
 });
 
+test('a banded profile refuses a call whose timestamp is missing instead of pricing it off-peak (#100)', () => {
+  // `Number(null)` is 0 and the epoch falls in the off-peak band - the cheaper one - while the
+  // record filter defaults a missing `at` to now. Together those priced a timestamp-less call at
+  // off-peak *right now*, even inside a peak window. The band is unknowable, so the tool says so.
+  const policy = { timeOfDay: { peak: [[1, 4], [6, 10]], offPeak: [[0, 24]] } };
+  const cards = [
+    { model: BANDED_MODEL, effectiveFrom: '2026-01-01T00:00:00.000Z', timeBand: 'peak', input: 3, output: 9, cacheRead: 0.3, cacheWrite: 3 },
+    { model: BANDED_MODEL, effectiveFrom: '2026-01-01T00:00:00.000Z', timeBand: 'offPeak', input: 1, output: 3, cacheRead: 0.1, cacheWrite: 1 },
+  ];
+  for (const manifest of BUILTINS.filter((candidate) => candidate.capabilities.timeBands)) {
+    for (const at of [null, '', NaN, 'not-a-date']) {
+      const resolution = profileResolution(manifest.id, BANDED_MODEL, {
+        rateCards: cards,
+        profile: policy,
+        context: { at, contextTokens: 1_000 },
+      });
+      assert.equal(resolution.rate, null, `${manifest.id} must not price a timestamp-less call (at=${String(at)})`);
+      assert.equal(resolution.coverage, 'unavailable', `${manifest.id} must say the band is unknowable (at=${String(at)})`);
+      assert.equal(resolution.timeBand, null, `${manifest.id} must not pick the cheaper band (at=${String(at)})`);
+    }
+    // The control: a real timestamp in the peak window still prices at the peak rate.
+    const control = profileResolution(manifest.id, BANDED_MODEL, {
+      rateCards: cards,
+      profile: policy,
+      context: { at: PEAK_AT, contextTokens: 1_000 },
+    });
+    assert.equal(control.timeBand, 'peak', `${manifest.id} must still price a knowable band`);
+  }
+});
+
 test('a profile with banded records and no declared calendar is unpriced, not guessed', () => {
   // Borrowing another provider's peak window produced a plausible number that silently
   // under-reported cost. The band is unknowable here, so the tool must say so.

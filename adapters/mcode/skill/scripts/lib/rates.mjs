@@ -132,6 +132,14 @@ export function makeRateRecord({
 
 export function bandForTimestamp(timestamp, rate) {
   if (!rate?.timeOfDay || Object.keys(rate.timeOfDay).length === 0) return 'flat';
+  // `null` and `undefined` are refused before Number() ever sees them: `Number(null)` is 0,
+  // and `new Date(0)` is a real instant - epoch Thursday, 00:00 UTC - which falls in the
+  // off-peak band, the cheaper one. A missing timestamp therefore used to price a call at the
+  // cheapest rate instead of failing (#100). An unparseable value still throws below; a missing
+  // one now joins it, because a band that cannot be determined must not be guessed.
+  if (timestamp === null || timestamp === undefined) {
+    throw new Error('cannot determine a time band from a missing timestamp');
+  }
   // `Number(isoString)` is NaN, and `new Date(NaN)` silently yields NaN for every
   // getter, which made an ISO timestamp always fall through to offPeak and quietly
   // under-price a peak call. Parse both accepted shapes explicitly.
@@ -595,6 +603,23 @@ export function resolveRate(table, provider, providerModelId, {
   const key = alias ?? Object.keys(entry.models).find((candidate) => normalizeModelId(candidate) === normalized);
   const model = key ? entry.models[key] : null;
   if (key && model) {
+    // An unusable call time cannot price anything: the effective-dated records and the
+    // peak/off-peak band both depend on it, and the only honest outcome is unpriced. This is
+    // explicit rather than left to fall out of the epoch (`Number(null)` is 0), because the
+    // epoch only saved the built-in table by accident - it predates every record - and it
+    // never named the gap.
+    if (!timestampIsUsable(at)) {
+      return {
+        key,
+        rate: null,
+        free: false,
+        providerKey,
+        coverage: 'unavailable',
+        missingComponents: [...REQUIRED_RATE_COMPONENTS],
+        timeBand: null,
+        contextTokens: Math.max(0, Number(contextTokens) || 0),
+      };
+    }
     const timestamp = typeof at === 'string' ? Date.parse(at) : Number(at);
     const context = Math.max(0, Number(contextTokens) || 0);
     const timeBand = band ?? bandForTimestamp(timestamp, model);
@@ -684,6 +709,29 @@ export function ratesForBand(rate, band = 'flat') {
  * so a corrupt field moved a bill *down*. That is the direction this project refuses, which is
  * why the function below now refuses rather than coerces.
  */
+/**
+ * Whether a call timestamp can be used to price a call.
+ *
+ * The mirror of tokenCountIsUsable for the other input pricing cannot fake. A timestamp is
+ * usable when it is a finite number (epoch milliseconds, the shape the ledger stores), a Date
+ * with a valid time, or a parseable date string. Everything else - null, undefined, '', a
+ * non-numeric string, NaN, Infinity - means the call's time was never recorded or was
+ * corrupted, and pricing must stop rather than guess:
+ *
+ *   - `Number(null)` is 0, and `new Date(0)` is a real instant (epoch Thursday, 00:00 UTC),
+ *     which resolves to the off-peak band - the cheaper one - so a null timestamp priced a
+ *     call at the cheapest rate while saying nothing (#100);
+ *   - `Number('')` is 0 for the same reason, so the empty string is refused too;
+ *   - an unusable timestamp in a per-call loop must degrade that one call to unpriced, not
+ *     throw the whole report down - the caller decides, and this function is how it knows.
+ */
+export function timestampIsUsable(value) {
+  if (value === null || value === undefined || value === '') return false;
+  if (value instanceof Date) return !Number.isNaN(value.getTime());
+  if (typeof value === 'string') return Number.isFinite(Date.parse(value));
+  return Number.isFinite(Number(value));
+}
+
 export function tokenCountIsUsable(value) {
   if (value === null || value === undefined) return true;
   if (typeof value !== 'number' || !Number.isFinite(value)) return false;

@@ -21,6 +21,7 @@ import { observeSchema, checkSchema, describeDrift } from './schema-drift.mjs';
 import {
   bandForTimestamp,
   calculateTokenCost,
+  timestampIsUsable,
   tokenCountIsUsable,
   inspectRateTable,
   normalizeProvider,
@@ -391,6 +392,11 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
   const perModel = new Map();
   const providersSeen = new Map();
   let inferredRows = 0;
+  // Calls that could not be priced for any reason - unknown model, corrupt token count, or a
+  // missing timestamp (#100). The report-level rateKnown below reads this, so a session whose
+  // models are all rate-known but which has an unpriceable call reports partial coverage and a
+  // non-zero exit instead of a confident, smaller "complete".
+  let unpricedCallCount = 0;
 
   const priceRow = (pricer, row) => {
     const { modelId, provider, inferred } = modelForRow(pricer, row);
@@ -399,7 +405,13 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
     // unknowable. Treating it as unpriced routes it into the same "no cost" path a model with no
     // rate takes, so the session degrades to partial coverage instead of a smaller, confident
     // total. Found because the fuzzer fed one through; pinned by tests.
-    const unusable = fields.some((field) => !tokenCountIsUsable(row[field]));
+    // A missing or corrupt timestamp is the same class of input as a corrupt token count:
+    // pricing needs it for the effective-dated records and the peak/off-peak band, and
+    // `Number(null)` being 0 means the epoch quietly answers "off-peak", the cheaper band
+    // (#100). The call takes the no-cost path, so one torn row degrades the session to partial
+    // coverage instead of pricing at the cheapest rate - or taking the whole report down.
+    const tsUnusable = !timestampIsUsable(row.ts);
+    const unusable = tsUnusable || fields.some((field) => !tokenCountIsUsable(row[field]));
     const contextTokens = fields.reduce((sum, field) => sum + (Number(row[field]) || 0), 0);
     const rateInfo = modelId && !unusable
       ? pricer.rateFor(provider, modelId, { at: row.ts, contextTokens })
@@ -412,7 +424,7 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
           missingComponents: ['input', 'output', 'cacheRead', 'cacheWrite'],
         };
     const rate = unusable ? null : (rateInfo.rate ?? null);
-    return { modelId, provider, inferred, rateInfo, rate, contextTokens, unusableTokens: unusable };
+    return { modelId, provider, inferred, rateInfo, rate, contextTokens, unusableTokens: unusable, unusableTimestamp: tsUnusable };
   };
 
   // Emitted for machine-readable output only. A text report has nowhere to put 2,000 events, and
@@ -430,6 +442,7 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
     // that this call has no cost. The timeline must say null there rather than the zero the
     // accumulator is using to keep the arithmetic total.
     const isPriced = rate != null;
+    if (!isPriced) unpricedCallCount += 1;
     accumulate(agg, row, rate ?? UNPRICED_ZERO_RATE);
     if (timeline) {
       const costs = isPriced ? calculateTokenCost(row, rate, bandForTimestamp(row.ts, rate)) : null;
@@ -478,7 +491,13 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
     for (const record of rateInfo.rate?.rateRecords ?? []) entry.rateRecords.set(record.id, record);
     entry.contextMinTokens = Math.min(entry.contextMinTokens, contextTokens);
     entry.contextMaxTokens = Math.max(entry.contextMaxTokens, contextTokens);
-    if (rate) entry.rateCoverage = 'complete';
+    if (rate) {
+      entry.rateCoverage = 'complete';
+      // Sticky: the model's rate is known if ANY call resolved it. Without this a same-model
+      // mix of priced and unpriced calls (one torn row) looked wholly unpriced, because the
+      // entry kept whichever verdict its first row happened to carry.
+      entry.rateKnown = true;
+    }
     accumulate(entry, row, rate ?? UNPRICED_ZERO_RATE);
 
     if (pkey) providersSeen.set(pkey, true);
@@ -558,8 +577,11 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
 
   const models = [...perModel.values()].map((model) => {
     const rateRecords = [...model.rateRecords.values()];
-    const missingRateComponents = [...model.missingRateComponents].sort();
-    const rateKnown = model.calls > 0 && model.rateKnown && missingRateComponents.length === 0;
+    // A resolved rate is always complete (resolveRate returns null rather than a partial one),
+    // so once any call priced, every required component demonstrably has a record. Listing the
+    // components an unpriced call could not check would contradict the records beside them.
+    const rateKnown = model.calls > 0 && model.rateKnown === true;
+    const missingRateComponents = rateKnown ? [] : [...model.missingRateComponents].sort();
     const rateCoverage = model.calls === 0
       ? 'no-calls'
       : rateKnown ? 'complete' : rateRecords.length ? 'partial' : 'unavailable';
@@ -616,7 +638,10 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
     agentName: target.meta?.agent_name ?? null,
     provider: target.provider,
     model: target.defaultModel,
-    rateKnown: models.every((m) => m.rateKnown),
+    // models.every(...) alone cannot see a same-model mix of priced and unpriced calls: the
+    // model's rate is known, yet one call (torn timestamp, corrupt tokens) has no cost. That
+    // session is partial, not complete - so the report is rateKnown only when every call priced.
+    rateKnown: models.every((m) => m.rateKnown) && unpricedCallCount === 0,
     currency,
     isCommandCode: Boolean(target.provider && /commandcode/i.test(target.provider)),
     includeChildren,

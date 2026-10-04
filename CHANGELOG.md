@@ -52,6 +52,25 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- A ledger row with a missing timestamp was priced at the epoch (#100). `Number(null)` is 0,
+  and `new Date(0)` is a real instant - epoch Thursday, 00:00 UTC - which falls in the
+  off-peak band, the cheaper one, so a torn row on a banded model was silently priced at the
+  cheapest rate. The custom-provider path was worse: the band came from the epoch while the
+  record filter defaulted the missing time to now, so a peak-hour call with no timestamp
+  priced at off-peak *right now*. A missing timestamp is now treated exactly like a corrupt
+  token count (#67): the call takes the no-cost path, and `bandForTimestamp` throws on
+  null/undefined so any caller that bypasses the graceful path fails loudly instead of at
+  the epoch. `resolveRate` and the profile band resolver report the call unpriced with the
+  reason named.
+
+  The verdict aggregation had to grow up to say this. A session whose priced and unpriced
+  calls share one model reported `unavailable` while a priced sum sat beside it, because the
+  per-model verdict kept whichever row arrived first (NULL sorts first in SQLite). A model's
+  rate is now known when any call resolved it - a resolved rate is always complete - and the
+  report-level `rateKnown` additionally requires zero unpriced calls, so the session reports
+  `partial` with the gap named, exits 2, and still prints every figure it has. This also
+  delivers what #67's entry already claimed for a same-model mix: partial, not unavailable.
+
 - An unpriced session renders as `$0.000000` in the dashboard's session table. This is accounting
   rule 1 - the silent zero, the failure this whole project exists to prevent - and it was visible
   on a real report: the same unknown cost appeared four ways on one page, as an em dash in the

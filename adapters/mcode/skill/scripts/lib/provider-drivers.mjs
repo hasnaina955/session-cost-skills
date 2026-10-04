@@ -5,7 +5,7 @@ import {
   defineProviderDriver,
   resolveDriverModel,
 } from './provider-driver.mjs';
-import { RATES_SOURCE, REQUIRED_RATE_COMPONENTS, bandForTimestamp, makeRateRecord, refreshRateTable, resolveRate } from './rates.mjs';
+import { RATES_SOURCE, REQUIRED_RATE_COMPONENTS, bandForTimestamp, makeRateRecord, refreshRateTable, resolveRate, timestampIsUsable } from './rates.mjs';
 import { PROTOCOL_ADAPTERS } from './protocol-adapters.mjs';
 
 export function profileRateRecords(profile) {
@@ -58,6 +58,17 @@ function resolveProfileTimeBand(records, profile, at) {
   const knownBands = new Set(records.map((record) => record.timeBand));
   if (knownBands.has('flat')) return { timeBand: 'flat' };
   if (knownBands.size <= 1) return { timeBand: [...knownBands][0] ?? 'flat' };
+  // A banded profile cannot resolve a band for a call whose time is unknown. `Number(null)`
+  // is 0 and the epoch falls in the off-peak band - the cheaper one - while the record filter
+  // below defaults a missing `at` to now, so asking bandForTimestamp here with a missing
+  // timestamp priced the call at off-peak *right now*, even inside a peak window (#100).
+  // Unpriced, with the reason named, is the only honest answer.
+  if (!timestampIsUsable(at)) {
+    return {
+      timeBand: null,
+      reason: 'the call timestamp is missing or corrupt, so the peak/off-peak band cannot be determined',
+    };
+  }
   const timeOfDay = profile?.timeOfDay ?? null;
   if (!timeOfDay || Object.keys(timeOfDay).length === 0) {
     return {
