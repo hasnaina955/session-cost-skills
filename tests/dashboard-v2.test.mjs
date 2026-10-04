@@ -125,7 +125,7 @@ test('the headline figures are in the server-rendered HTML, not only in the scri
   assert.equal(status, 0);
   // Strip the script, so only what the server produced is inspected.
   const serverRendered = html.replace(/<script>[\s\S]*?<\/script>/g, '');
-  for (const label of ['Total tokens', 'Cache-hit rate', 'Recorded / reference cost', 'Credits used']) {
+  for (const label of ['Total tokens', 'Cache-hit rate']) {
     assert.ok(serverRendered.includes(label), `"${label}" must be in the server-rendered HTML`);
   }
   // And they carry real figures, not placeholders: the tile for tokens shows a number.
@@ -135,6 +135,43 @@ test('the headline figures are in the server-rendered HTML, not only in the scri
   // The container the script fills is the same element, so a JS reader gets filter-aware tiles
   // and a no-JS reader still gets the session totals.
   assert.match(serverRendered, /<section class="kpis" id="cards">[\s\S]*?<\/section>/, 'the KPI container must hold the server-rendered tiles');
+});
+
+test('the headline KPI row leads with the cost domain the report actually carries', () => {
+  // The row was hardcoded to the Cline account domains, so on MCode two of the four tiles
+  // could only ever read "-" and the estimated cost - the one number the tool exists to
+  // report - appeared nowhere server-side. Found by rendering the dashboard and reading it,
+  // the only way this class of bug has ever been found here.
+  const tile = (serverRendered, label) => {
+    const match = new RegExp(`<div class="kpi"><div class="label">${label}</div><div class="value">([^<]+)</div></div>`).exec(serverRendered);
+    return match ? match[1] : null;
+  };
+
+  // MCode's only cost figure is the estimate, and it must be the headline.
+  const mcode = dashboardFor(createMCodeFixture(), mcodeScript, ['--session', 'mcode-root', '--include-children']);
+  assert.equal(mcode.status, 0);
+  const mcodeServer = mcode.html.replace(/<script>[\s\S]*?<\/script>/g, '');
+  const estimated = tile(mcodeServer, 'Estimated cost');
+  assert.ok(estimated, 'an MCode dashboard must carry an Estimated cost tile server-side');
+  assert.match(estimated, /^\$[0-9]/, 'the tile must carry the priced figure, not a dash');
+  assert.equal(tile(mcodeServer, 'Recorded / reference cost'), null, 'a foreign domain renders no tile');
+  assert.equal(tile(mcodeServer, 'Credits used'), null, 'a domain with no figure renders no tile');
+
+  // Cline's cost domain is the recorded figure; the estimate tile must not appear.
+  const cline = dashboardFor(createClineFixture(), clineScript, ['--session', 'cline-root']);
+  assert.equal(cline.status, 0);
+  const clineServer = cline.html.replace(/<script>[\s\S]*?<\/script>/g, '');
+  const recorded = tile(clineServer, 'Recorded / reference cost');
+  assert.ok(recorded, 'a Cline dashboard must carry its recorded-cost tile server-side');
+  assert.match(recorded, /^\$[0-9]/, 'the tile must carry the recorded figure, not a dash');
+  assert.equal(tile(clineServer, 'Estimated cost'), null, 'a foreign domain renders no tile');
+
+  // An unknown estimated cost is an em dash in its own tile, never $0.000000 and never a
+  // missing headline (accounting rule 1).
+  const unpriced = dashboardFor(createMCodeFixture(), mcodeScript, ['--session', 'mcode-unpriced']);
+  assert.equal(unpriced.status, 2, 'an unpriceable session exits 2 but must still render');
+  const unpricedServer = unpriced.html.replace(/<script>[\s\S]*?<\/script>/g, '');
+  assert.equal(tile(unpricedServer, 'Estimated cost'), '—', 'an unknown cost is a dash, not a zero and not a missing tile');
 });
 
 /**

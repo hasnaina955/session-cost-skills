@@ -854,6 +854,36 @@ export function renderDashboard(data, { title = 'Session Cost Dashboard' } = {})
       ]),
     )
     : '';
+  // The headline row. The first two tiles are domain-free; the cost tiles are not. A report
+  // carries the domains its cost basis declares (accounting rule 3), so an MCode dashboard -
+  // whose only cost figure is the estimate - must lead with it, and a tile for a domain the
+  // report does not carry is not rendered at all. Until this was domain-aware, the row was
+  // hardcoded to the Cline account domains: on MCode two of the four tiles could only ever
+  // read "-", and the one number the tool exists to report appeared nowhere server-side -
+  // a no-JS reader got tokens and a cache rate but never the cost.
+  //
+  // The tile for the report's own basis renders even when the figure is unknown, because an
+  // em dash there is the honest state (rule 1); a tile for a foreign domain renders only when
+  // it carries a figure.
+  const costBasis = data?.runtime?.costBasis ?? billingTotals.basis ?? null;
+  const recordedValue = billingTotals.recordedCostUsd ?? billingTotals.referenceCostUsd ?? null;
+  const kpiList = [
+    ['Total tokens', number(totals.totalTokens)],
+    ['Cache-hit rate', percent(totals.cacheHitRate)],
+  ];
+  if (costBasis === 'provider-rate-estimate') {
+    kpiList.push(['Estimated cost', money(billingTotals.estimatedCostUsd ?? null)]);
+  }
+  if (costBasis === 'runtime-recorded' || recordedValue !== null) {
+    kpiList.push(['Recorded / reference cost', money(recordedValue)]);
+  }
+  if (billingTotals.creditsUsedUsd != null) {
+    kpiList.push(['Credits used', money(billingTotals.creditsUsedUsd)]);
+  }
+  const kpiTiles = kpiList
+    .map(([label, value]) => `<div class="kpi"><div class="label">${label}</div><div class="value">${value}</div></div>`)
+    .join('');
+
   const titleValue = account
     ? `Account ${account.userId}`
     : (data?.session?.id ?? data?.sessionId ?? 'Session report');
@@ -876,7 +906,7 @@ export function renderDashboard(data, { title = 'Session Cost Dashboard' } = {})
   <h1>${esc(title)}</h1>
   <div class="page-meta"><span>${esc(titleValue)} · ${esc(generatedAt)} · ${esc(snapshot.active ? 'snapshot' : 'final')}</span><button id="formatToggle" class="format-toggle" type="button" aria-pressed="true">Full numbers</button><button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle light and dark mode">Light mode</button></div>
 </header>
-<section class="kpis" id="cards"><div class="kpi"><div class="label">Total tokens</div><div class="value">${number(totals.totalTokens)}</div></div><div class="kpi"><div class="label">Cache-hit rate</div><div class="value">${percent(totals.cacheHitRate)}</div></div><div class="kpi"><div class="label">Recorded / reference cost</div><div class="value">${money(billingTotals.recordedCostUsd ?? billingTotals.referenceCostUsd)}</div></div><div class="kpi"><div class="label">Credits used</div><div class="value">${money(billingTotals.creditsUsedUsd)}</div></div></section>
+<section class="kpis" id="cards">${kpiTiles}</section>
 <section class="controls" id="filters"><label>Provider <select id="providerFilter"><option value="">All providers</option></select></label><label>Model <select id="modelFilter"><option value="">All models</option></select></label><label>Session <select id="sessionFilter"><option value="">All sessions</option></select></label><label>Day <select id="dayFilter"><option value="">All days</option></select></label><button id="resetFilters" type="button">Reset</button><small id="filterStatus"></small></section>
 <div class="bento">${serverSections}<section class="panel span-6"><h2>Usage trend</h2><div id="trendChart" class="chart" aria-label="Daily token and cost trend"></div></section><section class="panel span-6"><h2>Model share</h2><div id="modelChart" aria-label="Token share by model"></div></section></div>
 ${periodTable ? `<h2 class="standalone">Period summary</h2>${periodTable}` : ''}

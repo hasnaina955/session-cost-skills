@@ -71,6 +71,17 @@ All notable changes to this project are documented here.
   `partial` with the gap named, exits 2, and still prints every figure it has. This also
   delivers what #67's entry already claimed for a same-model mix: partial, not unavailable.
 
+- The dashboard's headline KPI row was hardcoded to the Cline account domains, so on an MCode
+  dashboard two of the four tiles could only ever read "-" and the estimated cost - the one
+  number the tool exists to report - appeared nowhere in the server-rendered page, only as a
+  small chart caption. A no-JS reader got tokens and a cache rate but never the cost. The row
+  now leads with the domain the report actually carries (accounting rule 3): an estimated-cost
+  tile for estimate-basis reports, the recorded/reference tile for recorded-basis ones, and a
+  credits tile only when credits carry a figure. A foreign domain renders no tile rather than
+  a permanent em dash, and the report's own cost tile renders even when the figure is unknown,
+  because an em dash there is the honest state (rule 1). Found by rendering the dashboard and
+  reading it - the failure mode the handoff says catches every serious bug here.
+
 - An unpriced session renders as `$0.000000` in the dashboard's session table. This is accounting
   rule 1 - the silent zero, the failure this whole project exists to prevent - and it was visible
   on a real report: the same unknown cost appeared four ways on one page, as an em dash in the
