@@ -46,9 +46,26 @@ test('both adapters feed the same dashboard shape despite different vocabularies
       assert.ok(session.id, 'a session needs an id');
       assert.equal(typeof session.metrics.totalTokens, 'number', `${session.id} has no token count`);
       assert.equal(typeof session.metrics.calls, 'number', `${session.id} has no call count`);
-      assert.equal(typeof session.metrics.totalCost, 'number', `${session.id} has no cost`);
+      // A cost is either a number or an honest null, and which one it is has to be *declared*
+      // rather than inferred from a zero. The blanket "must be a number" assertion this replaces
+      // is what let a wholly unpriced session reach the table as a finite 0: it demanded a number
+      // in exactly the case where the accounting has none to give, and the table obliged with a
+      // zero that a reader takes as "this was free".
+      if (session.costKnown === false) {
+        assert.equal(session.metrics.totalCost, null, `${session.id} declares its cost unknown, so it must not carry a figure`);
+      } else {
+        assert.equal(typeof session.metrics.totalCost, 'number', `${session.id} claims a known cost but carries none`);
+      }
     }
     assert.ok(payload.sessions.some((s) => s.metrics.totalTokens > 0), 'rows must be populated, not all zero');
+  }
+  // And the two vocabularies still agree on which rows are unknowable: both adapters must reach
+  // the table in the same state for the same reason, not one blanked and the other not.
+  for (const [name, payload] of [['cline', clinePayload], ['mcode', mcodePayload]]) {
+    const unknown = payload.sessions.filter((s) => s.costKnown === false).map((s) => s.id);
+    for (const id of unknown) {
+      assert.equal(payload.sessions.find((s) => s.id === id).metrics.totalCost, null, `${name}: ${id}`);
+    }
   }
 });
 
