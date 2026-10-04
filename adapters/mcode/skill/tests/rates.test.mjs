@@ -11,6 +11,7 @@ import {
   RATE_PARSER_VERSION,
   RATES_SOURCE,
   SOURCE_PARSER_VERSION,
+  bandForTimestamp,
   calculateTokenCost,
   inspectRateTable,
   parseCommandCodeRates,
@@ -20,6 +21,7 @@ import {
   readRateTable,
   refreshRateTable,
   resolveRate,
+  timestampIsUsable,
   validateRateTable,
 } from '../scripts/lib/rates.mjs';
 
@@ -589,4 +591,59 @@ test('MCode CLI reports a nonzero CommandCode cache-write cost end to end', (t) 
   assert.deepEqual(aggregateReport.rootSessionIds, ['mvs_test']);
   assert.deepEqual(aggregateReport.includedSessionIds, ['mvs_test', 'mvs_child', 'mvs_grandchild']);
   assert.deepEqual([...aggregateReport.duplicateSuppressedSessionIds].sort(), ['mvs_child', 'mvs_grandchild']);
+});
+
+test('bandForTimestamp refuses a missing timestamp instead of pricing the epoch (#100)', () => {
+  // `Number(null)` is 0, and `new Date(0)` is a real instant - epoch Thursday, 00:00 UTC -
+  // which falls in the off-peak band, the cheaper one. A missing timestamp therefore used to
+  // price a call at the cheapest rate while saying nothing. It now throws, like an unparseable
+  // timestamp already did.
+  const banded = { timeOfDay: { peak: {}, offPeak: {} } };
+  assert.throws(() => bandForTimestamp(null, banded), /missing timestamp/);
+  assert.throws(() => bandForTimestamp(undefined, banded), /missing timestamp/);
+  assert.throws(() => bandForTimestamp('not-a-date', banded), /cannot determine a time band/);
+  // A rate with no bands never reads the timestamp at all.
+  assert.equal(bandForTimestamp(null, {}), 'flat');
+  // A real epoch is a real instant, not a missing one: 1970-01-01 was a Thursday, 00:00 UTC,
+  // outside the peak windows, so off-peak is the *correct* band for it.
+  assert.equal(bandForTimestamp(0, banded), 'offPeak');
+});
+
+test('timestampIsUsable refuses the shapes that coerce to a wrong instant (#100)', () => {
+  for (const value of [null, undefined, '', 'not-a-date', NaN, Infinity, new Date('junk')]) {
+    assert.equal(timestampIsUsable(value), false, `${String(value)} must not be usable`);
+  }
+  // `Number('')` is 0, which is exactly the trap: the empty string must not pass.
+  assert.equal(timestampIsUsable(''), false);
+  for (const value of [0, 1750000000000, '2026-06-15T12:00:00.000Z', new Date('2026-06-15T12:00:00.000Z')]) {
+    assert.equal(timestampIsUsable(value), true, `${String(value)} must be usable`);
+  }
+});
+
+test('resolveRate reports an unusable call timestamp unpriced rather than pricing at the epoch (#100)', () => {
+  const raw = commandModel({
+    id: 'vendor/banded-model',
+    name: 'Banded Model',
+    timeOfDay: {
+      effective: '2025-01-01T00:00:00.000Z',
+      windows: '01-04 UTC',
+      peak: { inputCost: 2, outputCost: 4, cacheReadCost: 0.2, cacheWriteCost: 0.5 },
+      offPeak: { inputCost: 1, outputCost: 2, cacheReadCost: 0.1, cacheWriteCost: 0.25 },
+    },
+  });
+  const model = parseCommandCodeRates(commandCodeHtml([raw], renderedRow('Banded Model')))[raw.id];
+  const prepared = prepareProviderRates('commandcode', { [raw.id]: model }, { refreshedAt: '2025-02-01T00:00:00.000Z' });
+  const table = validTable();
+  table.providers.commandcode.models = prepared.models;
+  table.providers.commandcode.rateRecords = prepared.rateRecords;
+  // The control: 2025-01-02 was a Thursday, 02:00 UTC is inside the 01-04 peak window.
+  const priced = resolveRate(table, 'commandcode', raw.id, { at: '2025-01-02T02:00:00.000Z', contextTokens: 1_000 });
+  assert.equal(priced.timeBand, 'peak');
+  assert.equal(priced.rate.input, 2);
+  for (const at of [null, '', 'not-a-date', NaN]) {
+    const result = resolveRate(table, 'commandcode', raw.id, { at, contextTokens: 1_000 });
+    assert.equal(result.rate, null, `at=${String(at)} must not produce a rate`);
+    assert.equal(result.coverage, 'unavailable', `at=${String(at)} must say so`);
+    assert.equal(result.timeBand, null, `at=${String(at)} must not pick the cheaper band`);
+  }
 });
