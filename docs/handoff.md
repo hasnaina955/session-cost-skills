@@ -17,14 +17,15 @@ unknown cost is `null`, never `0`; totals are exact sums; accounting domains are
 
 | | |
 | --- | --- |
-| `main` | **v0.6.0, released and published**, 497 tests passing |
+| `main` | **v0.6.0, released and published**; WP-4.4 (`--notify`) and the dashboard silent-zero fix merged since, 527 tests passing |
 | Gates | `npm run verify` and `npm run rehearse:release` must both pass |
-| Open PRs | none |
+| Open PRs | #99 (CommandCode adapter) - changes requested: the storage-layout and mod-API facts need cited provenance |
 | Bench | `npm run bench` (regression gate), `npm run bench:quick` |
 | Release | tag `v0.6.0`, three archives plus `SHA256SUMS.txt` on the GitHub release |
 
-**Phases 0, 1, 2 and 3 are complete.** Phase 4 has three of four items done. Phase 5 (new runtimes)
-is the bulk of what remains, and it is blocked on knowledge rather than code.
+**Phases 0, 1, 2 and 3 are complete.** Phase 4 is done except WP-4.2 (the MCP server), which is
+blocked on the spec. Phase 5 (new runtimes) is the bulk of what remains, and it is blocked on
+knowledge rather than code.
 
 Note: **`v0.5.0` was merged but never tagged.** There is no release or archive for it, so the tag
 history has a gap between `v0.4.1` and `v0.6.0`. Decide whether to back-tag it or leave it.
@@ -100,13 +101,7 @@ report carries token-mix and per-model bars.
 
 ## Actionable now, no external knowledge needed
 
-1. **WP-4.4: budget notifications.** `--notify` on `--budget` and `--watch`, emitting a terminal
-   bell and, where available, a desktop notification through the platform's own command
-   (`osascript` on macOS, `notify-send` on Linux, a PowerShell toast on Windows), called with
-   argument arrays rather than a shell string. A missing notifier warns once and continues, and an
-   unknown cost never triggers an alert because it has no severity. Test it by injecting a fake
-   notifier and asserting exactly one alert per threshold crossing.
-2. **The range-path cache: measured, and deliberately not done.** `--list N --rollup` is
+1. **The range-path cache: measured, and deliberately not done.** `--list N --rollup` is
    already cached and runs ~8x faster warm (8.8s to 1.1s over 200 sessions). The range mode -
    `--from/--to`, `--today`, dashboards over a range - is not cached, and measured at 1.4s cold
    *and* warm over a 30-day window, because the quadratic fixed in #87 was the dominant cost there
@@ -118,7 +113,9 @@ report carries token-mix and per-model bars.
    themes contrast-clean, the no-JS path renders its figures, 497 tests pass). Nobody has judged
    how it looks. Open a generated `session-dashboard.html` and tune the tokens or the grid spans if
    the aesthetic is off; that is the one part of this work no test can settle.
-4. Anything in `docs/roadmap-plan.md` under WP-4.x that needs no external facts.
+4. **#100: `bandForTimestamp(null)` resolves to the cheaper off-peak band.** Needs a decision
+   (throw, or price flat and mark coverage partial) before it needs code; either beats quietly
+   choosing the cheapest option.
 
 ## Blocked, and what unblocks it
 
@@ -128,7 +125,7 @@ prevent - so these stay blocked rather than guessed.
 
 | Item | Needs |
 | --- | --- |
-| **#77** CommandCode CLI/desktop adapter | Session storage path per OS, format, per-call fields, whether a stored cost is a charge or needs pricing, parent/child linkage, whether `input` includes cached tokens, and the mod/plugin API |
+| **#77** CommandCode CLI/desktop adapter (PR #99 attempted; held for provenance) | Session storage path per OS, format, per-call fields, whether a stored cost is a charge or needs pricing, parent/child linkage, whether `input` includes cached tokens, and the mod/plugin API |
 | **#15** OpenCode | Same class of facts. A branch `feature/opencode-adapter` holds ~7,300 lines of implementation that is now ~10 releases stale; decide whether to rebase it onto the kernel or start fresh |
 | **#16-#20** Qwen, Goose, Codex, Claude Code, others | Per-runtime storage layout |
 | **WP-4.2** MCP server | Verification of the MCP spec against the real specification. A wrong implementation fails to connect rather than reporting a wrong number, so it is lower risk than an adapter, but it still needs the spec read properly |

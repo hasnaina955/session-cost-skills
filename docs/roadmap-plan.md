@@ -31,6 +31,7 @@ Delivered and merged, each on its own PR with the full CI matrix green:
 | WP-3.5 | A shareable 1200x630 SVG summary card, private by default |
 | WP-4.1 | `--brief`: the cost, tokens, cache rate, and one caveat in a few lines |
 | WP-4.3 | A cross-platform skill update workflow (`scripts/update-skill.mjs`, `docs/updating.md`) |
+| WP-4.4 | `--notify` on `--budget`/`--watch`: bell plus the platform's own notifier, verdict-driven so an unknown cost never alerts, once per threshold per process |
 | WP-4.5 | A performance regression gate (`scripts/bench.mjs`) and the quadratic it found (#87) |
 | v0.5.0 | Cut, with the cross-platform skill update workflow |
 | v0.6.0 | **Released.** Phases 0-3 complete, the kernel and conformance kit in place, the dashboard redesigned |
@@ -44,14 +45,12 @@ Still ahead, and **all of it blocked on knowledge rather than effort**:
 - **WP-4.2 (MCP server)** needs the MCP specification read properly. A wrong implementation there
   fails to connect rather than reporting a wrong number, so it is lower risk than an adapter, but
   it still should not be guessed.
-- **WP-4.4 (budget notifications)** is unblocked and small: `--notify` on `--budget`/`--watch`,
-  calling the platform's own notifier with argument arrays rather than a shell string.
 - **Phase 5 adapters** (#15-#20, #77) each need their runtime's storage layout. The kernel and
   conformance kit exist so an adapter is a few hundred lines rather than another 1,500.
 
 One finding is closed and one is still open: `calculateTokenCost` coercing unusable token counts
 was fixed (#67), and `bandForTimestamp` resolving a `null` timestamp to the cheaper off-peak band
-is still open and still needs a decision.
+is still open, now filed as #100, and still needs a decision.
 
 ## 1. Direction
 

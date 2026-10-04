@@ -43,6 +43,13 @@ All notable changes to this project are documented here.
   New `shared/notify.mjs`, with the `sync:`/`check:` pair wired into `verify` like every other
   shared module, so a drift between the two adapters' generated copies fails the build.
 
+### Changed
+
+- `docs/handoff.md` and `docs/roadmap-plan.md` section 0 catch up with what merged: WP-4.4 is
+  delivered (`--notify` shipped in #96), the `bandForTimestamp(null)` finding is now filed as
+  #100, and #77 records that the CommandCode adapter attempt (#99) is held for provenance of the
+  storage-layout facts. The status docs were asserting a queue that no longer existed.
+
 ### Fixed
 
 - An unpriced session renders as `$0.000000` in the dashboard's session table. This is accounting
