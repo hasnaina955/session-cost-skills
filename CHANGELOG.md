@@ -43,6 +43,45 @@ All notable changes to this project are documented here.
   New `shared/notify.mjs`, with the `sync:`/`check:` pair wired into `verify` like every other
   shared module, so a drift between the two adapters' generated copies fails the build.
 
+- The Command Code adapter joins Cline and MCode: a single self-contained
+  TypeScript mod (`adapters/commandcode/skill/session-cost.ts`) that reads
+  Command Code's own session ledger (`~/.commandcode/projects`), prices calls
+  with the mirrored CommandCode provider-rate table (peak window 01-04 and
+  06-10 UTC Mon-Fri at twice the off-peak rate), and reports through the same
+  normalized report contract with runtime id `commandcode` and cost basis
+  `provider-rate-estimate`. It carries the full feature set of the other
+  adapters - current/last/today/compare/list/range modes, provider and model
+  filters, subagent tracking, HTML dashboards with a strict CSP, rate refresh,
+  the `doctor`/`providers`/`models discover`/`config explain` diagnostics,
+  layered configuration with model aliases, and `--json` - plus the mod's own
+  `session_cost` tool surface. Accounting semantics follow the repo principles:
+  `inputTokens` excludes cached tokens, an unknown model reports tokens with a
+  `null` cost rather than a guessed `$0`, a free-tier model is a known `$0`,
+  and subagent usage blocks are tracked separately until `--include-children`.
+  The reported clock honors `SESSION_COST_NOW` for deterministic output, and
+  every failure path returns one readable line. The runtime enum of the
+  normalized report contract gains `commandcode`; `contracts/README.md` now states
+  the rule that makes that lawful: the runtime-id enum is open, consumers must
+  tolerate ids they do not know, and extending it is additive rather than a
+  version bump.
+
+- The release version check now covers all three adapters: the Command Code
+  mod must declare the repository version and the shared contract version, or
+  the one-version-per-repository contract fails.
+
+  The takeover review (the original author was unavailable) verified every ledger fact the
+  mod relies on against the vendor's published docs and an independent parser before merge:
+  the sessions/mods/pricing pages at commandcode.ai, and tokscale's commandcode.rs, which
+  reproduces the transcript's recorded `costUsd` from the mirrored rates exactly. Three
+  hardening changes came out of that review: a transcript-version guard (a v4+ ledger is
+  reported unpriced with the drift named, never parsed into plausible zeros - the
+  schema-drift rule), the upstream #100 rule applied to the mod (a banded call with no
+  usable timestamp is unpriced rather than silently off-peak, the cheaper band), and the
+  ledger's own recorded `costUsd` surfaced as a separate labelled domain with a staleness
+  tripwire when it and the mirrored-rate estimate disagree. The mod also gains real
+  behavioral tests: it is type-strippable TypeScript, so Node 24 and Bun run it against
+  fixture transcripts in CI, with the static source-reading suite as the Node 22.15 floor.
+
 ### Changed
 
 - `docs/handoff.md` and `docs/roadmap-plan.md` section 0 catch up with what merged: WP-4.4 is

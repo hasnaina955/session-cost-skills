@@ -52,6 +52,7 @@ Each adapter keeps its own generated copy so it remains independently installabl
 
 - Cline adapter: `adapters/cline`
 - MCode adapter: `adapters/mcode`
+- Command Code adapter: `adapters/commandcode` (a self-contained mod, not a shared-CLI skill)
 - Shared documentation: `docs`
 - Shared release rules: `README.md` and `SECURITY.md`
 
