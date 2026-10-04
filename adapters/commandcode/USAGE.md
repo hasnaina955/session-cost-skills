@@ -62,12 +62,46 @@ Code adapter labels its value as a provider-rate estimate, keeps
 provenance, warnings, and session-graph state, plus Command Code
 extension fields (`sessions`, `totals`, `models`).
 
+## Provenance of the ledger facts
+
+The storage layout this mod reads is not guessed. It is verified against the vendor's own
+documentation and an independent parser, recorded here so a future schema change is checked
+against sources rather than vibes:
+
+- Transcript location and shape: vendor docs, "Sessions & Checkpoints"
+  (https://commandcode.ai/docs/sessions) - one append-only JSONL per session under
+  `~/.commandcode/projects/<project-slug>/<session-id>.jsonl`, first line a header
+  (session id, creation time, working directory), replies carrying "token usage and cost".
+- Record schema and token semantics: corroborated against tokscale's `commandcode.rs`,
+  which verified against the vendor's own cost arithmetic that v3 assistant records are
+  `{type:"message", timestamp, message:{role}, usage:{inputTokens, outputTokens,
+  cacheReadTokens, cacheWriteTokens, costUsd}, model}` and that the buckets are disjoint:
+  `inputTokens` excludes cached tokens, and input plus cache buckets at the mirrored rates
+  reproduce the recorded `costUsd` exactly.
+- Mod API: vendor docs, "Mods" (https://commandcode.ai/docs/mods) - one TypeScript file at
+  `~/.commandcode/mods/<name>.ts`, a default-export factory receiving `cmd: ModApi`.
+- Peak windows: vendor docs, "Pricing & Limits" - 01-04 & 06-10 UTC, Mon-Fri, peak billed at
+  twice the off-peak rate on the banded models.
+
+Two guards follow from this:
+
+- A session whose header declares a transcript version other than 3 is reported unpriced
+  with the drift named, never parsed into plausible wrong numbers.
+- A banded call with a missing or unparseable timestamp is unpriced, never priced at the
+  off-peak band (the cheaper one) by accident of `new Date('')` being invalid.
+
+The one unverified claim is the subagent `<usage>` block format; it feeds only an
+informational token counter, never a cost, so a wrong guess there cannot misprice.
+
 ## Accounting semantics
 
 - `inputTokens` is **fresh** input and excludes cached tokens; the
   prompt total is `input + cacheRead + cacheWrite`.
 - An unknown model reports its tokens with a `null` cost — never a
   guessed `$0`.
+- The ledger's own recorded `costUsd` is disclosed per session and in totals as a separate,
+  labelled domain (`recordedCostUsd`); it is never merged into the estimate, and a material
+  disagreement between the two domains warns that the mirrored rate table may be stale.
 - A free-tier model (`…-free` / `…:free`) is a *known* `$0`.
 - Subagent `<usage>` blocks carry no model, so they are tracked
   separately and folded in only with `--include-children`.

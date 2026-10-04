@@ -69,6 +69,19 @@ All notable changes to this project are documented here.
   mod must declare the repository version and the shared contract version, or
   the one-version-per-repository contract fails.
 
+  The takeover review (the original author was unavailable) verified every ledger fact the
+  mod relies on against the vendor's published docs and an independent parser before merge:
+  the sessions/mods/pricing pages at commandcode.ai, and tokscale's commandcode.rs, which
+  reproduces the transcript's recorded `costUsd` from the mirrored rates exactly. Three
+  hardening changes came out of that review: a transcript-version guard (a v4+ ledger is
+  reported unpriced with the drift named, never parsed into plausible zeros - the
+  schema-drift rule), the upstream #100 rule applied to the mod (a banded call with no
+  usable timestamp is unpriced rather than silently off-peak, the cheaper band), and the
+  ledger's own recorded `costUsd` surfaced as a separate labelled domain with a staleness
+  tripwire when it and the mirrored-rate estimate disagree. The mod also gains real
+  behavioral tests: it is type-strippable TypeScript, so Node 24 and Bun run it against
+  fixture transcripts in CI, with the static source-reading suite as the Node 22.15 floor.
+
 ### Changed
 
 - `docs/handoff.md` and `docs/roadmap-plan.md` section 0 catch up with what merged: WP-4.4 is

@@ -4,17 +4,34 @@
  * Ports the session-cost-skills reporting architecture (hasnaina955/session-cost-skills)
  * to Command Code's own session ledger: ~/.commandcode/projects/<slug>/<session>.jsonl
  *
- * Reads per-message usage records (inputTokens / outputTokens / cacheReadTokens /
- * cacheWriteTokens) and subagent <usage> blocks, then prices them with the mirrored
- * CommandCode provider-rate table (embedded from the repo's provider-rates.json,
- * refreshed 2026-09-25). Peak/off-peak bands follow CommandCode's published windows:
- * 01-04 & 06-10 UTC, Mon-Fri.
+ * Provenance of the ledger facts (verified 2026-10-04, recorded here because a guessed
+ * storage schema is the one failure this project exists to prevent):
+ *   - Transcript location and shape: vendor docs, "Sessions & Checkpoints"
+ *     (https://commandcode.ai/docs/sessions): one append-only JSONL per session, first
+ *     line a header (session id, creation time, working directory), replies carry
+ *     "token usage and cost".
+ *   - Record schema and token semantics: corroborated against an independent parser
+ *     (tokscale's commandcode.rs), which verified against the vendor's own arithmetic
+ *     that the v3 transcript's message lines are
+ *     {type:"message", timestamp, message:{role}, usage:{inputTokens, outputTokens,
+ *     cacheReadTokens, cacheWriteTokens, costUsd}, model} — and that the buckets are
+ *     DISJOINT: inputTokens excludes cached tokens, and input + cache buckets at the
+ *     mirrored rates reproduce the recorded costUsd exactly.
+ *   - Mod API: vendor docs, "Mods" (https://commandcode.ai/docs/mods): one TypeScript
+ *     file at ~/.commandcode/mods/<name>.ts, default-export factory(cmd: ModApi),
+ *     addCommand / addTool registration.
+ *   - Peak windows: vendor docs, "Pricing & Limits": 01–04 & 06–10 UTC, Mon–Fri, peak
+ *     billed at twice the off-peak rate on the banded models.
+ * The one unverified claim is the subagent <usage> block format; it only ever feeds an
+ * informational token counter, never a cost, so a wrong guess there cannot misprice.
  *
  * Accounting semantics (shared with the upstream skill):
  *   - inputTokens is fresh input, excluding cached tokens
  *   - total prompt = input + cacheRead + cacheWrite
  *   - unknown models report tokens without a guessed cost
  *   - free-tier models (…-free / …:free) bill at $0
+ *   - the ledger's own recorded costUsd is reported as a separate, labelled domain and
+ *     never merged into the estimate (accounting rule 3)
  */
 import type {ModApi} from '@commandcode/harness';
 import * as fs from 'node:fs';
@@ -23,6 +40,12 @@ import * as os from 'node:os';
 import * as readline from 'node:readline';
 
 const MOD_VERSION = '0.6.0';
+// The transcript schema this parser understands (see the provenance note above). A ledger
+// written by a newer Command Code may have renamed or reshaped fields, and parsing it
+// anyway is how a tool produces plausible, wrong numbers (the upstream project's
+// schema-drift rule: a renamed column must fail by name, never read as zero). A session
+// whose header declares any other version is reported unpriced with the drift named.
+const TRANSCRIPT_VERSION = 3;
 const RATE_TABLE_VERSION = '2026-09-25';
 const CONTRACT_VERSION = '1.2.0';
 const RATES_REFRESH_URL = 'https://raw.githubusercontent.com/hasnaina955/session-cost-skills/main/adapters/mcode/skill/references/provider-rates.json';
@@ -146,6 +169,13 @@ interface CallRecord {
   cacheWrite: number;
   band: 'peak' | 'off-peak' | 'flat' | 'free' | 'unknown';
   costUsd: number | null; // null = unpriced
+  // Why a call is unpriced, when it is: the model has no rate card, or a banded call had no
+  // usable timestamp. The reasons must not be conflated: only one of them means the rate
+  // table lacks the model.
+  unpricedReason: 'no-rate-card' | 'unknown-time' | null;
+  // The ledger's own figure for this call, when the transcript carries one. A separate,
+  // labelled domain from the estimate above (accounting rule 3); the two are never merged.
+  recordedCostUsd: number | null;
 }
 
 interface ModelAggregate {
@@ -167,6 +197,7 @@ interface SessionData {
   calls: CallRecord[];
   subagentTokens: number;
   subagentBlocks: number;
+  schemaDrift: number | null;
 }
 
 interface SessionMeta {
@@ -175,12 +206,14 @@ interface SessionMeta {
   mtimeMs: number;
   startedAt: string | null;
   project: string;
+  version: number | null;
 }
 
 function readSessionMeta(file: string): SessionMeta {
   const stat = fs.statSync(file);
   let startedAt: string | null = null;
   let project = '';
+  let version: number | null = null;
   try {
     const fd = fs.openSync(file, 'r');
     const buf = Buffer.alloc(64 * 1024);
@@ -192,6 +225,7 @@ function readSessionMeta(file: string): SessionMeta {
       if (rec && rec.type === 'session') {
         startedAt = typeof rec.timestamp === 'string' ? rec.timestamp : null;
         project = typeof rec.cwd === 'string' ? rec.cwd : '';
+        version = typeof rec.version === 'number' && Number.isFinite(rec.version) ? rec.version : null;
       }
     } catch {
       // first line not a session record — fall back to mtime
@@ -199,7 +233,7 @@ function readSessionMeta(file: string): SessionMeta {
   } catch {
     // unreadable — caller skips
   }
-  return {file, id: path.basename(file, '.jsonl'), mtimeMs: stat.mtimeMs, startedAt, project};
+  return {file, id: path.basename(file, '.jsonl'), mtimeMs: stat.mtimeMs, startedAt, project, version};
 }
 
 function discoverSessions(dataDir: string): SessionMeta[] {
@@ -230,6 +264,22 @@ function discoverSessions(dataDir: string): SessionMeta[] {
 
 async function parseSession(meta: SessionMeta, aliases?: Map<string, string>): Promise<SessionData> {
   const calls: CallRecord[] = [];
+  // A ledger whose header declares a schema this mod does not understand is not parsed:
+  // reading renamed fields as zeros is how a cost tool lies. The session is reported
+  // unpriced with the drift named, never guessed.
+  if (meta.version !== null && meta.version !== TRANSCRIPT_VERSION) {
+    return {
+      id: meta.id,
+      file: meta.file,
+      project: meta.project,
+      startedAt: meta.startedAt,
+      endedAt: meta.startedAt,
+      calls,
+      subagentTokens: 0,
+      subagentBlocks: 0,
+      schemaDrift: meta.version,
+    };
+  }
   let subagentTokens = 0;
   let subagentBlocks = 0;
   let endedAt: string | null = null;
@@ -256,26 +306,40 @@ async function parseSession(meta: SessionMeta, aliases?: Map<string, string>): P
     if (rec?.type !== 'message' || rec?.message?.role !== 'assistant' || !rec.usage) continue;
     const u = rec.usage;
     const model = typeof rec.model === 'string' ? rec.model : 'unknown';
-    const ts = typeof rec.timestamp === 'string' ? rec.timestamp : meta.startedAt || '';
+    // The line's own timestamp is the only one pricing may use. Falling back to the session's
+    // start for display is fine, but pricing a banded call at a time it did not happen is the
+    // silent-cheapest-band failure (upstream #100): new Date('') is an invalid date whose
+    // getters are NaN, and NaN fails every peak comparison, so the call would price off-peak -
+    // the cheaper band - while saying nothing.
+    const ownTs = typeof rec.timestamp === 'string' ? rec.timestamp : '';
+    const ts = ownTs || meta.startedAt || '';
     if (ts) endedAt = ts;
+    const tsUsable = ownTs !== '' && Number.isFinite(Date.parse(ownTs));
 
     const input = Number(u.inputTokens || 0);
     const output = Number(u.outputTokens || 0);
     const cacheRead = Number(u.cacheReadTokens || 0);
     const cacheWrite = Number(u.cacheWriteTokens || 0);
+    const recordedCostUsd = typeof u.costUsd === 'number' && Number.isFinite(u.costUsd) ? u.costUsd : null;
 
     const {card, free, matchedKey} = matchRateCard(model, aliases);
     let band: CallRecord['band'];
     let costUsd: number | null = null;
+    let unpricedReason: CallRecord['unpricedReason'] = null;
     if (free) {
       band = 'free';
       costUsd = 0;
     } else if (!card) {
       band = 'unknown';
+      unpricedReason = 'no-rate-card';
+    } else if (card.peak && card.off && !tsUsable) {
+      // A banded call whose time is unknown is unpriced, never priced at the cheaper band.
+      band = 'unknown';
+      unpricedReason = 'unknown-time';
     } else {
       let components = card;
       if (card.peak && card.off) {
-        const peak = isPeakUtc(new Date(ts));
+        const peak = isPeakUtc(new Date(ownTs));
         band = peak ? 'peak' : 'off-peak';
         components = peak ? card.peak : card.off;
       } else {
@@ -288,7 +352,7 @@ async function parseSession(meta: SessionMeta, aliases?: Map<string, string>): P
         (cacheWrite / 1e6) * components.cw;
     }
     void matchedKey;
-    calls.push({ts, model, input, output, cacheRead, cacheWrite, band, costUsd});
+    calls.push({ts, model, input, output, cacheRead, cacheWrite, band, costUsd, recordedCostUsd, unpricedReason});
   }
 
   return {
@@ -300,6 +364,7 @@ async function parseSession(meta: SessionMeta, aliases?: Map<string, string>): P
     calls,
     subagentTokens,
     subagentBlocks,
+    schemaDrift: null,
   };
 }
 
@@ -319,6 +384,16 @@ interface SessionSummary {
   cacheWrite: number;
   costUsd: number | null; // null when any call was unpriced
   pricedCostUsd: number;
+  // Call-level verdicts: a session whose calls share one model can still be a mix of priced
+  // and unpriced, and only the counts say so honestly (upstream #103).
+  pricedCallCount: number;
+  unpricedCallCount: number;
+  timelessBandedCalls: number;
+  // The ledger's own total for the calls that carried one; null when no call did. A
+  // separate domain from costUsd/pricedCostUsd, never merged into either.
+  recordedCostUsd: number | null;
+  // The transcript version a drifted session declared, or null when the schema matched.
+  schemaDrift: number | null;
   models: ModelAggregate[];
   unpricedModels: string[];
   peakCostUsd: number;
@@ -339,11 +414,20 @@ function summarize(data: SessionData): SessionSummary {
   let offPeakCostUsd = 0;
   const unpricedSet = new Set<string>();
 
+  let recordedCostUsd = 0;
+  let recordedCalls = 0;
+  let pricedCalls = 0;
+  let unpricedCalls = 0;
+  let timelessBandedCalls = 0;
   for (const c of data.calls) {
     input += c.input;
     output += c.output;
     cacheRead += c.cacheRead;
     cacheWrite += c.cacheWrite;
+    if (c.recordedCostUsd !== null) {
+      recordedCostUsd += c.recordedCostUsd;
+      recordedCalls++;
+    }
     let agg = byModel.get(c.model);
     if (!agg) {
       agg = {model: c.model, calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, costUsd: 0};
@@ -356,9 +440,12 @@ function summarize(data: SessionData): SessionSummary {
     agg.cacheWrite += c.cacheWrite;
     if (c.costUsd === null) {
       hasUnpriced = true;
+      unpricedCalls++;
+      if (c.unpricedReason === 'unknown-time') timelessBandedCalls++;
+      else unpricedSet.add(c.model);
       agg.costUsd = null;
-      unpricedSet.add(c.model);
     } else {
+      pricedCalls++;
       pricedCostUsd += c.costUsd;
       if (agg.costUsd !== null) agg.costUsd += c.costUsd;
       if (c.band === 'peak') peakCostUsd += c.costUsd;
@@ -378,8 +465,15 @@ function summarize(data: SessionData): SessionSummary {
     output,
     cacheRead,
     cacheWrite,
-    costUsd: hasUnpriced ? null : pricedCostUsd,
+    // A drifted transcript was not parsed at all: its cost is unknown, not the $0 an empty
+    // call list would produce (rule 1).
+    costUsd: data.schemaDrift !== null ? null : (hasUnpriced ? null : pricedCostUsd),
     pricedCostUsd,
+    pricedCallCount: pricedCalls,
+    unpricedCallCount: unpricedCalls,
+    timelessBandedCalls,
+    recordedCostUsd: recordedCalls > 0 ? recordedCostUsd : null,
+    schemaDrift: data.schemaDrift,
     models,
     unpricedModels: [...unpricedSet].sort(),
     peakCostUsd,
@@ -458,6 +552,11 @@ function totalsSummary(summaries: SessionSummary[]): SessionSummary {
     cacheWrite: 0,
     costUsd: 0,
     pricedCostUsd: 0,
+    pricedCallCount: 0,
+    unpricedCallCount: 0,
+    timelessBandedCalls: 0,
+    recordedCostUsd: null,
+    schemaDrift: null,
     models: [],
     unpricedModels: [],
     peakCostUsd: 0,
@@ -467,6 +566,8 @@ function totalsSummary(summaries: SessionSummary[]): SessionSummary {
   };
   const byModel = new Map<string, ModelAggregate>();
   let hasUnpriced = false;
+  let recordedTotal = 0;
+  let recordedSessions = 0;
   const unpricedSet = new Set<string>();
   for (const s of summaries) {
     t.callCount += s.callCount;
@@ -477,6 +578,13 @@ function totalsSummary(summaries: SessionSummary[]): SessionSummary {
     t.pricedCostUsd += s.pricedCostUsd;
     t.peakCostUsd += s.peakCostUsd;
     t.offPeakCostUsd += s.offPeakCostUsd;
+    if (s.recordedCostUsd !== null) {
+      recordedTotal += s.recordedCostUsd;
+      recordedSessions++;
+    }
+    t.pricedCallCount += s.pricedCallCount;
+    t.unpricedCallCount += s.unpricedCallCount;
+    t.timelessBandedCalls += s.timelessBandedCalls;
     t.subagentTokens += s.subagentTokens;
     t.subagentBlocks += s.subagentBlocks;
     if (s.costUsd === null) hasUnpriced = true;
@@ -494,6 +602,7 @@ function totalsSummary(summaries: SessionSummary[]): SessionSummary {
     }
   }
   t.costUsd = hasUnpriced ? null : t.pricedCostUsd;
+  t.recordedCostUsd = recordedSessions > 0 ? recordedTotal : null;
   t.models = [...byModel.values()].sort((a, b) => b.calls - a.calls);
   t.unpricedModels = [...unpricedSet].sort();
   return t;
@@ -506,17 +615,20 @@ function toJson(summaries: SessionSummary[], mode: string, selection: {method: s
   const totals = totalsSummary(summaries);
   const calls = summaries.reduce((n, s) => n + s.callCount, 0);
   const totalTokens = totals.input + totals.output + totals.cacheRead + totals.cacheWrite;
-  const knownModels = totals.models.filter((m) => m.costUsd !== null);
-  const unknownModels = totals.models.filter((m) => m.costUsd === null);
-  // Principle: unknown cost is null, never 0. When no model in the selection
-  // could be priced there is no estimate at all; a partial selection reports
-  // the priced subset with coverage "partial".
-  const estimatedCostUsd = totals.models.length > 0 && knownModels.length === 0 ? null : totals.pricedCostUsd;
+  // The verdict reads CALLS, not models: a single model can mix priced calls with unpriced
+  // ones (a torn timestamp, a model the mirror lacks), and the model-level figure alone cannot
+  // say so (upstream #103). The estimate is the priced sum whenever at least one call priced -
+  // a disclosed lower bound - and null only when nothing priced at all, because the sum of
+  // zero priced calls is the absence of a figure, not $0 (rule 1).
+  const estimatedCostUsd = totals.pricedCallCount > 0 ? totals.pricedCostUsd : null;
   const coverageStatus = calls === 0
     ? 'no-calls'
     : estimatedCostUsd === null
       ? 'unavailable'
-      : unknownModels.length > 0 ? 'partial' : 'complete';
+      : totals.unpricedCallCount > 0 ? 'partial' : 'complete';
+  // Models with no rate card at all, for the coverage reason below. A banded call with a
+  // missing timestamp is unpriced for a different reason and is named separately.
+  const unknownModels = totals.models.filter((m) => totals.unpricedModels.includes(m.model));
   const promptTokens = totals.input + totals.cacheRead + totals.cacheWrite;
   const cacheHitRate = promptTokens > 0 ? totals.cacheRead / promptTokens : 0;
   const sessionOut = summaries.map((s) => ({
@@ -534,8 +646,12 @@ function toJson(summaries: SessionSummary[], mode: string, selection: {method: s
     },
     costUsd: s.costUsd,
     pricedCostUsd: s.pricedCostUsd,
+    // The ledger's own figure, a separate labelled domain (rule 3): present when the
+    // transcript carried per-call costUsd, null when it did not.
+    recordedCostUsd: s.recordedCostUsd,
     peakCostUsd: s.peakCostUsd,
     offPeakCostUsd: s.offPeakCostUsd,
+    schemaDrift: s.schemaDrift,
     models: s.models.map((m) => ({
       model: m.model,
       calls: m.calls,
@@ -547,11 +663,33 @@ function toJson(summaries: SessionSummary[], mode: string, selection: {method: s
     subagent: {blocks: s.subagentBlocks, tokens: s.subagentTokens},
   }));
   const warnings: string[] = [];
+  const drifted = summaries.filter((s) => s.schemaDrift !== null);
+  for (const s of drifted) {
+    warnings.push(
+      `session ${s.id} uses transcript version ${s.schemaDrift}, which this mod does not understand ` +
+      `(expected ${TRANSCRIPT_VERSION}); it is reported unpriced rather than guessed`,
+    );
+  }
   if (totals.unpricedModels.length > 0) {
     warnings.push('unpriced models reported without a guessed cost: ' + totals.unpricedModels.join(', '));
   }
   if (totals.subagentTokens > 0) {
     warnings.push('subagent usage blocks are tracked separately; pass --include-children to fold them into totals');
+  }
+  // The drift tripwire. The vendor's own arithmetic reproduces the ledger's recorded costUsd
+  // from the mirrored rates exactly (see the provenance note), so the two domains should agree
+  // almost to the digit. A material disagreement means the mirror is stale or the vendor
+  // changed pricing - the estimate is the figure at risk, and the warning says so rather than
+  // letting two plausible totals coexist silently.
+  const estimated = totals.pricedCostUsd;
+  if (totals.recordedCostUsd !== null && estimated > 0) {
+    const gap = Math.abs(totals.recordedCostUsd - estimated);
+    if (gap > Math.max(1e-6, totals.recordedCostUsd * 0.01)) {
+      warnings.push(
+        `the ledger-recorded cost ($${totals.recordedCostUsd.toFixed(6)}) and the mirrored-rate estimate ` +
+        `($${estimated.toFixed(6)}) disagree; the mirrored rate table may be stale (run --refresh-rates)`,
+      );
+    }
   }
   return JSON.stringify({
     schemaVersion: 1,
@@ -595,7 +733,7 @@ function toJson(summaries: SessionSummary[], mode: string, selection: {method: s
       amountUsd: estimatedCostUsd,
       recordedCostUsd: null,
       estimatedCostUsd,
-      rateKnown: unknownModels.length === 0,
+      rateKnown: totals.unpricedCallCount === 0,
       coverage: coverageStatus,
       classification: estimatedCostUsd === null ? 'cost-unavailable' : 'rate-estimated',
       label: null,
@@ -605,9 +743,14 @@ function toJson(summaries: SessionSummary[], mode: string, selection: {method: s
       status: coverageStatus,
       calls,
       totalTokens,
-      unknownReasons: unknownModels.length > 0
-        ? ['no applicable rate card: ' + unknownModels.map((m) => m.model).join(', ')]
-        : [],
+      unknownReasons: [
+        ...(unknownModels.length > 0
+          ? ['no applicable rate card: ' + unknownModels.map((m) => m.model).join(', ')]
+          : []),
+        ...(totals.timelessBandedCalls > 0
+          ? [totals.timelessBandedCalls + ' banded call(s) had no usable timestamp and were not priced']
+          : []),
+      ],
     },
     sessionGraph: {
       rootSessionIds: summaries.map((s) => s.id),
@@ -639,6 +782,7 @@ function toJson(summaries: SessionSummary[], mode: string, selection: {method: s
       tokens: {input: totals.input, output: totals.output, cacheRead: totals.cacheRead, cacheWrite: totals.cacheWrite, subagent: totals.subagentTokens},
       costUsd: totals.costUsd,
       pricedCostUsd: totals.pricedCostUsd,
+      recordedCostUsd: totals.recordedCostUsd,
       peakCostUsd: totals.peakCostUsd,
       offPeakCostUsd: totals.offPeakCostUsd,
       unpricedModels: totals.unpricedModels,

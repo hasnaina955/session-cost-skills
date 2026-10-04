@@ -41,10 +41,39 @@ test('the JSON emitter carries every field the normalized contract requires', ()
 });
 
 test('an unpriced selection reports a null cost, never a guessed zero', () => {
-  // Principle 1: unknown cost is null. The aggregator must keep the null
-  // through to the session and totals summaries.
-  assert.match(source, /costUsd: hasUnpriced \? null : pricedCostUsd/);
-  assert.match(source, /estimatedCostUsd = totals\.models\.length > 0 && knownModels\.length === 0 \? null : totals\.pricedCostUsd/);
+  // Principle 1: unknown cost is null. The aggregator must keep the null through to the
+  // session and totals summaries - including the two edges the takeover added: a drifted
+  // transcript (not parsed, so its empty call list must not read as $0) and a selection
+  // where no call priced (the sum of zero priced calls is the absence of a figure).
+  assert.match(source, /costUsd: data\.schemaDrift !== null \? null : \(hasUnpriced \? null : pricedCostUsd\)/);
+  assert.match(source, /estimatedCostUsd = totals\.pricedCallCount > 0 \? totals\.pricedCostUsd : null/);
+});
+
+test('a banded call with a missing timestamp is unpriced, never priced at the cheaper band', () => {
+  // Upstream #100 applies here too: new Date('') is an invalid date whose NaN getters fail
+  // every peak comparison, so an unguarded band lookup prices the off-peak (cheaper) band.
+  // The mod must check timestamp usability before banding and mark the call 'unknown-time'.
+  assert.match(source, /const tsUsable = ownTs !== '' && Number\.isFinite\(Date\.parse\(ownTs\)\)/);
+  assert.match(source, /card\.peak && card\.off && !tsUsable/);
+  assert.match(source, /unpricedReason = 'unknown-time'/);
+});
+
+test('a transcript whose version the mod does not understand is guarded by name', () => {
+  // The schema-drift rule: a renamed field must fail by name, never read as zero. The mod
+  // declares the transcript version it understands and refuses to price any other.
+  assert.match(source, /const TRANSCRIPT_VERSION = 3;/);
+  assert.match(source, /meta\.version !== null && meta\.version !== TRANSCRIPT_VERSION/);
+});
+
+test('the ledger-recorded cost is surfaced as a separate labelled domain, never merged', () => {
+  // Rule 3: the recorded figure and the estimate are different domains. The v3 transcript
+  // carries a per-call costUsd; the mod discloses it per session and in totals, keeps
+  // billing.recordedCostUsd null on an estimate-basis report, and warns when the two
+  // domains disagree materially (a stale mirror trips the wire).
+  assert.match(source, /recordedCostUsd = typeof u\.costUsd === 'number' && Number\.isFinite\(u\.costUsd\) \? u\.costUsd : null/);
+  assert.match(source, /recordedCostUsd: totals\.recordedCostUsd/);
+  assert.match(source, /recordedCostUsd: null,/);
+  assert.match(source, /disagree; the mirrored rate table may be stale/);
 });
 
 test('commandcode token semantics exclude cached input tokens', () => {

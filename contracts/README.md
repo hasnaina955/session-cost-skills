@@ -15,6 +15,14 @@ Every normalized report includes:
 - root, included, excluded, and duplicate-suppressed session IDs
 - provenance, warnings, and runtime-specific extension fields
 
+The runtime-id enum is **open**. New runtimes are added to `runtime.id` without a contract
+version bump, and a consumer must tolerate an id it does not know - the shared fields (usage,
+billing, coverage, provenance) mean the same thing on every runtime, so an unknown id can never
+make a known figure unreadable. What still requires a version bump: changing the meaning of an
+existing field, removing a field, or tightening a rule a consumer may have relied on (for
+example, an estimated-basis report is currently forbidden from carrying `recordedCostUsd`, and
+relaxing that is a semantic change, not an additive one).
+
 ## Cost bases
 
 - Cline uses `runtime-recorded`; `recordedCostUsd` contains the runtime-recorded amount.
