@@ -124,6 +124,10 @@ const COMMON_FLAGS = Object.freeze({
   // registration and a lifecycle, and would leave orphan processes with no clear stop.
   watch: { key: 'watch', value: true },
   watchInterval: { key: 'watchInterval', value: (argv, i) => requireInteger(argv, i, '--watch-interval', { min: 100, max: 60_000 }) },
+  // Raises a desktop notification and a terminal bell when a known spend passes --budget. Inert
+  // on its own: with no --budget there is no threshold, so there is nothing to announce and
+  // nothing is inferred. An unpriceable session never alerts (accounting rule 1).
+  notify: { key: 'notify', value: true },
   // Tier 3. --setup diagnoses what is missing for a custom provider and emits a validated
   // starter config; it never writes a secret, only an environment-variable name.
   setup: { key: 'setup', value: true },
