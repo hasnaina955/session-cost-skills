@@ -52,6 +52,20 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- MCode's per-session metrics promised one contract and kept another (#104). The builder read
+  `priced.missing`, a field `priceRow` does not return, so `unpricedCalls` was always 0 -
+  and every shared consumer written for Cline's convention (the rollup's partial marker and
+  cost exclusion, the insights baseline, the CSV count columns, cost centres) treated a
+  partial MCode session as complete, rolling its lower bound up as a final figure. The
+  convention is now kept, not just documented: `cost` is the sum of the calls that could be
+  priced (a lower bound when partial, never a guessed total), `pricedCalls`/`unpricedCalls`
+  are the real counts, and a session where no call could be priced carries `cost: null`,
+  because the sum of zero priced calls is the absence of a figure, not $0 (rule 1). A
+  zero-call session keeps its real zero: "nothing happened" is an answer, not an unknown.
+  The new tests were proven to fail against the pre-fix builder before they were allowed to
+  pass, and the rendered rollup now marks a partial day `unavailable` while naming the known
+  portion - verified by reading it, not just by the suite.
+
 - A ledger row with a missing timestamp was priced at the epoch (#100). `Number(null)` is 0,
   and `new Date(0)` is a real instant - epoch Thursday, 00:00 UTC - which falls in the
   off-peak band, the cheaper one, so a torn row on a banded model was silently priced at the

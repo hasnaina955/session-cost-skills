@@ -532,8 +532,18 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
   // The same per-session array Cline emits, so the shared rollup, cost-centre, and
   // insights modules work on both adapters. Without it they correctly reported
   // "unknown" here, which was honest but left three shipped features half-available.
-  // Cost stays null when any call in the session was unpriced, matching the rule that
-  // unknown cost is never folded into a total as zero.
+  //
+  // The convention is Cline's, and every shared consumer is written for it: `cost` is the
+  // sum of the calls that could be priced - a lower bound the reader may rely on, never a
+  // null and never a guessed total - and `pricedCalls` / `unpricedCalls` are how the reader
+  // knows how much of the session the figure covers. The verdict layers (billing coverage,
+  // the CSV charge cell, the rollup's partial marker) are what refuse to present a partial
+  // total as final; the data layer here discloses it.
+  //
+  // The previous version read `priced.missing`, a field priceRow does not return, so
+  // unpricedCalls was always 0 and every downstream consumer treated a partial session as
+  // complete (#104). A null rate is the unpriced signal: unknown model, corrupt token count
+  // (#67), or a missing timestamp (#100) all route here.
   const sessions = ids.map((id) => {
     const sub = emptyAggregate();
     let unpricedCalls = 0;
@@ -542,7 +552,7 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
     for (const row of rows.filter((r) => r.session_id === id)) {
       const priced = priceRow(pricers.get(id), row);
       accumulate(sub, row, priced.rate ?? UNPRICED_ZERO_RATE);
-      unpricedCalls += priced.missing?.length ? 1 : 0;
+      unpricedCalls += priced.rate === null ? 1 : 0;
       const ts = Number(row.ts);
       if (Number.isFinite(ts)) {
         if (firstTs === null || ts < firstTs) firstTs = ts;
@@ -567,7 +577,13 @@ function buildReport(db, dataDir, table, providerRegistry, graph, sessionId, inc
         calls: fin.calls,
         pricedCalls: fin.calls - unpricedCalls,
         unpricedCalls,
-        cost: unpricedCalls > 0 ? null : fin.totalCost,
+        // The disclosed amount: the sum of the calls that could be priced. When
+        // unpricedCalls is above zero this is a lower bound, and the counts beside it say so -
+        // the same contract Cline's session array has always carried. Two edges keep rule 1:
+        // a session where NO call priced has no figure at all, so its cost is null rather
+        // than the zero an empty sum would produce; and a session with no calls has a real
+        // zero, because "nothing happened" is an answer, not an unknown.
+        cost: fin.calls - unpricedCalls > 0 || fin.calls === 0 ? fin.totalCost : null,
         title: titles.get(id) ?? null,
         source: 'runtime-ledger',
         lastTs,
