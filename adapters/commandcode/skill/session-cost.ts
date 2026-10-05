@@ -10,13 +10,19 @@
  *     (https://commandcode.ai/docs/sessions): one append-only JSONL per session, first
  *     line a header (session id, creation time, working directory), replies carry
  *     "token usage and cost".
- *   - Record schema and token semantics: corroborated against an independent parser
- *     (tokscale's commandcode.rs), which verified against the vendor's own arithmetic
- *     that the v3 transcript's message lines are
+ *   - Record schema and token semantics: the record shape was corroborated
+ *     against an independent parser (tokscale's commandcode.rs), and the
+ *     bucket semantics were settled call-by-call against a live install's
+ *     recorded costUsd (#107). The v3 transcript's message lines are
  *     {type:"message", timestamp, message:{role}, usage:{inputTokens, outputTokens,
- *     cacheReadTokens, cacheWriteTokens, costUsd}, model} — and that the buckets are
- *     DISJOINT: inputTokens excludes cached tokens, and input + cache buckets at the
- *     mirrored rates reproduce the recorded costUsd exactly.
+ *     cacheReadTokens, cacheWriteTokens, costUsd}, model}. The buckets are
+ *     INCLUSIVE: inputTokens is the total prompt and contains the cache
+ *     buckets. inputTokens minus the cache buckets, priced at the mirrored
+ *     rates, reproduces the recorded costUsd exactly on every priced call of
+ *     the install checked; the raw inputTokens never does. (An earlier draft
+ *     of this note claimed the buckets were disjoint, on the parser's
+ *     corroboration; the live ledger overturned it, so the code deducts the
+ *     cached portion and reports the fresh input.)
  *   - Mod API: vendor docs, "Mods" (https://commandcode.ai/docs/mods): one TypeScript
  *     file at ~/.commandcode/mods/<name>.ts, default-export factory(cmd: ModApi),
  *     addCommand / addTool registration.
@@ -26,7 +32,8 @@
  * informational token counter, never a cost, so a wrong guess there cannot misprice.
  *
  * Accounting semantics (shared with the upstream skill):
- *   - inputTokens is fresh input, excluding cached tokens
+ *   - the reported input field is fresh input: the ledger's inputTokens minus
+ *     the cache buckets, so the reported buckets are disjoint
  *   - total prompt = input + cacheRead + cacheWrite
  *   - unknown models report tokens without a guessed cost
  *   - free-tier models (…-free / …:free) bill at $0
@@ -316,10 +323,20 @@ async function parseSession(meta: SessionMeta, aliases?: Map<string, string>): P
     if (ts) endedAt = ts;
     const tsUsable = ownTs !== '' && Number.isFinite(Date.parse(ownTs));
 
-    const input = Number(u.inputTokens || 0);
+    // The v3 ledger's inputTokens is the TOTAL prompt tokens: the cache buckets are
+    // included in it, not disjoint from it. A live install settles this call by call
+    // (#107): inputTokens minus cacheReadTokens minus cacheWriteTokens, priced at the
+    // mirrored rates, reproduces the ledger's recorded costUsd exactly on every priced
+    // call, while the raw figure never does. Pricing the raw inputTokens would
+    // double-count every cached token at the input rate, so the fresh input is what
+    // the CallRecord carries; the reported buckets stay disjoint and
+    // inputTokenMeaning 'excludes-cache' stays truthful. The clamp guards a malformed
+    // usage block whose cache buckets exceed its total, which would otherwise price a
+    // negative input.
     const output = Number(u.outputTokens || 0);
     const cacheRead = Number(u.cacheReadTokens || 0);
     const cacheWrite = Number(u.cacheWriteTokens || 0);
+    const input = Math.max(0, Number(u.inputTokens || 0) - cacheRead - cacheWrite);
     const recordedCostUsd = typeof u.costUsd === 'number' && Number.isFinite(u.costUsd) ? u.costUsd : null;
 
     const {card, free, matchedKey} = matchRateCard(model, aliases);
