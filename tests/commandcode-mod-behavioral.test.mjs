@@ -2,20 +2,29 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {pathToFileURL} from 'node:url';
 import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
 import {removeDirectory} from './helpers/temp-dir.mjs';
 
 /**
- * Behavioral coverage for the Command Code mod. The static suite (commandcode-mod.test.mjs)
- * reads the source; this file actually RUNS it. The mod is type-strippable TypeScript - only
- * `import type` and interfaces, no runtime TS features - so Node 24's built-in type stripping
- * (and Bun's native TS support) can import it with no build step. On Node 22.15, which cannot,
- * every test here skips rather than fails: the harness says plainly what it could not check.
+ * Behavioral coverage for the Command Code mod. The static suite
+ * (commandcode-mod.test.mjs) reads the source; this file actually RUNS it. The mod
+ * is type-strippable TypeScript - only `import type` and interfaces, no runtime TS
+ * features - so Node 24's built-in type stripping (and Bun's native TS support) can
+ * import it with no build step. On Node 22.15, which cannot, every test here skips
+ * rather than fails: the harness says plainly what it could not check. The import
+ * goes through pathToFileURL because a bare Windows path is not a valid ESM URL and
+ * would silently skip the whole suite on Windows.
  *
- * The fixture is a real v3 transcript, the shape the vendor documents and tokscale
- * corroborates: a header line, then assistant message records with a disjoint-bucket usage
- * block (inputTokens excludes cached tokens) and, where the ledger has it, a recorded costUsd.
+ * The fixture is a real v3 transcript, the shape the vendor documents and a live
+ * install confirms: a header line, then assistant message records whose usage block
+ * carries the token buckets and, where the ledger has it, a recorded costUsd. The
+ * v3 ledger's inputTokens is the TOTAL prompt tokens - it includes the cache buckets
+ * (verified call-by-call against the recorded costUsd on a live install, #107: the
+ * vendor's arithmetic prices inputTokens minus the cache buckets, and that
+ * reproduction is exact). The fixture therefore writes inclusive inputTokens, and the
+ * estimate the vendor arithmetic produces deducts the cached portion first.
  */
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,7 +32,7 @@ const modPath = path.join(root, 'adapters', 'commandcode', 'skill', 'session-cos
 
 async function loadMod() {
   try {
-    return (await import(modPath)).default;
+    return (await import(pathToFileURL(modPath).href)).default;
   } catch {
     return null;
   }
@@ -66,6 +75,10 @@ const ASSISTANT = (id, timestamp, model, usage) => ({
 // deepseek-v4-flash is banded in the embedded table (peak x2, off-peak x1): input .15,
 // output .60, cacheRead .003, cacheWrite 0 per 1M off-peak. 2026-06-15 is a Monday, and
 // 12:00 UTC is outside every peak window, so off-peak is the CORRECT band for the good call.
+// The good call's usage block is written the way the live ledger writes it: inputTokens
+// (1150) is the total prompt, inclusive of the 100 cache-read and 50 cache-write tokens.
+// The vendor's arithmetic deducts those before pricing, so the estimate the ledger's own
+// costUsd carries prices 1000 fresh input, not 1150.
 const GOOD_CALL_ESTIMATE = (1000 * 0.15 + 500 * 0.6 + 100 * 0.003 + 50 * 0) / 1e6;
 
 async function report(factory, dataDir, args) {
@@ -84,14 +97,17 @@ test('a banded call with a missing timestamp is unpriced, never priced at the ch
   writeLedger(dir, 'fixture', 'sess-1', [
     HEADER('sess-1'),
     ASSISTANT('m1', '2026-06-15T12:00:00.000Z', 'deepseek-v4-flash', {
-      inputTokens: 1000, outputTokens: 500, cacheReadTokens: 100, cacheWriteTokens: 50,
-      // The ledger's own figure, matching the vendor arithmetic for this exact call.
+      // Inclusive: 1000 fresh input + 100 cache read + 50 cache write.
+      inputTokens: 1150, outputTokens: 500, cacheReadTokens: 100, cacheWriteTokens: 50,
+      // The ledger's own figure, matching the vendor arithmetic for this exact call:
+      // the cached portion is deducted, then the fresh input is priced at the input rate.
       costUsd: GOOD_CALL_ESTIMATE,
     }),
     // The torn call: no timestamp of its own. Before the takeover fix this priced at
     // off-peak - the cheaper band - because new Date('') fails every peak comparison.
     ASSISTANT('m2', '', 'deepseek-v4-flash', {
-      inputTokens: 4000, outputTokens: 2000, cacheReadTokens: 400, cacheWriteTokens: 200,
+      // Inclusive: 4000 fresh input + 400 cache read + 200 cache write.
+      inputTokens: 4600, outputTokens: 2000, cacheReadTokens: 400, cacheWriteTokens: 200,
     }),
   ]);
 

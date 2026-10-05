@@ -77,8 +77,13 @@ test('the ledger-recorded cost is surfaced as a separate labelled domain, never 
 });
 
 test('commandcode token semantics exclude cached input tokens', () => {
-  // Principle 7: never copy the Cline fresh-input formula. Command Code's
-  // inputTokens excludes cached tokens, like MCode's input_tokens.
+  // Principle 7: never copy the Cline fresh-input formula blindly. The v3
+  // ledger's inputTokens is the TOTAL prompt and includes the cache buckets
+  // (settled call-by-call against a live install's recorded costUsd, #107),
+  // so the mod deducts them and reports the fresh input. The declared
+  // meaning must stay 'excludes-cache': the reported buckets are disjoint,
+  // like MCode's input_tokens, and a consumer summing them gets the true
+  // prompt once.
   assert.ok(source.includes("inputTokenMeaning: 'excludes-cache'"));
   assert.ok(!source.includes("inputTokenMeaning: 'includes-cache'"));
 });

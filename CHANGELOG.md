@@ -82,6 +82,19 @@ All notable changes to this project are documented here.
   behavioral tests: it is type-strippable TypeScript, so Node 24 and Bun run it against
   fixture transcripts in CI, with the static source-reading suite as the Node 22.15 floor.
 
+- The Command Code adapter paints a live cost line around the input bar. A
+  footer segment under the text box (the TUI surface wired today) and an
+  above-editor widget (renders when the TUI wires widget placement) carry the
+  running estimate for the active session: cost so far, call count, tokens,
+  and the last model. The ledger is tailed incrementally — each refresh
+  parses only the bytes the last commit appended — and repaints on run
+  start, message end, tool completion, and run end, throttled to 800ms.
+  The live line prices by the report engine's rules: a drifted transcript is
+  reported unpriced with its version named, and a banded call without a
+  usable timestamp counts as unpriced, never priced at the cheaper band; an
+  unpriced call marks the figure with a trailing `+`. `"liveStatus": false`
+  in the session-cost config turns it off.
+
 ### Changed
 
 - `docs/handoff.md` and `docs/roadmap-plan.md` section 0 catch up with the Command Code adapter
@@ -97,6 +110,42 @@ All notable changes to this project are documented here.
   storage-layout facts. The status docs were asserting a queue that no longer existed.
 
 ### Fixed
+
+- The Command Code adapter priced every cached token twice (#107). The v3
+  ledger's `inputTokens` is the TOTAL prompt tokens and includes the cache
+  buckets; the mod read it as fresh input and priced it at the input rate,
+  so a session whose traffic was almost entirely cache-read was billed as
+  if every cached token were fresh input. On a live install the disagreement
+  was not a rounding gap: the mirrored-rate estimate ran 16x the ledger's
+  recorded cost ($389.21 against $24.34), and the recorded-cost tripwire
+  fired on every report. The vendor's arithmetic settles the semantics call
+  by call: `inputTokens` minus the cache buckets, priced at the mirrored
+  rates, reproduces the recorded `costUsd` exactly on every priced call of
+  the install checked, while the raw figure never reproduces a single call
+  that carries cache tokens. The mod now deducts the cache buckets and
+  reports the fresh input, so the reported buckets stay disjoint,
+  `inputTokenMeaning: 'excludes-cache'` becomes truthful, and every prompt
+  total (`input + cacheRead + cacheWrite`) is the true prompt for the first
+  time. After the fix the same install's flat-rate models reproduce the
+  vendor's figures to the digit (Kimi-K3 $5.0915 estimated against
+  $5.091515 recorded), the doctor's cache-read share corrected from a false
+  49.1% - below the 60% threshold, so a warning was shown - to the true
+  96.5%, and the aggregate estimate fell from $389.21 to $26.54 against
+  $24.34 recorded. The provenance note in the mod, which claimed the buckets
+  were disjoint on an independent parser's corroboration, is corrected: the
+  live ledger overturned it.
+
+  One disagreement survives the fix, and it is not a rate-table defect. All
+  762 deepseek calls that fall in the documented peak windows (01-04 and
+  06-10 UTC, Mon-Fri) were billed by the vendor at the off-peak rate on
+  this install - every hour cell of the week, no exceptions - which is the
+  entire $2.20 residual. Either the vendor's peak banding does not apply to
+  this install's billing (a plan rate, not the public list price the mirror
+  carries), or the published banding changed and the mirror's peak cards are
+  stale. The evidence on this install cannot tell the two apart; settling it
+  needs the vendor's current pricing page or a pay-per-token ledger. The
+  tripwire is what surfaces the residual, and it stays armed: a table
+  refresh cannot fix a banding disagreement, but silence would hide it.
 
 - MCode's per-session metrics promised one contract and kept another (#104). The builder read
   `priced.missing`, a field `priceRow` does not return, so `unpricedCalls` was always 0 -
@@ -173,6 +222,22 @@ All notable changes to this project are documented here.
   one is new work, not a fix.
 
 ### Tests
+
+- The Command Code behavioral suite silently skipped every live test on
+  Windows. It imported the mod through a bare Windows path, which is not a
+  valid ESM URL, and the catch that handles "this Node cannot strip types"
+  swallowed the import failure as a skip. Node 24 on Windows strips types
+  fine, so the suite reported "skipped, not failed" while proving nothing on
+  an entire platform - the same trap as a test anchored to the wrong
+  witness. The import goes through `pathToFileURL`, and the suite now runs
+  3/3 on Windows. The fixture was rewritten to the ledger's real semantics -
+  inclusive `inputTokens`, the way a live ledger writes them - so the good
+  call's recorded `costUsd` is the figure the vendor arithmetic produces.
+  Against the pre-fix mod the corrected fixture fails by exactly the
+  double-counted cache tokens at the input rate (0.0004728 against
+  0.0004503), which is the failing-then-passing proof for the fix above;
+  against the fixed mod it passes, and the suite was proven to fail before
+  the fix was allowed to land.
 
 - `check:docs` now fails when `## Unreleased` repeats a `### ` heading. Unreleased had grown three
   separate `### Added` blocks before the 0.6.0 cut, so a reader could not tell which batch an
