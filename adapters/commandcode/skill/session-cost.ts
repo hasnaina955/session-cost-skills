@@ -1543,7 +1543,40 @@ const live: LiveState = {
   lastModel: '',
 };
 
-let liveText = 'session-cost —';
+// The TUI prints footer status text verbatim, so the line carries its own
+// ansi styling: a dim brand and separators, a bold cost figure colored by
+// magnitude, and a magenta marker when unpriced calls are folded in.
+const ANSI_DIM = '\x1b[2m';
+const ANSI_BOLD = '\x1b[1m';
+const ANSI_RESET = '\x1b[0m';
+const ANSI_GREEN = '\x1b[32m';
+const ANSI_YELLOW = '\x1b[33m';
+const ANSI_RED = '\x1b[31m';
+const ANSI_MAGENTA = '\x1b[35m';
+
+function liveCostColor(cost: number): string {
+  if (cost >= 10) return ANSI_RED;
+  if (cost >= 1) return ANSI_YELLOW;
+  return ANSI_GREEN;
+}
+
+// The footer line, styled. One line by contract: the TUI collapses
+// newlines and tabs to spaces, so every cell sits on the same row.
+function liveLineText(): string {
+  if (live.schemaDrift !== null) {
+    return ANSI_DIM + 'session-cost' + ANSI_RESET + ' ' +
+      ANSI_BOLD + ANSI_RED + 'unpriced' + ANSI_RESET +
+      ANSI_DIM + ' · transcript v' + live.schemaDrift + ', expected v' + TRANSCRIPT_VERSION + ANSI_RESET;
+  }
+  const marker = live.hasUnpriced ? ANSI_MAGENTA + '+' + ANSI_RESET : '';
+  return ANSI_DIM + 'session-cost' + ANSI_RESET + ' ' +
+    ANSI_BOLD + liveCostColor(live.costUsd) + fmtCost(live.costUsd) + ANSI_RESET + marker +
+    ANSI_DIM + ' · ' + ANSI_RESET + live.calls + ' calls' +
+    ANSI_DIM + ' · ' + ANSI_RESET + fmtTokens(live.input + live.output + live.cacheRead + live.cacheWrite) + ' tok' +
+    ANSI_DIM + ' · ' + ANSI_RESET + ANSI_DIM + (live.lastModel || 'no usage yet') + ANSI_RESET;
+}
+
+let liveText = 'session-cost';
 let lastRefreshAt = 0;
 const LIVE_REFRESH_MS = 800;
 
@@ -1652,14 +1685,7 @@ function refreshLive(cmd: ModApi, aliases: Map<string, string>, force = false): 
   if (!newest) return;
   if (live.file !== newest.file) liveReset(newest);
   liveTail(aliases);
-  const tok = live.input + live.output + live.cacheRead + live.cacheWrite;
-  liveText = live.schemaDrift !== null
-    ? 'session-cost unpriced (transcript v' + live.schemaDrift + ', expected v' + TRANSCRIPT_VERSION + ')'
-    : 'session-cost ' +
-      fmtCost(live.costUsd) +
-      (live.hasUnpriced ? '+' : '') +
-      ' · ' + live.calls + ' calls · ' + fmtTokens(tok) + ' tok · ' +
-      (live.lastModel || 'no usage yet');
+  liveText = liveLineText();
   cmd.ui.setStatus(liveText);
   cmd.ui.refreshWidgets();
 }
