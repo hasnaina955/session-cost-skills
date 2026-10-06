@@ -815,6 +815,7 @@ interface SessionCostConfig {
   includeChildren?: boolean;
   defaultFormat?: 'compact' | 'json';
   warnOnCacheRateBelow?: number;
+  liveStatus?: boolean;
   models?: {runtimeModel?: string; rateModel?: string}[];
 }
 
@@ -836,6 +837,7 @@ function validateConfig(c: any): {valid: boolean; errors: string[]} {
   if (c.includeChildren !== undefined && typeof c.includeChildren !== 'boolean') errors.push('includeChildren must be a boolean');
   if (c.defaultFormat !== undefined && !['compact', 'json'].includes(c.defaultFormat)) errors.push('defaultFormat must be "compact" or "json"');
   if (c.warnOnCacheRateBelow !== undefined && (typeof c.warnOnCacheRateBelow !== 'number' || c.warnOnCacheRateBelow < 0 || c.warnOnCacheRateBelow > 1)) errors.push('warnOnCacheRateBelow must be a number between 0 and 1');
+  if (c.liveStatus !== undefined && typeof c.liveStatus !== 'boolean') errors.push('liveStatus must be a boolean');
   if (c.models !== undefined) {
     if (!Array.isArray(c.models)) errors.push('models must be an array');
     else for (const m of c.models) {
@@ -863,6 +865,7 @@ const CONFIG_TEMPLATE: SessionCostConfig = {
   includeChildren: false,
   defaultFormat: 'compact',
   warnOnCacheRateBelow: 0.6,
+  liveStatus: true,
   models: [{runtimeModel: 'my-custom-model', rateModel: 'deepseek-v4.1-flash'}],
 };
 
@@ -1290,12 +1293,16 @@ const HELP = [
   '  config explain --model <m>   how a model string matches a rate card',
   '  config init | validate | export | import <path>',
   '',
+  'live:',
+  '  a running cost line renders under the input bar (footer segment) and as an',
+  '  above-editor widget; set "liveStatus": false in the config to turn it off',
+  '',
   'rates & config:',
   '  --refresh-rates    re-fetch the mirrored CommandCode rate table',
   '  --config <path>    alternate config file (default ~/.commandcode/session-cost.json)',
   '  --init-config / --validate-config / --export-config / --import-config <path>',
   '',
-  'config keys: standingSummary · includeChildren · defaultFormat · warnOnCacheRateBelow · models (aliases)',
+  'config keys: standingSummary · includeChildren · defaultFormat · warnOnCacheRateBelow · liveStatus · models (aliases)',
 ].join('\n');
 
 // ---------------------------------------------------------------------------
@@ -1494,6 +1501,170 @@ async function runReport(argv: string[]): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
+// Live status — a running cost line around the input bar
+// ---------------------------------------------------------------------------
+// Tails the active session ledger incrementally (byte-offset reads, so each
+// refresh only parses what the last commit appended) and paints the running
+// estimate via cmd.ui.setStatus (footer segment under the input panel —
+// wired today) plus an above-editor widget (renders once the TUI wires
+// placement). Pricing follows the report engine's rules: a transcript whose
+// version the mod does not understand is not parsed at all, and a banded
+// call without a usable timestamp is unpriced, never priced at the cheaper
+// band (upstream #100).
+interface LiveState {
+  file: string;
+  startedAt: string;
+  schemaDrift: number | null;
+  offset: number;
+  pending: string;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  calls: number;
+  costUsd: number;
+  hasUnpriced: boolean;
+  lastModel: string;
+}
+
+const live: LiveState = {
+  file: '',
+  startedAt: '',
+  schemaDrift: null,
+  offset: 0,
+  pending: '',
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  calls: 0,
+  costUsd: 0,
+  hasUnpriced: false,
+  lastModel: '',
+};
+
+let liveText = 'session-cost —';
+let lastRefreshAt = 0;
+const LIVE_REFRESH_MS = 800;
+
+function liveReset(meta: SessionMeta): void {
+  live.file = meta.file;
+  live.startedAt = meta.startedAt || '';
+  live.schemaDrift = meta.version !== null && meta.version !== TRANSCRIPT_VERSION ? meta.version : null;
+  live.offset = 0;
+  live.pending = '';
+  live.input = 0;
+  live.output = 0;
+  live.cacheRead = 0;
+  live.cacheWrite = 0;
+  live.calls = 0;
+  live.costUsd = 0;
+  live.hasUnpriced = false;
+  live.lastModel = '';
+}
+
+function liveParseLine(line: string, aliases: Map<string, string>): void {
+  if (!line.includes('"usage"')) return;
+  let rec: any;
+  try {
+    rec = JSON.parse(line);
+  } catch {
+    return;
+  }
+  if (rec?.type !== 'message' || rec?.message?.role !== 'assistant' || !rec.usage) return;
+  const u = rec.usage;
+  const output = Number(u.outputTokens || 0);
+  const cacheRead = Number(u.cacheReadTokens || 0);
+  const cacheWrite = Number(u.cacheWriteTokens || 0);
+  // #107: the v3 ledger's inputTokens is the total prompt and contains the
+  // cache buckets; the fresh input is what pricing may carry, clamped at 0.
+  const input = Math.max(0, Number(u.inputTokens || 0) - cacheRead - cacheWrite);
+  const model = typeof rec.model === 'string' ? rec.model : 'unknown';
+  // The line's own timestamp is the only one pricing may use: a banded call
+  // without a usable time is unpriced, never priced at the cheaper off-peak band.
+  const ownTs = typeof rec.timestamp === 'string' ? rec.timestamp : '';
+  const tsUsable = ownTs !== '' && Number.isFinite(Date.parse(ownTs));
+  const {card, free} = matchRateCard(model, aliases);
+  let cost = 0;
+  if (free) {
+    cost = 0; // free-tier models bill $0
+  } else if (!card) {
+    live.hasUnpriced = true;
+  } else if (card.peak && card.off && !tsUsable) {
+    live.hasUnpriced = true;
+  } else {
+    const components = card.peak && card.off
+      ? (isPeakUtc(new Date(ownTs)) ? card.peak : card.off)
+      : card;
+    cost =
+      (input / 1e6) * components.i +
+      (output / 1e6) * components.o +
+      (cacheRead / 1e6) * components.cr +
+      (cacheWrite / 1e6) * components.cw;
+  }
+  live.calls++;
+  live.input += input;
+  live.output += output;
+  live.cacheRead += cacheRead;
+  live.cacheWrite += cacheWrite;
+  live.costUsd += cost;
+  live.lastModel = model;
+}
+
+// Parse only the bytes appended since the last refresh.
+function liveTail(aliases: Map<string, string>): void {
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(live.file);
+  } catch {
+    return; // file gone — the next refresh re-discovers the newest session
+  }
+  if (stat.size <= live.offset) return;
+  const len = stat.size - live.offset;
+  const buf = Buffer.alloc(len);
+  const fd = fs.openSync(live.file, 'r');
+  try {
+    let read = 0;
+    while (read < len) {
+      const n = fs.readSync(fd, buf, read, len - read, live.offset + read);
+      if (n === 0) break;
+      read += n;
+    }
+    live.offset = stat.size;
+    const text = live.pending + buf.toString('utf8', 0, read);
+    const lines = text.split('\n');
+    live.pending = lines.pop() || '';
+    if (live.schemaDrift === null) {
+      for (const line of lines) liveParseLine(line, aliases);
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function refreshLive(cmd: ModApi, aliases: Map<string, string>, force = false): void {
+  const now = Date.now();
+  if (!force && now - lastRefreshAt < LIVE_REFRESH_MS) return;
+  lastRefreshAt = now;
+  let newest: SessionMeta | undefined;
+  const dataDir = defaultDataDir();
+  if (fs.existsSync(dataDir)) newest = discoverSessions(dataDir)[0];
+  if (!newest) return;
+  if (live.file !== newest.file) liveReset(newest);
+  liveTail(aliases);
+  const tok = live.input + live.output + live.cacheRead + live.cacheWrite;
+  liveText = live.schemaDrift !== null
+    ? 'session-cost unpriced (transcript v' + live.schemaDrift + ', expected v' + TRANSCRIPT_VERSION + ')'
+    : 'session-cost ' +
+      fmtCost(live.costUsd) +
+      (live.hasUnpriced ? '+' : '') +
+      ' · ' + live.calls + ' calls · ' + fmtTokens(tok) + ' tok · ' +
+      (live.lastModel || 'no usage yet');
+  cmd.ui.setStatus(liveText);
+  cmd.ui.refreshWidgets();
+}
+
+// ---------------------------------------------------------------------------
 // Mod registration
 // ---------------------------------------------------------------------------
 export default function (cmd: ModApi): void {
@@ -1581,4 +1752,29 @@ export default function (cmd: ModApi): void {
       }
     },
   });
+
+  // Live status: a running cost line around the input bar (config: liveStatus).
+  // Every surface is probed before registration: a mod factory must never
+  // throw (a throwing factory fails the whole mod load), and minimal
+  // harness bindings — the behavioral-test harness — provide only
+  // addCommand and addTool.
+  const {config} = loadConfig();
+  const aliases = configAliases(config);
+  if (
+    config.liveStatus !== false &&
+    cmd.ui && typeof cmd.ui.setStatus === 'function' &&
+    typeof cmd.on === 'function' &&
+    typeof cmd.hooks === 'function'
+  ) {
+    refreshLive(cmd, aliases, true);
+    // above/below the editor — renders once the TUI wires widget placement;
+    // the footer segment under the input is live today.
+    cmd.ui.widget({placement: 'above-editor', render: () => [liveText]});
+    cmd.on('run_start', () => refreshLive(cmd, aliases));
+    cmd.on('message_end', () => refreshLive(cmd, aliases));
+    cmd.on('tool_completed', () => refreshLive(cmd, aliases));
+    cmd.hooks({
+      onRunEnd: async () => refreshLive(cmd, aliases, true),
+    });
+  }
 }
