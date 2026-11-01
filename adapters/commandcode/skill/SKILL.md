@@ -78,10 +78,12 @@ Natural language mapping:
 ## Procedure
 
 1. Run the command — never recompute by hand. Four facts make hand-calculation
-   wrong: `inputTokens` **excludes** cached tokens (fresh and cached prompt
-   tokens bill at different rates), a session can switch models partway
-   through, CommandCode bills its peak window at twice the off-peak price, and
-   only the mirrored models can be priced at all.
+   wrong: the ledger's `inputTokens` is the **total prompt** and contains the
+   cached tokens, which bill at their own discounted rates (a live install
+   settled this call by call, #107), so pricing the raw field double-counts
+   every cached token; a session can switch models partway through;
+   CommandCode bills its peak window at twice the off-peak price; and only the
+   mirrored models can be priced at all.
 
 2. Read the lines that decide whether the numbers are trustworthy before
    reporting:

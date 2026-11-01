@@ -32,7 +32,7 @@ Delivered and merged, each on its own PR with the full CI matrix green:
 | WP-4.1 | `--brief`: the cost, tokens, cache rate, and one caveat in a few lines |
 | WP-4.3 | A cross-platform skill update workflow (`scripts/update-skill.mjs`, `docs/updating.md`) |
 | WP-4.4 | `--notify` on `--budget`/`--watch`: bell plus the platform's own notifier, verdict-driven so an unknown cost never alerts, once per threshold per process |
-| #77 | **Delivered, via #99 (takeover): the Command Code adapter.** A self-contained TypeScript mod on the vendor's own mod API, its ledger facts verified against the vendor docs and an independent parser before merge; hardened with a transcript-version guard, #100-parity timestamp handling, the recorded-cost domain with a staleness tripwire, and behavioral tests under Node 24/Bun. Live-install validation open as #107 |
+| #77 | **Delivered, via #99 (takeover): the Command Code adapter.** A self-contained TypeScript mod on the vendor's own mod API, its ledger facts verified against the vendor docs and an independent parser before merge; hardened with a transcript-version guard, #100-parity timestamp handling, the recorded-cost domain with a staleness tripwire, and behavioral tests under Node 24/Bun. Its live-install validation (#107) ran: the version guard stayed quiet on 77 ledgers, the subagent regex matched 393 real blocks, and the recorded-cost tripwire caught a real bug - the ledger's `inputTokens` includes the cache buckets, so pricing it as fresh input double-counted every cached token (fixed in #109). Three questions the run could not settle stay open in #107 and in `adapters/commandcode/USAGE.md` |
 | WP-4.5 | A performance regression gate (`scripts/bench.mjs`) and the quadratic it found (#87) |
 | v0.5.0 | Cut, with the cross-platform skill update workflow |
 | v0.6.0 | **Released.** Phases 0-3 complete, the kernel and conformance kit in place, the dashboard redesigned |
@@ -52,9 +52,11 @@ Still ahead, and **all of it blocked on knowledge rather than effort**:
   often be unblocked by finding the primary sources (vendor docs, independent parsers) instead of
   waiting for them, and that the verification must be cited in the adapter, not assumed.
 
-One finding is closed and one is still open: `calculateTokenCost` coercing unusable token counts
-was fixed (#67), and `bandForTimestamp` resolving a `null` timestamp to the cheaper off-peak band
-is still open, now filed as #100, and still needs a decision.
+Two findings are closed: `calculateTokenCost` coercing unusable token counts was fixed (#67), and
+`bandForTimestamp` resolving a `null` timestamp to the cheaper off-peak band was fixed (#100) -
+the call now takes the no-cost path and the resolver throws on a missing timestamp instead of
+pricing it at the epoch. The live Command Code validation (#107) turned up one defect of the same
+class and it is fixed too (#109): an inclusive `inputTokens` read as fresh input.
 
 ## 1. Direction
 

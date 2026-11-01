@@ -72,12 +72,19 @@ against sources rather than vibes:
   (https://commandcode.ai/docs/sessions) - one append-only JSONL per session under
   `~/.commandcode/projects/<project-slug>/<session-id>.jsonl`, first line a header
   (session id, creation time, working directory), replies carrying "token usage and cost".
-- Record schema and token semantics: corroborated against tokscale's `commandcode.rs`,
-  which verified against the vendor's own cost arithmetic that v3 assistant records are
+- Record schema and token semantics: the record shape was corroborated against tokscale's
+  `commandcode.rs`, and the bucket semantics were then settled call by call against a live
+  install's recorded cost (issue #107: 79 sessions, 8,550 calls, ledgers spanning 2026-09-14
+  to 2026-10-05). A v3 assistant record is
   `{type:"message", timestamp, message:{role}, usage:{inputTokens, outputTokens,
-  cacheReadTokens, cacheWriteTokens, costUsd}, model}` and that the buckets are disjoint:
-  `inputTokens` excludes cached tokens, and input plus cache buckets at the mirrored rates
-  reproduce the recorded `costUsd` exactly.
+  cacheReadTokens, cacheWriteTokens, costUsd}, model}`, and its buckets are **inclusive**:
+  `inputTokens` is the total prompt and contains the cache buckets. Subtracting the cache
+  buckets and pricing the remainder at the mirrored rates reproduces the recorded `costUsd`
+  exactly; pricing the raw `inputTokens` reproduces only the calls that carry no cache at all
+  and ran 16x the recorded cost on that cache-heavy ledger. No disjoint rate card fits two
+  same-band calls (a least-squares fit goes negative), so the subtraction is the unique linear
+  explanation. An earlier version of this note claimed the buckets were disjoint on the
+  parser's corroboration; the live ledger overturned it, so the mod was corrected (#109).
 - Mod API: vendor docs, "Mods" (https://commandcode.ai/docs/mods) - one TypeScript file at
   `~/.commandcode/mods/<name>.ts`, a default-export factory receiving `cmd: ModApi`.
 - Peak windows: vendor docs, "Pricing & Limits" - 01-04 & 06-10 UTC, Mon-Fri, peak billed at
@@ -90,13 +97,33 @@ Two guards follow from this:
 - A banded call with a missing or unparseable timestamp is unpriced, never priced at the
   off-peak band (the cheaper one) by accident of `new Date('')` being invalid.
 
-The one unverified claim is the subagent `<usage>` block format; it feeds only an
-informational token counter, never a cost, so a wrong guess there cannot misprice.
+The same live install exercised both guards and the claim that used to be unverified: all 77
+session ledgers declared transcript version 3, so the drift guard stayed quiet in every mode,
+and 393 real subagent `<usage>` blocks across 29 sessions all matched the documented
+`total_tokens: N / tool_uses: N / turns: N / duration_ms: N` shape, so the counter is no longer
+a guess. (The conformance kit does not apply to this adapter: it drives runtimes that implement
+the shared `runtime-adapter` interface, and the mod is self-contained. Its acceptance battery
+is the behavioral suite, which runs the mod itself against fixture transcripts.)
+
+Three gaps the validation could not close, recorded rather than papered over:
+
+- **Peak banding.** All 762 peak-window calls on that install (01-04 and 06-10 UTC, Mon-Fri)
+  were billed by the vendor at the off-peak rate, in every hour and weekday cell. Either that
+  plan bills flat or the published peak pricing changed; settling it needs the vendor's current
+  pricing page or a pay-per-token ledger. A rate-table refresh cannot answer it, and it is the
+  $2.20 residual between the post-fix estimate and the recorded total.
+- **`deepseek-v4.1-flash-fast`** exists in the wild (one call, `$0.003` recorded) but is not in
+  the mirror, so that session is reported unpriced rather than guessed. The entry belongs in
+  `adapters/mcode/skill/references/provider-rates.json`, which `--refresh-rates` carries.
+- **Free-tier models without a `-free` suffix** (for example `stealth/space-bunny-alpha`, 1,351
+  calls) are likewise reported unpriced under the no-guessed-cost rule. A vendor-published `$0`
+  entry in the mirror would price them; a guess would not.
 
 ## Accounting semantics
 
-- `inputTokens` is **fresh** input and excludes cached tokens; the
-  prompt total is `input + cacheRead + cacheWrite`.
+- The ledger's `inputTokens` is the total prompt and **includes** the cache buckets; the
+  report's input field is the fresh remainder (`inputTokens - cacheRead - cacheWrite`), so the
+  reported buckets are disjoint and the prompt total is `input + cacheRead + cacheWrite`.
 - An unknown model reports its tokens with a `null` cost — never a
   guessed `$0`.
 - The ledger's own recorded `costUsd` is disclosed per session and in totals as a separate,

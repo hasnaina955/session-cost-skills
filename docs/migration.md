@@ -105,7 +105,10 @@ If you consume `--json` output, these are the fields to read:
 - `coverage.status` and `coverage.unknownReasons` say why a number is missing. Read the
   reasons before treating a total as complete.
 - `usage.semantics.inputTokenMeaning` is `includes-cache` for Cline and `excludes-cache`
-  for MCode. Do not apply one runtime's fresh-input formula to the other's data.
+  for MCode and Command Code. Command Code's ledger field is inclusive, so its mod subtracts
+  the cache buckets before reporting: the reported buckets are disjoint on every runtime, but
+  the ledger field a hand-calculation would read is not. Do not apply one runtime's
+  fresh-input formula to another runtime's data.
 - `sessionGraph` carries `rootSessionIds`, `includedSessionIds`, `excludedSessionIds`,
   and `duplicateSuppressedSessionIds`, so you can tell a child that was excluded from
   one that was counted.

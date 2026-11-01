@@ -18,7 +18,7 @@ unknown cost is `null`, never `0`; totals are exact sums; accounting domains are
 
 | | |
 | --- | --- |
-| `main` | **v0.6.0, released and published**; since the cut: WP-4.4 (`--notify`), four correctness fixes (#97, #100, #104, the dashboard KPI row), and the Command Code adapter (#99) merged. 552 tests passing |
+| `main` | **v0.6.0, released and published**; since the cut: WP-4.4 (`--notify`), five correctness fixes (#97, #100, #104, the dashboard KPI row, and the Command Code cache double-count in #109), and the Command Code adapter (#99) merged. 552 tests passing |
 | Gates | `npm run verify` and `npm run rehearse:release` must both pass |
 | Open PRs | none |
 | Bench | `npm run bench` (regression gate), `npm run bench:quick` |
@@ -26,9 +26,15 @@ unknown cost is `null`, never `0`; totals are exact sums; accounting domains are
 
 **Phases 0, 1, 2 and 3 are complete.** Phase 4 is done except WP-4.2 (the MCP server), which is
 blocked on the spec. Phase 5 has its first adapter: Command Code shipped in #99, its ledger facts
-verified against the vendor docs and an independent parser before merge (#77 closed). What remains
-of Phase 5 is still blocked on knowledge rather than code - and #107 records the one verification
-a merge could not do: a live Command Code install.
+verified against the vendor docs and an independent parser before merge (#77 closed), and then
+validated against a live install (#107). That run did its job - it caught a real defect, not a
+cosmetic one: the v3 ledger's `inputTokens` is the total prompt and contains the cache buckets,
+so the mod was pricing every cached token twice. #109 fixes it and the docs now say so. What is
+left of #107 is knowledge, not code: whether the vendor still bills the documented peak window at
+twice the off-peak rate on a flat-billed plan, and two mirror entries (`deepseek-v4.1-flash-fast`,
+and the free-tier models that carry no `-free` suffix). A redacted real transcript would make the
+whole validation permanent as a fixture. Phase 5's remaining adapters are still blocked on
+knowledge rather than code.
 
 Note: **`v0.5.0` was merged but never tagged.** There is no release or archive for it, so the tag
 history has a gap between `v0.4.1` and `v0.6.0`. Decide whether to back-tag it or leave it.
@@ -111,14 +117,16 @@ report carries token-mix and per-model bars.
    too. Wiring the cache in would add invalidation complexity to a path that already answers in
    under two seconds, so it stays unwired. Revisit only if `npm run bench` shows the range path
    regressing.
-3. **Someone should look at the redesigned dashboard.** It was rebuilt as a modern flat report -
+2. **Someone should look at the redesigned dashboard.** It was rebuilt as a modern flat report -
    bento grid, hairline borders, no shadows, collapsed raw data - and verified *structurally* (both
    themes contrast-clean, the no-JS path renders its figures, 497 tests pass). Nobody has judged
    how it looks. Open a generated `session-dashboard.html` and tune the tokens or the grid spans if
    the aesthetic is off; that is the one part of this work no test can settle.
-4. **#100: `bandForTimestamp(null)` resolves to the cheaper off-peak band.** Needs a decision
-   (throw, or price flat and mark coverage partial) before it needs code; either beats quietly
-   choosing the cheapest option.
+3. **Any newly rendered surface deserves the same reading.** #109 corrected a 16x cost error that
+   every test in the suite had been happy with, and the only thing that caught it was running the
+   tool against real data and comparing two accounting domains. When you touch a mode nobody has
+   run against a live ledger - the live cost line, the rate dashboard, `--include-children` - run
+   it on real data and read the output before believing the suite.
 
 ## Blocked, and what unblocks it
 
@@ -128,7 +136,7 @@ prevent - so these stay blocked rather than guessed.
 
 | Item | Needs |
 | --- | --- |
-| **#107** Command Code live-install validation | A real session run under Command Code: the transcript version guard stays quiet, the recorded-cost tripwire stays quiet (the mirror matches what the vendor charges), the subagent `<usage>` regex matches real blocks, and ideally the conformance kit run end to end. A redacted real transcript settles it permanently as a fixture |
+| **#107** Command Code live-install validation | **Ran** on 2026-10-05 (79 sessions, 8,550 calls): the version guard stayed quiet on all 77 ledgers and the subagent `<usage>` regex matched 393 real blocks, but the recorded-cost tripwire fired and found a real bug, fixed in #109. What it still needs: the vendor's current peak-pricing terms (all 762 peak-window calls billed at the off-peak rate on that install - either a flat plan or changed public pricing, and it is the $2.20 residual), a mirrored rate for `deepseek-v4.1-flash-fast`, a vendor `$0` entry for free-tier models without a `-free` suffix, and ideally a redacted real transcript as a permanent fixture |
 | **#15** OpenCode | Same class of facts. A branch `feature/opencode-adapter` holds ~7,300 lines of implementation that is now ~10 releases stale; decide whether to rebase it onto the kernel or start fresh |
 | **#16-#20** Qwen, Goose, Codex, Claude Code, others | Per-runtime storage layout |
 | **WP-4.2** MCP server | Verification of the MCP spec against the real specification. A wrong implementation fails to connect rather than reporting a wrong number, so it is lower risk than an adapter, but it still needs the spec read properly |
