@@ -55,9 +55,12 @@ All notable changes to this project are documented here.
   the `doctor`/`providers`/`models discover`/`config explain` diagnostics,
   layered configuration with model aliases, and `--json` - plus the mod's own
   `session_cost` tool surface. Accounting semantics follow the repo principles:
-  `inputTokens` excludes cached tokens, an unknown model reports tokens with a
-  `null` cost rather than a guessed `$0`, a free-tier model is a known `$0`,
-  and subagent usage blocks are tracked separately until `--include-children`.
+  the `inputTokens` the mod reports is fresh input, excluding cached tokens (the
+  live install proved the *ledger* field is inclusive and the mod subtracts the
+  cache buckets - see the `### Fixed` entry for #107), an unknown model reports
+  tokens with a `null` cost rather than a guessed `$0`, a free-tier model is a
+  known `$0`, and subagent usage blocks are tracked separately until
+  `--include-children`.
   The reported clock honors `SESSION_COST_NOW` for deterministic output, and
   every failure path returns one readable line. The runtime enum of the
   normalized report contract gains `commandcode`; `contracts/README.md` now states
@@ -96,6 +99,30 @@ All notable changes to this project are documented here.
   in the session-cost config turns it off.
 
 ### Changed
+
+- The Command Code documentation no longer states the token semantics the live install disproved.
+  #109 corrected the mod, but three shipping documents still told a reader that the v3 ledger's
+  buckets are disjoint - `inputTokens` excludes cached tokens - which is exactly the belief that
+  produced the 16x estimate: `adapters/commandcode/USAGE.md` (the provenance note and the
+  accounting semantics), `adapters/commandcode/skill/SKILL.md` (the fact list an agent reads
+  before answering), and the README's runtime-differences table. They now say what the ledger
+  does - `inputTokens` is the total prompt and contains the cache buckets, and the report carries
+  the fresh remainder - and `docs/migration.md` names Command Code alongside MCode in the
+  `inputTokenMeaning: excludes-cache` row, with the distinction the whole bug turned on: a
+  reported field is disjoint, while the ledger field a hand-calculation would read is not.
+  USAGE.md also records what the validation proved (77 version-3 ledgers with no drift, 393
+  matching subagent `<usage>` blocks, the conformance kit's inapplicability to a self-contained
+  mod) and the three questions it could not close (peak banding, `deepseek-v4.1-flash-fast`, and
+  suffix-less free-tier models), so the next reader inherits the evidence instead of the
+  assumption. A corrected number with a stale explanation is still a tool that will be trusted
+  for the wrong reason.
+
+- `docs/handoff.md` and `docs/roadmap-plan.md` record the #107 run and the #109 fix: the state
+  table counts five post-cut correctness fixes, the roadmap's #77 row and closing paragraph say
+  the validation ran and what it found, the blocked table's #107 row now lists only the three
+  knowledge gaps, and the stale #100 "still open, needs a decision" item - fixed in 7e6dc7b - is
+  corrected in both documents. A handoff that describes a queue which no longer exists costs the
+  next contributor exactly the time it was written to save.
 
 - `docs/handoff.md` and `docs/roadmap-plan.md` section 0 catch up with the Command Code adapter
   (#77 closed, delivered via the #99 takeover): the state table records the third runtime and the

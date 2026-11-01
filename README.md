@@ -112,7 +112,7 @@ Command Code (mod):
 | Concern | Cline | MCode | Command Code |
 | --- | --- | --- | --- |
 | Primary data | `data/db/sessions.db` and message JSON | `v2/sqlite/runtime-state.sqlite` and session logs | `~/.commandcode/projects` JSONL session transcripts |
-| `inputTokens` | Includes cached prompt tokens | `input_tokens` excludes cached tokens | `inputTokens` excludes cached tokens |
+| `inputTokens` | Includes cached prompt tokens | `input_tokens` excludes cached tokens | Includes cached prompt tokens (the mod reports the fresh remainder) |
 | Cost source | Recorded per-call `metrics.cost` | Provider-rate calculation for BYOK providers | Provider-rate calculation from the mirrored CommandCode table |
 | Account mode | Optional read-only Cline API view | Not applicable; use rate coverage | Not applicable; use rate coverage |
 | Providers | Cline/ClinePass/OpenAI-compatible/etc. | Mirrored CommandCode and StepFun rates | Mirrored CommandCode rates (the shared table) |
