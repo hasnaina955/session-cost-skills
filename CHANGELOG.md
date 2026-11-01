@@ -55,9 +55,12 @@ All notable changes to this project are documented here.
   the `doctor`/`providers`/`models discover`/`config explain` diagnostics,
   layered configuration with model aliases, and `--json` - plus the mod's own
   `session_cost` tool surface. Accounting semantics follow the repo principles:
-  `inputTokens` excludes cached tokens, an unknown model reports tokens with a
-  `null` cost rather than a guessed `$0`, a free-tier model is a known `$0`,
-  and subagent usage blocks are tracked separately until `--include-children`.
+  the `inputTokens` the mod reports is fresh input, excluding cached tokens (the
+  live install proved the *ledger* field is inclusive and the mod subtracts the
+  cache buckets - see the `### Fixed` entry for #107), an unknown model reports
+  tokens with a `null` cost rather than a guessed `$0`, a free-tier model is a
+  known `$0`, and subagent usage blocks are tracked separately until
+  `--include-children`.
   The reported clock honors `SESSION_COST_NOW` for deterministic output, and
   every failure path returns one readable line. The runtime enum of the
   normalized report contract gains `commandcode`; `contracts/README.md` now states
