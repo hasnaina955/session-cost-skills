@@ -93,9 +93,16 @@ test('MCode has no extra modes, and a runtime without them is not a failure', ()
 test('the account mode is reachable only through extraModes, never through the report step', () => {
   // If an account figure could reach the report's billing, rule 3 would be broken in a way no
   // value assertion would catch. The separation is what this asserts.
-  assert.deepEqual(Object.keys(clineAdapter.extraModes), ['account']);
+  //
+  // `mcp` is the second extra mode and belongs in the same list: it is a transport over the report,
+  // not a report. It must be an extraMode rather than a branch inside `run`, so that "serve the
+  // protocol" and "produce a report" cannot end up sharing a function that grows a flag.
+  assert.deepEqual(Object.keys(clineAdapter.extraModes), ['account', 'mcp']);
   const reportStep = String(clineAdapter.run);
   assert.doesNotMatch(reportStep, /account/i, 'the report step must not branch on --account');
+  // The transport, likewise, is not reachable from the report step: it would have to write protocol
+  // messages from inside a renderer.
+  assert.doesNotMatch(reportStep, /runMcpServer|--mcp/, 'the report step must not branch on --mcp');
 });
 
 test('each entry point is a caller, not a second implementation', () => {

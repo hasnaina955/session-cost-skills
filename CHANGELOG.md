@@ -6,6 +6,43 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- `--mcp` serves the same reports over the Model Context Protocol, so an agent host (Cline, Claude
+  Code, and anything else that speaks MCP) can call them as tools instead of shelling out and
+  parsing text. The point is not the transport; it is that the transport cannot disagree with the
+  terminal. `shared/mcp.mjs` computes nothing: each tool call re-runs the adapter's own entry point
+  as a child process and returns its output verbatim, so a tool's figure and the CLI's figure are
+  the same bytes from the same code path - a test asserts exactly that. A second accounting
+  implementation living behind a protocol adapter is how a tool ends up quoting a number the ledger
+  never supported, and an MCP client has no terminal output beside it to check against.
+
+  Five read-only tools - `session_cost` (brief by default, `json` for the normalized contract),
+  `list_sessions`, `cost_rollup`, `explain_cost`, `rate_coverage` - each with a JSON Schema the
+  server validates before running anything, so a bad argument is a `-32602` naming the offending
+  path instead of a silent default. Read-only is structural rather than promised: the argv for
+  every tool is built from an allowlist of report flags, so `--refresh-rates`, `--init-config`,
+  `--dashboard` and `--watch` are unreachable from an agent, and a test enumerates the whole
+  surface to prove it. The ledger-locating flags (`--data-dir`, `--session-config`, `--config`) are
+  forwarded, because a server pointed at one directory and answering with another directory's
+  sessions would be real numbers about the wrong machine.
+
+  Three failure modes are answered rather than left to chance. An incomplete CLI answer (exit 2)
+  stays a *successful* result carrying the CLI's own caveat and `coverage: "incomplete"`, so an
+  agent reads "3 of 40 calls unpriced" instead of a tidy total; only a crash is `isError: true`. A
+  runtime with no rate table (Cline records cost directly) says so instead of returning an empty
+  coverage object a client could read as "no gaps". And a client that hangs up mid-session is the
+  normal end of an MCP session: writing to the closed pipe used to kill the process with an `EPIPE`
+  stack trace, which the hang-up test now pins.
+
+  The protocol revision is pinned to `2025-06-18` and cited rather than guessed - the request and
+  result shapes come from the published schema at
+  `modelcontextprotocol/modelcontextprotocol/schema/2025-06-18/schema.json`, which is what unblocked
+  WP-4.2 - and the two rules that break a session when missed are enforced and tested: nothing but
+  protocol messages may reach stdout (every diagnostic goes to stderr, a child's stdout is captured
+  and never inherited), and JSON-RPC batching, removed in this revision, is rejected rather than
+  half-processed. `tests/mcp-server.test.mjs` covers the handshake, `tools/list`, five
+  `tools/call`s through a real child process, the error codes, the stdout purity, and the
+  hang-up.
+
 - `--notify` raises a terminal bell and, where the platform has one, a desktop notification when
   a session's spend passes `--budget`. The budget existed but was only ever a line of text on
   stderr and an exit code, which means it can only catch you if you happen to be reading. A budget
@@ -99,6 +136,12 @@ All notable changes to this project are documented here.
   in the session-cost config turns it off.
 
 ### Changed
+
+- `docs/roadmap-plan.md` and `docs/handoff.md` record WP-4.2 as delivered: phases 0-4 are complete,
+  the state table counts `--mcp` among the post-cut work, the blocked table loses the MCP row (its
+  only blocker was reading the published schema, which is now cited in the module and the
+  changelog), and the roadmap keeps the lesson rather than the to-do - a specification, like a
+  vendor's ledger format, is unblocked by finding the primary source, not by waiting for it.
 
 - The Command Code documentation no longer states the token semantics the live install disproved.
   #109 corrected the mod, but three shipping documents still told a reader that the v3 ledger's

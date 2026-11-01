@@ -287,7 +287,17 @@ test('every flag the schema accepts is actually acted on by both CLIs', async ()
   // twelve-line caller. Pinning this to session-cost.mjs would have made the test fail on a
   // layout change while saying nothing about whether the flag is still read.
   const { RUNTIME_FLAGS } = await import('../shared/cli-args.mjs');
+  // A flag can also be acted on by being an extra mode: the kernel dispatches it through
+  // `selectedExtraMode` to the adapter's handler, so the flag's action is the mode itself rather
+  // than a branch reading `opts`. `--mcp` is that case - its handler starts the protocol server -
+  // and `--account` was the first one. This reads the adapters to know which keys those are,
+  // instead of hardcoding a list that would drift.
+  const adapters = {
+    cline: (await import('../adapters/cline/skill/scripts/lib/runtime.mjs')).default,
+    mcode: (await import('../adapters/mcode/skill/scripts/lib/runtime.mjs')).default,
+  };
   for (const runtime of ['cline', 'mcode']) {
+    const extraModeKeys = Object.keys(adapters[runtime].extraModes ?? {});
     const scriptsDir = path.join(root, 'adapters', runtime, 'skill', 'scripts');
     const sources = fs.readdirSync(scriptsDir, { recursive: true })
       .filter((file) => String(file).endsWith('.mjs'))
@@ -295,6 +305,7 @@ test('every flag the schema accepts is actually acted on by both CLIs', async ()
       .join('\n');
     for (const [flag, spec] of Object.entries(RUNTIME_FLAGS[runtime])) {
       if (['help', 'version', 'dataDir', 'out'].includes(flag)) continue; // handled before or outside the option flow
+      if (extraModeKeys.includes(spec.key)) continue; // dispatched as an extra mode by the kernel
       assert.ok(sources.includes(`opts.${spec.key}`),
         `${runtime}: --${flag} is in the schema but the CLI never reads opts.${spec.key}`);
     }

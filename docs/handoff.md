@@ -18,14 +18,16 @@ unknown cost is `null`, never `0`; totals are exact sums; accounting domains are
 
 | | |
 | --- | --- |
-| `main` | **v0.6.0, released and published**; since the cut: WP-4.4 (`--notify`), five correctness fixes (#97, #100, #104, the dashboard KPI row, and the Command Code cache double-count in #109), and the Command Code adapter (#99) merged. 552 tests passing |
+| `main` | **v0.6.0, released and published**; since the cut: WP-4.4 (`--notify`), WP-4.2 (`--mcp`), five correctness fixes (#97, #100, #104, the dashboard KPI row, and the Command Code cache double-count in #109), and the Command Code adapter (#99) merged. 561 tests passing |
 | Gates | `npm run verify` and `npm run rehearse:release` must both pass |
 | Open PRs | none |
 | Bench | `npm run bench` (regression gate), `npm run bench:quick` |
 | Release | tag `v0.6.0`, three archives plus `SHA256SUMS.txt` on the GitHub release |
 
-**Phases 0, 1, 2 and 3 are complete.** Phase 4 is done except WP-4.2 (the MCP server), which is
-blocked on the spec. Phase 5 has its first adapter: Command Code shipped in #99, its ledger facts
+**Phases 0, 1, 2, 3 and 4 are complete.** Phase 4's last package, WP-4.2, shipped as `--mcp`: the
+reports are now callable as MCP tools, and the server computes nothing itself - each tool call
+re-runs the adapter's own CLI, so the tool's figure and the terminal's figure are the same bytes.
+Phase 5 has its first adapter: Command Code shipped in #99, its ledger facts
 verified against the vendor docs and an independent parser before merge (#77 closed), and then
 validated against a live install (#107). That run did its job - it caught a real defect, not a
 cosmetic one: the v3 ledger's `inputTokens` is the total prompt and contains the cache buckets,
@@ -101,7 +103,8 @@ is not evidence that the page or the terminal output is right.
 `--brief` (short answer; `--json` gives a stable `session-brief` shape), `--card` (a shareable
 SVG summary, private unless `--card-include-title`), `--list`, `--rollup`, `--top`, `--explain`,
 `--csv`, `--budget`, `--counterfactual`, `--insights`, `--watch`, `--dashboard`, `--rates`,
-`--refresh-rates`, `doctor`, `providers`, `models discover`, `config explain`, plus
+`--refresh-rates`, `--mcp` (the Model Context Protocol server: five read-only tools over stdio,
+documented in `docs/mcp.md`), `doctor`, `providers`, `models discover`, `config explain`, plus
 date/provider/model filters and `--include-children`.
 
 An MCode `--json` report also carries a bounded `timeline` of per-call events. The dashboard renders
@@ -139,7 +142,6 @@ prevent - so these stay blocked rather than guessed.
 | **#107** Command Code live-install validation | **Ran** on 2026-10-05 (79 sessions, 8,550 calls): the version guard stayed quiet on all 77 ledgers and the subagent `<usage>` regex matched 393 real blocks, but the recorded-cost tripwire fired and found a real bug, fixed in #109. What it still needs: the vendor's current peak-pricing terms (all 762 peak-window calls billed at the off-peak rate on that install - either a flat plan or changed public pricing, and it is the $2.20 residual), a mirrored rate for `deepseek-v4.1-flash-fast`, a vendor `$0` entry for free-tier models without a `-free` suffix, and ideally a redacted real transcript as a permanent fixture |
 | **#15** OpenCode | Same class of facts. A branch `feature/opencode-adapter` holds ~7,300 lines of implementation that is now ~10 releases stale; decide whether to rebase it onto the kernel or start fresh |
 | **#16-#20** Qwen, Goose, Codex, Claude Code, others | Per-runtime storage layout |
-| **WP-4.2** MCP server | Verification of the MCP spec against the real specification. A wrong implementation fails to connect rather than reporting a wrong number, so it is lower risk than an adapter, but it still needs the spec read properly |
 
 A `PRAGMA table_info` dump or one redacted session file settles most of the adapter questions.
 

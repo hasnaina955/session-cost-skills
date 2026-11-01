@@ -32,6 +32,7 @@ This repository keeps runtime-specific accounting adapters separate while sharin
 - Cache-read and cache-write semantics preserved per runtime
 - Self-contained HTML dashboards with no external assets
 - Shared normalized JSON report contract with runtime extensions
+- A Model Context Protocol server (`--mcp`) so an MCP-capable agent can call the reports as tools
 - Windows and Node.js 22.15+ support
 
 ## Installation
@@ -120,6 +121,32 @@ Command Code (mod):
 
 Never use the Cline fresh-input formula on MCode or Command Code data.
 
+## Model Context Protocol
+
+Any MCP-capable agent host can call the reports as tools instead of shelling out. Start the server
+with `--mcp`; it speaks JSON-RPC 2.0 on stdio and exits when stdin closes.
+
+```json
+{
+  "mcpServers": {
+    "session-cost": {
+      "command": "node",
+      "args": ["~/.cline/skills/session-cost/scripts/session-cost.mjs", "--mcp"]
+    }
+  }
+}
+```
+
+```bash
+claude mcp add session-cost -- node ~/.cline/skills/session-cost/scripts/session-cost.mjs --mcp
+```
+
+Five read-only tools: `session_cost`, `list_sessions`, `cost_rollup`, `explain_cost`, and
+`rate_coverage`. Each tool call re-runs the same CLI as a child process and returns its output
+verbatim, so a tool's figure is the terminal's figure - there is no second accounting path. No tool
+writes config, refreshes rates, or touches the network. [Full reference, including the protocol
+details](docs/mcp.md).
+
 ## Development
 
 Install no npm dependencies is required for the current skill tests; Node.js 22.15+ and the built-in `node:sqlite` module are required.
@@ -158,6 +185,7 @@ A Gumroad product may be offered for voluntary support, compatibility assistance
 - [Cline usage reference](adapters/cline/USAGE.md)
 - [MCode usage reference](adapters/mcode/USAGE.md)
 - [Command Code usage reference](adapters/commandcode/USAGE.md)
+- [MCP server](docs/mcp.md)
 - [Architecture](docs/architecture.md)
 - [Configuration](docs/configuration.md)
 - [Provider drivers](docs/provider-drivers.md)

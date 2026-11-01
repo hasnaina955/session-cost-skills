@@ -43,6 +43,7 @@ node $SessionCost
 | `--account-user-id <id>` | Must match authenticated account |
 | `--dashboard` | Write a self-contained HTML dashboard |
 | `--out <path>` | Dashboard output path |
+| `--mcp` | Serve the reports over the Model Context Protocol on stdio (read-only; see [docs/mcp.md](../../../docs/mcp.md)) |
 | `--data-dir <path>` | Override Cline data directory |
 | `--version` / `-v` | Installed skill, report-contract, and Node versions |
 | `--help` / `-h` | CLI help |

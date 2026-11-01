@@ -123,6 +123,10 @@ const COMMON_FLAGS = Object.freeze({
   // Foreground only. There is deliberately no background daemon: it would need service
   // registration and a lifecycle, and would leave orphan processes with no clear stop.
   watch: { key: 'watch', value: true },
+  // Serves the Model Context Protocol on stdio so an agent can call the report as a tool. It is a
+  // transport, not a mode: every tool call re-enters this same CLI (see shared/mcp.mjs), so there is
+  // no second accounting path that could disagree with the terminal.
+  mcp: { key: 'mcp', value: true },
   watchInterval: { key: 'watchInterval', value: (argv, i) => requireInteger(argv, i, '--watch-interval', { min: 100, max: 60_000 }) },
   // Raises a desktop notification and a terminal bell when a known spend passes --budget. Inert
   // on its own: with no --budget there is no threshold, so there is nothing to announce and
