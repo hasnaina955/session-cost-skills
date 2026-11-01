@@ -42,6 +42,7 @@ import { discoverModels, doctorReport, explainModelMatch, renderDiagnostics } fr
 import { importConfig, initConfig, loadEffectiveConfig, publicConfigResult, readConfigFile } from './config.mjs';
 import { renderBriefText, briefJson } from './brief.mjs';
 import { renderCard } from './card.mjs';
+import { passthroughArgs, runMcpServer } from './mcp.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 // <dataDir>/skills/session-cost/scripts/lib/ -> four levels up is <dataDir>. This module used to sit
@@ -176,6 +177,7 @@ const HELP_TEXT = `session-cost — token usage and Cline-recorded cost
   --insights           compare this session to your own history; no forecasting
   --watch              repaint a live view until Ctrl-C (foreground only)
   --watch-interval <ms> idle poll interval (default 3000; active is 500)
+  --mcp                serve the Model Context Protocol on stdio for agent clients; read-only
   --json              emit schema-versioned JSON
   --data-dir <path>    Cline data directory (default: %USERPROFILE%\\.cline)
   --version           print the installed skill, report-contract, and Node versions
@@ -1041,6 +1043,19 @@ const clineAdapter = {
 
   extraModes: {
     account: (context) => runAccount(context.dataDir),
+    // The MCP server is a transport over this adapter's own CLI: each tool call re-runs this file
+    // as a child process, so the tool's figure and the terminal's figure cannot drift apart.
+    mcp: () => runMcpServer({
+      runtime: 'cline',
+      entry: fileURLToPath(new URL('../session-cost.mjs', import.meta.url)),
+      version: versionBanner('cline').version,
+      // The server answers for the ledger it was started against: without this a server pointed at
+      // another data directory would report that machine's sessions as if they were this one's.
+      extraArgs: passthroughArgs(opts),
+      // Cline records cost in its own ledger; it holds no rate table, so rate_coverage says so
+      // instead of reporting an empty coverage object a client could read as "no gaps".
+      rateCoverage: false,
+    }),
   },
 
   loadConfig: (context) => {

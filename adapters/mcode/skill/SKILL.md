@@ -67,6 +67,10 @@ Natural language mapping:
 - `why was this model selected` → `config explain --provider <id> --model <id>`
 - `I use a custom OpenAI-compatible endpoint` → configure a provider profile with a manual or imported rate card, then run `doctor`
 
+An MCP-capable host can also call these numbers as tools: run the same script with `--mcp` to serve
+them over the Model Context Protocol (JSON-RPC on stdio, read-only). Each tool call re-runs this
+CLI, so the tool's figure and the terminal's figure are the same bytes.
+
 ## Inputs to collect
 
 - **Which session.** Default to the current session id from `<agent-context>`. Ask only when the

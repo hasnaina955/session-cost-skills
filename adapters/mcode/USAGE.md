@@ -30,6 +30,7 @@ node $SessionCost
 | `--rates` | Rate coverage and freshness |
 | `--dashboard` | Write a self-contained HTML dashboard |
 | `--out <path>` | Dashboard output path |
+| `--mcp` | Serve the reports over the Model Context Protocol on stdio (read-only; see [docs/mcp.md](../../../docs/mcp.md)) |
 | `--refresh-rates` | Re-fetch mirrored provider rates |
 | `--json` | Shared normalized contract JSON |
 | `--config <path>` | Standing-summary config |

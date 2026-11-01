@@ -46,6 +46,7 @@ import { createLiveSurface, nextInterval, renderLiveFrame } from './live-view.mj
 import { buildProviderProfile, renderSetupText } from './setup.mjs';
 import { compareToBaseline, renderInsightsText } from './insights.mjs';
 import { renderBriefText, briefJson } from './brief.mjs';
+import { passthroughArgs, runMcpServer } from './mcp.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RATES_PATH = process.env.SESSION_COST_RATES_PATH
@@ -127,6 +128,7 @@ const HELP_TEXT = `session-cost — token usage and provider-rate cost of a Mini
   --insights               compare this session to your own history; no forecasting
   --watch                  repaint a live view until Ctrl-C (foreground only)
   --watch-interval <ms>    idle poll interval (default 3000; active is 500)
+  --mcp                    serve the Model Context Protocol on stdio for agent clients; read-only
   --json                  emit JSON instead of the markdown summary
   --config <path>         load standing-summary settings
   --session-config <path> load provider/session configuration
@@ -1732,6 +1734,18 @@ const mcodeAdapter = {
   diagnostic: async (context) => (opts.diagnostic ? await runDiagnostic(context.effectiveConfiguration) : undefined),
   applyDefaults: (context) => applyRuntimeDefaults(context.effectiveConfiguration),
   preflight: async (context) => runPreflight(context.effectiveConfiguration),
+  extraModes: {
+    // A transport over this adapter's own CLI: every tool call re-runs this file as a child
+    // process, so the tool's figure and the terminal's figure cannot drift apart. Unlike Cline,
+    // MCode prices from a rate table, so rate_coverage is a real answer here.
+    mcp: () => runMcpServer({
+      runtime: 'mcode',
+      entry: fileURLToPath(new URL('../session-cost.mjs', import.meta.url)),
+      version: versionBanner('mcode').version,
+      extraArgs: passthroughArgs(opts),
+      rateCoverage: true,
+    }),
+  },
   run: (context) => (context.opts.watch ? watchSession() : main(context)),
 };
 

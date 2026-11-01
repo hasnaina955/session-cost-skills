@@ -13,6 +13,7 @@ const documents = [
   'docs/gumroad-selling-guide.html',
   'docs/session-cost-support-pack.html',
   'docs/principles.md',
+  'docs/mcp.md',
   'adapters/cline/USAGE.md',
   'adapters/cline/skill/SKILL.md',
   'adapters/mcode/USAGE.md',

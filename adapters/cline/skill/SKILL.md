@@ -77,6 +77,10 @@ node $SessionCost --account --account-days 90
 node $SessionCost --account --account-user-id usr-...
 ```
 
+Serve the same reports to an agent host over the Model Context Protocol with `--mcp` (JSON-RPC on
+stdio, read-only). Every tool call re-runs this same CLI, so a tool's figure is the terminal's
+figure.
+
 `--last` selects the newest completed session. `--today` aggregates sessions started on the current
 UTC date. `--compare` compares the latest two matching sessions. Date, provider, and model filters
 produce an aggregate when multiple sessions match.
