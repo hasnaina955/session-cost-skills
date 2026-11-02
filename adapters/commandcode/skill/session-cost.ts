@@ -1522,6 +1522,10 @@ interface LiveState {
   cacheRead: number;
   cacheWrite: number;
   calls: number;
+  // Calls the rate table could actually price. A run of unpriced calls beside a priced
+  // one is a lower bound with a marker; a session where NOTHING priced has no figure at
+  // all, and drawing it as $0.0000 would be the silent zero principle 1 forbids.
+  pricedCalls: number;
   costUsd: number;
   hasUnpriced: boolean;
   lastModel: string;
@@ -1538,6 +1542,7 @@ const live: LiveState = {
   cacheRead: 0,
   cacheWrite: 0,
   calls: 0,
+  pricedCalls: 0,
   costUsd: 0,
   hasUnpriced: false,
   lastModel: '',
@@ -1569,8 +1574,12 @@ function liveLineText(): string {
       ANSI_DIM + ' · transcript v' + live.schemaDrift + ', expected v' + TRANSCRIPT_VERSION + ANSI_RESET;
   }
   const marker = live.hasUnpriced ? ANSI_MAGENTA + '+' + ANSI_RESET : '';
+  // Nothing priced is not the same as nothing spent. Principle 1 names the live view
+  // explicitly, so a run with no priced call says 'unpriced' rather than $0.0000.
+  const nothingPriced = live.calls > 0 && live.pricedCalls === 0;
+  const figure = nothingPriced ? 'unpriced' : fmtCost(live.costUsd);
   return ANSI_DIM + 'session-cost' + ANSI_RESET + ' ' +
-    ANSI_BOLD + liveCostColor(live.costUsd) + fmtCost(live.costUsd) + ANSI_RESET + marker +
+    ANSI_BOLD + liveCostColor(live.costUsd) + figure + ANSI_RESET + marker +
     ANSI_DIM + ' · ' + ANSI_RESET + live.calls + ' calls' +
     ANSI_DIM + ' · ' + ANSI_RESET + fmtTokens(live.input + live.output + live.cacheRead + live.cacheWrite) + ' tok' +
     ANSI_DIM + ' · ' + ANSI_RESET + ANSI_DIM + (live.lastModel || 'no usage yet') + ANSI_RESET;
@@ -1591,6 +1600,7 @@ function liveReset(meta: SessionMeta): void {
   live.cacheRead = 0;
   live.cacheWrite = 0;
   live.calls = 0;
+  live.pricedCalls = 0;
   live.costUsd = 0;
   live.hasUnpriced = false;
   live.lastModel = '';
@@ -1620,7 +1630,8 @@ function liveParseLine(line: string, aliases: Map<string, string>): void {
   const {card, free} = matchRateCard(model, aliases);
   let cost = 0;
   if (free) {
-    cost = 0; // free-tier models bill $0
+    cost = 0; // free-tier models bill $0, which is a KNOWN zero, so this call is priced
+    live.pricedCalls++;
   } else if (!card) {
     live.hasUnpriced = true;
   } else if (card.peak && card.off && !tsUsable) {
@@ -1634,6 +1645,7 @@ function liveParseLine(line: string, aliases: Map<string, string>): void {
       (output / 1e6) * components.o +
       (cacheRead / 1e6) * components.cr +
       (cacheWrite / 1e6) * components.cw;
+    live.pricedCalls++;
   }
   live.calls++;
   live.input += input;

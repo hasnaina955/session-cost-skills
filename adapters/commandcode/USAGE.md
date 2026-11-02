@@ -155,6 +155,7 @@ the previous table intact.
   "includeChildren": false,
   "defaultFormat": "compact",
   "warnOnCacheRateBelow": 0.6,
+  "liveStatus": true,
   "models": [{ "runtimeModel": "my-model", "rateModel": "deepseek-v4.1-flash" }]
 }
 ```
@@ -164,6 +165,13 @@ the previous table intact.
 - `defaultFormat` — `compact` (default) or `json`.
 - `warnOnCacheRateBelow` — cache-read share of prompt tokens below
   which the card and `doctor` warn (0-1, default 0.6).
+- `liveStatus` — the running cost line around the input bar (default `true`). A footer
+  segment under the text box carries cost so far, call count, tokens, and the last model;
+  an above-editor widget carries the same line once the TUI wires widget placement. The
+  ledger is tailed incrementally and repainted on run start, message end, tool completion,
+  and run end, at most once per 800ms. A session where nothing could be priced reads
+  `unpriced`, never `$0.0000`, and a total that leaves unpriced calls out is marked `+`.
+  Set `false` to turn it off.
 - `models` — runtime-model → rate-model aliases; `config explain`
   reports the resolution.
 
