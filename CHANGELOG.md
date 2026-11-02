@@ -135,6 +135,18 @@ All notable changes to this project are documented here.
   unpriced call marks the figure with a trailing `+`. `"liveStatus": false`
   in the session-cost config turns it off.
 
+  One rule the first cut broke, caught before landing: a run where *nothing* could be
+  priced painted `$0.0000`, which is the silent zero principle 1 forbids - and the live
+  view is named in that rule. A trailing marker does not rescue a figure that is wholly
+  unknown, so the line now counts the calls it actually priced and reads `unpriced` when
+  there are none, keeping the `+` for the genuinely different case of a lower bound
+  beside a priced call. Six behavioral tests drive the real mod through a fake host with
+  HOME relocated, because the data directory is the runtime default and the config path
+  is fixed at import: the paint itself, the 800ms throttle plus the forced run-end paint,
+  the unpriced-only figure, the `+` marker, a drifted transcript named rather than parsed
+  into zeros, and `"liveStatus": false` painting nothing at all. The unpriced-figure test
+  fails against the unhardened line, which is how the defect was found.
+
 ### Changed
 
 - `docs/roadmap-plan.md` and `docs/handoff.md` record WP-4.2 as delivered: phases 0-4 are complete,

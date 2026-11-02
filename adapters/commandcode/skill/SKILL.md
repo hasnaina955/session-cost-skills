@@ -98,6 +98,12 @@ Natural language mapping:
    - the **`unpriced`** line — when it appears, the total covers priced calls
      only.
 
+   While a session is running, the mod also paints a live line around the input bar
+   (`liveStatus` in the config, on by default): cost so far, calls, tokens, last model.
+   It reads `unpriced` when nothing could be priced yet and marks a lower bound with `+`.
+   Treat it as a snapshot like any active-session total, and quote the report's digits
+   when the user asks for the number.
+
 3. Report with the script's digits. Round nothing further: totals are exact
    sums of per-call costs.
 
